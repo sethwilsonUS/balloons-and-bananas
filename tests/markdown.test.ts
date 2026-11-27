@@ -70,6 +70,53 @@ test('ArchiveMarkdown normalizes container headings (block quotes), closes sourc
   assert.match(html, /<code[^>]*># Hash inside fenced code block/);
 });
 
+test('ArchiveMarkdown sets footnote heading level to baseHeadingLevel and preserves leading titles with footnote references', () => {
+  const withBodyFootnote = [
+    '# Plain synthetic title',
+    '',
+    'A body note[^1].',
+    '',
+    '[^1]: Synthetic source attribution.',
+  ].join('\n');
+
+  const bodyHtml = renderToStaticMarkup(
+    createElement(ArchiveMarkdown, {
+      text: withBodyFootnote,
+      documentTitle: 'Plain synthetic title',
+      baseHeadingLevel: 3,
+      onEntry: () => {},
+    }),
+  );
+
+  assert.doesNotMatch(bodyHtml, /Plain synthetic title<\/h/i);
+  assert.doesNotMatch(bodyHtml, /<h2\b/i);
+  assert.match(bodyHtml, /<h3\b[^>]*id="footnote-label"[^>]*>Footnotes<\/h3>/);
+  assert.match(bodyHtml, /Synthetic source attribution\./);
+
+  const withTitleFootnote = [
+    '# Synthetic titled note[^1]',
+    '',
+    'Body text.',
+    '',
+    '[^1]: Attribution attached to title.',
+  ].join('\n');
+
+  const titleHtml = renderToStaticMarkup(
+    createElement(ArchiveMarkdown, {
+      text: withTitleFootnote,
+      documentTitle: 'Synthetic titled note',
+      baseHeadingLevel: 4,
+      onEntry: () => {},
+    }),
+  );
+
+  // Leading heading with footnoteReference is kept (shifted to h4) so the footnote definition is not lost
+  assert.match(titleHtml, /<h4>Synthetic titled note<sup\b/);
+  assert.match(titleHtml, /<h4\b[^>]*id="footnote-label"[^>]*>Footnotes<\/h4>/);
+  assert.match(titleHtml, /Attribution attached to title\./);
+  assert.doesNotMatch(titleHtml, /<h1\b|<h2\b|<h3\b/i);
+});
+
 test('ArchiveMarkdown strips duplicate leading heading, keeps heading hierarchy intact, and renders escaped pipes in GFM table code spans as 3 intact columns', () => {
   const markdown = [
     '# Synthetic provenance table guide',

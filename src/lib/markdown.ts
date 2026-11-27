@@ -33,6 +33,12 @@ function extractNodeText(node: MdastNode): string {
   return node.children.map(extractNodeText).join('');
 }
 
+function containsFootnoteReference(node: MdastNode): boolean {
+  if (node.type === 'footnoteReference') return true;
+  if (!Array.isArray(node.children)) return false;
+  return node.children.some(containsFootnoteReference);
+}
+
 /**
  * Strip a leading markdown H1 heading when it duplicates the document title
  * already rendered by the surrounding reader UI.
@@ -105,7 +111,12 @@ export function remarkNormalizeHeadings(options: NormalizeHeadingsOptions = {}) 
   return (tree: MdastNode) => {
     if (targetTitle && Array.isArray(tree.children) && tree.children.length > 0) {
       const first = tree.children[0];
-      if (first.type === 'heading' && first.depth === 1 && normalizeHeadingText(extractNodeText(first)) === targetTitle) {
+      if (
+        first.type === 'heading'
+        && first.depth === 1
+        && !containsFootnoteReference(first)
+        && normalizeHeadingText(extractNodeText(first)) === targetTitle
+      ) {
         tree.children.shift();
       }
     }

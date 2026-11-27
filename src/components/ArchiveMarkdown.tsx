@@ -21,7 +21,7 @@ export default function ArchiveMarkdown({
 }: ArchiveMarkdownProps) {
   const tableLabel = documentTitle ? `${documentTitle} table` : 'Scrollable table';
 
-  return <div className="prose"><ReactMarkdown remarkPlugins={[remarkGfm, [remarkNormalizeHeadings, { baseHeadingLevel, documentTitle }]]} components={{
+  return <div className="prose"><ReactMarkdown remarkPlugins={[remarkGfm, [remarkNormalizeHeadings, { baseHeadingLevel, documentTitle }]]} remarkRehypeOptions={{ footnoteLabelTagName: `h${baseHeadingLevel}` }} components={{
     a: ({ href, children }) => {
       const entryMatch = href?.match(/^(?:\/)?\?entry=([^&#]+)/);
       if (entryMatch) {
