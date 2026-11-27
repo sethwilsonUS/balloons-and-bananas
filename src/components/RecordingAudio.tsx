@@ -27,6 +27,7 @@ interface Props {
   onPlaying: (playing: boolean) => void;
 }
 type SignedAudio = { url: string; expiresAt: number; fileId: string; generation: number };
+type ScrubIntent = { fromScrub: true; toEnd: boolean; target: number; reportSeek: boolean };
 type SeekSource = 'native' | 'back' | 'forward' | 'passage';
 type AudioEvent = 'audio_start' | 'audio_resume' | 'audio_pause' | 'audio_end' | 'audio_listen_milestone' | 'audio_seek' | 'audio_rate' | 'audio_file_change' | 'audio_error' | 'audio_download';
 const rateBucket = (rate: number) => rate < 1 ? 'slow' : rate > 1 ? 'fast' : 'normal';
@@ -59,8 +60,8 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const [failed, setFailed] = useState(false);
   const audio = useRef<HTMLAudioElement>(null);
   const generation = useRef(0);
-  const pending = useRef<{ at: number; play: boolean; generation: number; fromScrub?: boolean; toEnd?: boolean } | null>(null);
-  const retryScrubIntent = useRef<{ fromScrub: true; toEnd: boolean } | null>(null);
+  const pending = useRef<{ at: number; play: boolean; generation: number; fromScrub?: boolean; toEnd?: boolean; reportSeek?: boolean } | null>(null);
+  const retryScrubIntent = useRef<ScrubIntent | null>(null);
   const controller = useRef<AbortController | null>(null);
   const loading = useRef(false);
   const recoveryTried = useRef(false);
@@ -160,7 +161,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     }
   }, [reportError]);
 
-  const load = useCallback(async (file: AudioFile, at: number, shouldPlay: boolean, options?: { fromScrub?: boolean; toEnd?: boolean }) => {
+  const load = useCallback(async (file: AudioFile, at: number, shouldPlay: boolean, options?: ScrubIntent) => {
     if (!file.available || file.format.toLowerCase() !== 'mp3') return;
     telemetry.current.tracker.suspend();
     selectTelemetry(file.id);
@@ -173,9 +174,18 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     const next = new AbortController();
     controller.current = next;
     loading.current = true;
-    const scrubIntent = options?.fromScrub ? { fromScrub: true as const, toEnd: Boolean(options.toEnd) } : null;
+    const scrubIntent: ScrubIntent | null = options?.fromScrub
+      ? { fromScrub: true, toEnd: Boolean(options.toEnd), target: at, reportSeek: Boolean(options.reportSeek) }
+      : null;
     retryScrubIntent.current = scrubIntent;
-    pending.current = { at, play: shouldPlay, generation: nextGeneration, fromScrub: scrubIntent?.fromScrub, toEnd: scrubIntent?.toEnd };
+    pending.current = {
+      at,
+      play: shouldPlay,
+      generation: nextGeneration,
+      fromScrub: scrubIntent?.fromScrub,
+      toEnd: scrubIntent?.toEnd,
+      reportSeek: scrubIntent?.reportSeek,
+    };
     releaseMedia(audio.current);
     setSource(null);
     setPlaying(false);
@@ -276,9 +286,9 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       }
       recoveryTried.current = false;
       setMessage('');
-      const intent = { fromScrub: true as const, toEnd };
+      const intent: ScrubIntent = { fromScrub: true, toEnd, target: clamped, reportSeek: true };
       retryScrubIntent.current = intent;
-      pending.current = { ...pending.current, at: clamped, ...intent };
+      pending.current = { ...pending.current, at: clamped, fromScrub: true, toEnd, reportSeek: true };
       lastPosition.current = clamped;
       setPosition(clamped);
       onTime(clamped);
@@ -287,25 +297,25 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     if (playing && source && Date.now() >= source.expiresAt - 15_000) {
       recoveryTried.current = false;
       setMessage('');
-      const intent = { fromScrub: true as const, toEnd };
+      const intent: ScrubIntent = { fromScrub: true, toEnd, target: clamped, reportSeek: true };
       retryScrubIntent.current = intent;
       lastPosition.current = clamped;
       setPosition(clamped);
       onTime(clamped);
-      report('audio_seek', selected.id, { seekSource: 'native' });
       void load(selected, clamped, true, intent);
       return;
     }
-    const samePosition = Math.abs(lastPosition.current - clamped) < 0.05;
+    const currentTarget = retryScrubIntent.current ? retryScrubIntent.current.target : lastPosition.current;
+    const samePosition = Math.abs(currentTarget - clamped) < 0.05;
     const sameIntent = Boolean(retryScrubIntent.current?.fromScrub) && Boolean(retryScrubIntent.current?.toEnd) === toEnd;
-    if (samePosition && sameIntent) return;
+    if (samePosition && (sameIntent || (!retryScrubIntent.current && !toEnd))) return;
     recoveryTried.current = false;
     setMessage('');
-    retryScrubIntent.current = { fromScrub: true, toEnd };
+    retryScrubIntent.current = { fromScrub: true, toEnd, target: clamped, reportSeek: true };
     lastPosition.current = clamped;
     setPosition(clamped);
     onTime(clamped);
-  }, [hasLoadedSelected, load, onTime, playing, report, scheduleScrubSeek, selected, sliderMax, source]);
+  }, [hasLoadedSelected, load, onTime, playing, scheduleScrubSeek, selected, sliderMax, source]);
 
   const handleSeekKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -386,7 +396,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         || (loadedDuration !== null
           ? lastPosition.current >= loadedDuration - 0.05
           : effectiveDuration > 0 && lastPosition.current >= effectiveDuration - 0.05);
-    const target = atEnd ? 0 : lastPosition.current;
+    const target = atEnd ? 0 : (retainedScrub ? retainedScrub.target : lastPosition.current);
     const scrubIntent = atEnd ? undefined : (retainedScrub ?? undefined);
     recoveryTried.current = false;
     setMessage('');
@@ -455,6 +465,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     lastPosition.current = target;
     setPosition(target);
     onTime(target);
+    if (next.reportSeek) scheduleScrubSeek(source!.fileId);
     if (next.play) void playLoaded();
   };
 
@@ -576,6 +587,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             const time = event.currentTarget.currentTime;
             if (event.currentTarget.seeking) telemetry.current.tracker.suspend();
             else observe(telemetry.current.tracker.sample(playbackSample(event.currentTarget)), source!.fileId);
+            if (retryScrubIntent.current) return;
             lastPosition.current = time;
             setPosition(time);
             onTime(time);
@@ -583,7 +595,16 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
           onPlay={event => {
             if (!isCurrentMedia(event.currentTarget)) return;
             if (source && Date.now() >= source.expiresAt - 15_000 && selected) {
-              void load(selected, lastPosition.current, true);
+              const intent = retryScrubIntent.current;
+              if (intent?.toEnd) {
+                retryScrubIntent.current = null;
+                lastPosition.current = 0;
+                setPosition(0);
+                onTime(0);
+                void load(selected, 0, true);
+                return;
+              }
+              void load(selected, intent ? intent.target : lastPosition.current, true, intent ?? undefined);
               return;
             }
             setPlaying(true);
@@ -609,7 +630,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             if (!isCurrentMedia(event.currentTarget)) return;
             const player = event.currentTarget;
             if (!player.paused && !player.ended && player.readyState >= 3) telemetry.current.tracker.reanchor(playbackSample(player));
-            if (nativeSeek.current) scheduleScrubSeek(source!.fileId);
+            if (nativeSeek.current && !retryScrubIntent.current) scheduleScrubSeek(source!.fileId);
             nativeSeek.current = false;
             programmedSeek.current = null;
           }}
@@ -619,8 +640,10 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
           } }}
           onEnded={event => { if (isCurrentMedia(event.currentTarget)) {
             observe(telemetry.current.tracker.end(playbackSample(event.currentTarget)), source!.fileId);
-            lastPosition.current = event.currentTarget.currentTime;
-            setPosition(event.currentTarget.currentTime);
+            if (!retryScrubIntent.current) {
+              lastPosition.current = event.currentTarget.currentTime;
+              setPosition(event.currentTarget.currentTime);
+            }
             setPlaying(false); onPlaying(false);
           } }}
           onVolumeChange={event => {
@@ -645,12 +668,12 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
           }}
           onError={event => {
             if (!isCurrentMedia(event.currentTarget) || !source || controller.current?.signal.aborted) return;
-            const activeIntent = pending.current?.fromScrub
-              ? { fromScrub: true as const, toEnd: Boolean(pending.current.toEnd) }
+            const activeIntent: ScrubIntent | null = pending.current?.fromScrub
+              ? { fromScrub: true, toEnd: Boolean(pending.current.toEnd), target: pending.current.at, reportSeek: Boolean(pending.current.reportSeek) }
               : retryScrubIntent.current;
             if (selected && Date.now() >= source.expiresAt - 30_000 && !recoveryTried.current) {
               recoveryTried.current = true;
-              void load(selected, pending.current?.at ?? lastPosition.current, playing || pending.current?.play || false, activeIntent ?? undefined);
+              void load(selected, activeIntent ? activeIntent.target : (pending.current?.at ?? lastPosition.current), playing || pending.current?.play || false, activeIntent ?? undefined);
               return;
             }
             loading.current = false;
@@ -665,7 +688,12 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             onPlaying(false);
             setMessage('This recording could not be played. Retry from your current position, or choose another file.');
           }} />
-        {failed && <button className="button secondary audio-retry-button" type="button" onClick={() => { recoveryTried.current = false; if (selected) void load(selected, lastPosition.current, true, retryScrubIntent.current ?? undefined); }}>Retry audio</button>}
+        {failed && <button className="button secondary audio-retry-button" type="button" onClick={() => {
+          recoveryTried.current = false;
+          if (!selected) return;
+          const intent = retryScrubIntent.current;
+          void load(selected, intent ? intent.target : lastPosition.current, true, intent ?? undefined);
+        }}>Retry audio</button>}
         <p className="small muted audio-timing-note">Audio loads when you choose to listen. Transcript times are approximate and have not been independently verified against the recordings; alternate files may differ.</p>
       </> : <p className="small muted">MP3 playback for this session is not available on the site yet. You can read the transcript and guide below.</p>}
       {originalWavs.length > 0 && <details className="original-audio-downloads"><summary>Original WAV {originalWavs.length === 1 ? 'file' : 'files'}</summary><p className="small muted">These larger files are preserved for download. The player uses MP3 audio.</p><ul>{originalWavs.map(file => <li key={file.id}>{file.available ? <a className="text-link small" href={`/api/assets/${encodeURIComponent(file.id)}?download=1`} download={file.name} referrerPolicy="no-referrer" onClick={() => report('audio_download', file.id, { format: 'wav', fileKind: 'original' })}><Download size={15} aria-hidden="true" /><span>Download original WAV: <span className="audio-filename">{file.name}</span> ({(file.bytes / 1_000_000).toFixed(1)} MB)</span></a> : <span className="small muted audio-filename">{file.name} · Not yet available</span>}</li>)}</ul></details>}
