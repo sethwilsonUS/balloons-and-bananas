@@ -1,0 +1,3 @@
+# Show filename-inferred ages, labelled as inferred
+
+The importer previously showed ages only when a transcript's own CHAT metadata established them, which left 300 of 391 sessions (all AI drafts) off the age axis. In all 78 archived research transcripts that record the child's age, the filename stem exactly matches that age (e.g., `010626` and 1;06.26). So we now show an inferred age for the other sessions, and use age as the primary browse axis. Inferred ages are always visibly labelled and stored separately from source ages, and the methods page cites the 78-of-78 match as the evidence. Dates are still never inferred.
