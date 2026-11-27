@@ -60,6 +60,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const audio = useRef<HTMLAudioElement>(null);
   const generation = useRef(0);
   const pending = useRef<{ at: number; play: boolean; generation: number; fromScrub?: boolean; toEnd?: boolean } | null>(null);
+  const retryScrubIntent = useRef<{ fromScrub: true; toEnd: boolean } | null>(null);
   const controller = useRef<AbortController | null>(null);
   const loading = useRef(false);
   const recoveryTried = useRef(false);
@@ -169,7 +170,9 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     const next = new AbortController();
     controller.current = next;
     loading.current = true;
-    pending.current = { at, play: shouldPlay, generation: nextGeneration, fromScrub: options?.fromScrub, toEnd: options?.toEnd };
+    const scrubIntent = options?.fromScrub ? { fromScrub: true as const, toEnd: Boolean(options.toEnd) } : null;
+    retryScrubIntent.current = scrubIntent;
+    pending.current = { at, play: shouldPlay, generation: nextGeneration, fromScrub: scrubIntent?.fromScrub, toEnd: scrubIntent?.toEnd };
     releaseMedia(audio.current);
     setSource(null);
     setPlaying(false);
@@ -218,6 +221,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       return;
     }
     recoveryTried.current = false;
+    retryScrubIntent.current = null;
     if (isLoadedSelected && file.id === selected!.id) {
       if (Number.isFinite(player.duration) && seconds >= player.duration) {
         setMessage('This timestamp falls beyond this recording. Please choose another recording file.');
@@ -241,13 +245,15 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const scrubTo = useCallback((rawSeconds: number) => {
     if (!selected?.available || !Number.isFinite(rawSeconds) || sliderMax <= 0) return;
     const clamped = clampSeekPosition(rawSeconds, sliderMax);
-    if (clamped === Math.floor(lastPosition.current) && Math.abs(lastPosition.current - clamped) < 0.05) return;
-    recoveryTried.current = false;
-    setMessage('');
+    const toEnd = clamped >= sliderMax;
     const player = audio.current;
     if (hasLoadedSelected(player)) {
       const mediaMax = Number.isFinite(player.duration) && player.duration > 0 ? player.duration : clamped;
-      const mediaTarget = clamped >= sliderMax ? mediaMax : Math.min(clamped, mediaMax);
+      const mediaTarget = toEnd ? mediaMax : Math.min(clamped, mediaMax);
+      if (Math.abs(player.currentTime - mediaTarget) < 0.05 && Math.abs(lastPosition.current - mediaTarget) < 0.05) return;
+      recoveryTried.current = false;
+      retryScrubIntent.current = null;
+      setMessage('');
       telemetry.current.tracker.suspend();
       programmedSeek.current = { generation: generation.current, target: mediaTarget, when: performance.now() };
       player.currentTime = mediaTarget;
@@ -258,17 +264,38 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       return;
     }
     if (loading.current && pending.current && pending.current.generation === generation.current) {
-      pending.current = { ...pending.current, at: clamped, fromScrub: true, toEnd: clamped >= sliderMax };
+      if (
+        Math.abs(pending.current.at - clamped) < 0.05
+        && Boolean(pending.current.fromScrub)
+        && Boolean(pending.current.toEnd) === toEnd
+      ) {
+        return;
+      }
+      recoveryTried.current = false;
+      setMessage('');
+      const intent = { fromScrub: true as const, toEnd };
+      retryScrubIntent.current = intent;
+      pending.current = { ...pending.current, at: clamped, ...intent };
       lastPosition.current = clamped;
       setPosition(clamped);
       onTime(clamped);
       return;
     }
     if (playing && source && Date.now() >= source.expiresAt - 15_000) {
+      recoveryTried.current = false;
+      setMessage('');
+      const intent = { fromScrub: true as const, toEnd };
+      retryScrubIntent.current = intent;
       report('audio_seek', selected.id, { seekSource: 'native' });
-      void load(selected, clamped, true, { fromScrub: true, toEnd: clamped >= sliderMax });
+      void load(selected, clamped, true, intent);
       return;
     }
+    const samePosition = Math.abs(lastPosition.current - clamped) < 0.05;
+    const sameIntent = Boolean(retryScrubIntent.current?.fromScrub) && Boolean(retryScrubIntent.current?.toEnd) === toEnd;
+    if (samePosition && sameIntent) return;
+    recoveryTried.current = false;
+    setMessage('');
+    retryScrubIntent.current = { fromScrub: true, toEnd };
     lastPosition.current = clamped;
     setPosition(clamped);
     onTime(clamped);
@@ -376,6 +403,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     setBusy(false);
     if (!next) return;
     pending.current = null;
+    retryScrubIntent.current = null;
     let target = next.at;
     if (next.fromScrub) {
       if (Number.isFinite(player.duration) && player.duration > 0) {
@@ -407,6 +435,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         controller.current?.abort();
         loading.current = false;
         pending.current = null;
+        retryScrubIntent.current = null;
         recoveryTried.current = false;
         releaseMedia(audio.current);
         setPlaying(false);
@@ -577,12 +606,17 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
           }}
           onError={event => {
             if (!isCurrentMedia(event.currentTarget) || !source || controller.current?.signal.aborted) return;
+            const activeIntent = pending.current?.fromScrub
+              ? { fromScrub: true as const, toEnd: Boolean(pending.current.toEnd) }
+              : retryScrubIntent.current;
             if (selected && Date.now() >= source.expiresAt - 30_000 && !recoveryTried.current) {
               recoveryTried.current = true;
-              void load(selected, lastPosition.current, playing || pending.current?.play || false);
+              void load(selected, pending.current?.at ?? lastPosition.current, playing || pending.current?.play || false, activeIntent ?? undefined);
               return;
             }
             loading.current = false;
+            pending.current = null;
+            retryScrubIntent.current = activeIntent;
             telemetry.current.tracker.suspend();
             const code = event.currentTarget.error?.code;
             reportError(source.fileId, code === 1 ? 'aborted' : code === 2 ? 'network' : code === 3 ? 'decode' : 'unsupported');
@@ -592,7 +626,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             onPlaying(false);
             setMessage('This recording could not be played. Retry from your current position, or choose another file.');
           }} />
-        {failed && <button className="button secondary audio-retry-button" type="button" onClick={() => { recoveryTried.current = false; if (selected) void load(selected, lastPosition.current, true); }}>Retry audio</button>}
+        {failed && <button className="button secondary audio-retry-button" type="button" onClick={() => { recoveryTried.current = false; if (selected) void load(selected, lastPosition.current, true, retryScrubIntent.current ?? undefined); }}>Retry audio</button>}
         <p className="small muted audio-timing-note">Audio loads when you choose to listen. Transcript times are approximate and have not been independently verified against the recordings; alternate files may differ.</p>
       </> : <p className="small muted">MP3 playback for this session is not available on the site yet. You can read the transcript and guide below.</p>}
       {originalWavs.length > 0 && <details className="original-audio-downloads"><summary>Original WAV {originalWavs.length === 1 ? 'file' : 'files'}</summary><p className="small muted">These larger files are preserved for download. The player uses MP3 audio.</p><ul>{originalWavs.map(file => <li key={file.id}>{file.available ? <a className="text-link small" href={`/api/assets/${encodeURIComponent(file.id)}?download=1`} download={file.name} referrerPolicy="no-referrer" onClick={() => report('audio_download', file.id, { format: 'wav', fileKind: 'original' })}><Download size={15} aria-hidden="true" /><span>Download original WAV: <span className="audio-filename">{file.name}</span> ({(file.bytes / 1_000_000).toFixed(1)} MB)</span></a> : <span className="small muted audio-filename">{file.name} · Not yet available</span>}</li>)}</ul></details>}
