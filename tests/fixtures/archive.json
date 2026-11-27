@@ -333,7 +333,7 @@
       "title": "Fixture annotation provenance guide",
       "description": "Explains how invented transcript origins and CHAT notation layers remain separate.",
       "category": "guide",
-      "markdown": "# Fixture annotation provenance guide\n\nThis invented guide documents how transcript origins and notation layers stay separate in the test fixture.\n\n| Layer | Notation example | Provenance note |\n| --- | --- | --- |\n| Archived research | `[/]` and `(.)` | Invented research transcript with explicit `CHI` speaker labels |\n| TalkBank AI draft | `PAR1` | Machine-generated fixture draft with unverified speakers |\n| Local AI draft | `plain text \\| JSON` | Local speech-recognition fixture without CHAT notation |\n",
+      "markdown": "# Fixture annotation provenance guide\n\nThis invented guide documents how transcript origins and notation layers stay separate in the test fixture.\n\n## Transcript layers\n\n| Layer | Notation example | Provenance note |\n| --- | --- | --- |\n| Archived research | `[/]` and `(.)` | Invented research transcript with explicit `CHI` speaker labels |\n| TalkBank AI draft | `PAR1` | Machine-generated fixture draft with unverified speakers |\n| Local AI draft | `plain text \\| JSON` | Local speech-recognition fixture without CHAT notation |\n\n### Editorial markers\n\nSynthetic boundary comments such as `[[SYNTHETIC NOTE |` and `| END SYNTHETIC NOTE]]` stay separate from transcript speech.\n",
       "assets": [
         {
           "id": "fixture-doc-provenance-md",
@@ -434,8 +434,8 @@
       "pathname": "archive/v1/files/fixture-provenance-guide.md",
       "name": "fixture-provenance-guide.md",
       "contentType": "text/markdown; charset=utf-8",
-      "bytes": 510,
-      "sha256": "006bf08c07a8c3555b43023bcb2a97ee36aab0af81b08ac9d39c7696e2cb516e"
+      "bytes": 680,
+      "sha256": "fd59735b80f97d778e1f3be859435b0875a89f9fd8e33b6719e613e46181cf68"
     },
     "fixture-doc-research-md": {
       "pathname": "archive/v1/files/fixture-research-notes.md",
