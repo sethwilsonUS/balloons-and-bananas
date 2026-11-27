@@ -1,0 +1,8 @@
+TRANSCRIPT (Invented fixture copy)
+
+Child (CHI, target child): blue [/] blue locomotive !
+Parent (FAT, father): where does the locomotive go next ?
+Child (CHI, target child): where [//] where is the bridge (.) papa ?
+  Note: pointing toward the cardboard arch
+Parent (FAT, father): right here by the wooden station .
+Child (CHI, target child): no , I want three lanterns over there .

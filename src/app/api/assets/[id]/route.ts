@@ -1,6 +1,7 @@
 import { getDownloadUrl } from '@vercel/blob';
 import { checkBasicBot } from '@/lib/bot-protection';
 import { archive, signedAsset } from '@/lib/archive';
+import { localAssetsRoot, localSignedAsset, serveLocalAsset } from '@/lib/local-assets';
 import { json, privateHeaders, unavailable } from '@/lib/responses';
 
 export const runtime = 'nodejs';
@@ -13,7 +14,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       if (blocked) return blocked;
     }
     const { id } = await params;
-    const asset = await signedAsset(await archive(), id);
+    const data = await archive();
+    if (localAssetsRoot()) {
+      if (query.get('json') === '1') {
+        const asset = await localSignedAsset(data, id);
+        return asset ? json(asset) : json({ error: 'File not found.' }, 404);
+      }
+      const response = await serveLocalAsset(request, data, id);
+      return response ?? json({ error: 'File not found.' }, 404);
+    }
+    if (query.get('local') === '1') return json({ error: 'File not found.' }, 404);
+    const asset = await signedAsset(data, id);
     if (!asset) return json({ error: 'File not found.' }, 404);
     if (query.get('json') === '1') return json(asset);
     const location = query.get('download') === '1' ? getDownloadUrl(asset.url) : asset.url;

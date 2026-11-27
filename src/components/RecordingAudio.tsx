@@ -245,11 +245,11 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       {available.length ? <>
         <div className="playback-controls">
           <button type="button" className="button primary" disabled={busy} onClick={toggle}>{playing ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}{busy ? 'Loading audio…' : playing ? 'Pause' : 'Play recording'}</button>
-          <button type="button" className="button secondary" disabled={!source || busy} onClick={() => seek(Math.max(0, lastPosition.current - 15), playing, 'back')} aria-label="Back 15 seconds"><RotateCcw size={17} aria-hidden="true" />15s</button>
+          <button type="button" className="button secondary" disabled={!source || busy} onClick={() => seek(Math.max(0, lastPosition.current - 15), playing, 'back')}><RotateCcw size={17} aria-hidden="true" /><span className="sr-only">Back 15 seconds</span><span aria-hidden="true">15s</span></button>
           <button type="button" className="button secondary" disabled={!source || busy} onClick={() => {
             const duration = audio.current?.duration;
             seek(Math.min(lastPosition.current + 30, Number.isFinite(duration) ? Math.max(0, duration! - .05) : selected?.duration || lastPosition.current + 30), playing, 'forward');
-          }} aria-label="Forward 30 seconds">30s<RotateCw size={17} aria-hidden="true" /></button>
+          }}><span className="sr-only">Forward 30 seconds</span><span aria-hidden="true">30s</span><RotateCw size={17} aria-hidden="true" /></button>
           <div className="playback-speed field"><label htmlFor="playback-speed">Speed</label><select id="playback-speed" value={speed} onChange={event => {
             const rate = Number(event.target.value);
             if (audio.current) observe(telemetry.current.tracker.sample(playbackSample(audio.current)), telemetry.current.fileId);

@@ -9,3 +9,6 @@ CLAUDE.md
 *.tsbuildinfo
 private-config/
 private-workspace/
+playwright.config.ts
+playwright-report/
+test-results/
