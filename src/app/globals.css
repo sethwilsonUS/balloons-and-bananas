@@ -627,14 +627,14 @@ input[type='range'].audio-range::-moz-range-progress { height: 10px; border-radi
 input[type='range'].audio-range::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--primary-bg); border: 2px solid var(--paper); box-shadow: 0 0 0 1.5px var(--control-line); transition: background-color 150ms ease; }
 input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { background: var(--primary-hover); }
 @media (prefers-reduced-motion: reduce) {
-  input[type='range'].audio-range::-webkit-slider-thumb,
+  input[type='range'].audio-range::-webkit-slider-thumb { transition: none !important; }
   input[type='range'].audio-range::-moz-range-thumb { transition: none !important; }
 }
 @media (forced-colors: active) {
-  input[type='range'].audio-range::-webkit-slider-runnable-track,
+  input[type='range'].audio-range::-webkit-slider-runnable-track { background: Canvas; border: 1px solid CanvasText; }
   input[type='range'].audio-range::-moz-range-track { background: Canvas; border: 1px solid CanvasText; }
   input[type='range'].audio-range::-moz-range-progress { background: Highlight; }
-  input[type='range'].audio-range::-webkit-slider-thumb,
+  input[type='range'].audio-range::-webkit-slider-thumb { background: Highlight; border: 2px solid CanvasText; }
   input[type='range'].audio-range::-moz-range-thumb { background: Highlight; border: 2px solid CanvasText; }
 }
 .player-meta { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding-top: 12px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
@@ -644,6 +644,7 @@ input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { backgro
 .audio-mute-button[aria-pressed='true'] { background: var(--primary-bg); border-color: var(--primary-bg); color: var(--on-primary); }
 .audio-mute-button[aria-pressed='true']:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: var(--on-primary); }
 .audio-volume-slider { flex: 1 1 140px; min-width: 110px; display: flex; flex-direction: column; gap: 2px; }
+.audio-device-volume-note { align-self: center; }
 .audio-retry-button { margin-top: 14px; }
 .audio-timing-note { margin: 14px 0 0; }
 .audio-provenance { margin: 0 0 18px; }

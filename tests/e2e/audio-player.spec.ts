@@ -318,3 +318,25 @@ test('audio player preserves load/media error status, signed-URL recovery, keybo
   await setTheme(page, 'dark');
   await expectNoSeriousAxeViolations(page, 'listening-copy audio player (dark)');
 });
+
+test('audio player hides percentage slider when platform volume is read-only (iOS behavior) while keeping mute', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLMediaElement.prototype, 'volume', {
+      configurable: true,
+      get() { return 1; },
+      set() { /* Read-only on iOS Safari */ },
+    });
+  });
+
+  await page.goto('/?entry=fixture-010815-locomotive');
+  const audioPanel = page.locator('.audio-panel');
+  await expect(audioPanel.getByRole('slider', { name: 'Volume' })).toHaveCount(0);
+  await expect(audioPanel).toContainText('Use device buttons to adjust volume.');
+
+  const muteButton = audioPanel.getByRole('button', { name: 'Mute' });
+  await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
+  await tabUntilFocused(page, muteButton);
+  await page.keyboard.press('Enter');
+  await expect(muteButton).toHaveAttribute('aria-pressed', 'true');
+  await expectNoSeriousAxeViolations(page, 'read-only volume audio player (light)');
+});
