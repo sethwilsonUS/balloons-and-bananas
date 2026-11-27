@@ -531,7 +531,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   }
   body { background: white; color: black; font-size: 11pt; }
   .archive-shell { max-width: none; padding: 0; }
-  .theme-control, .top-bar, .section-nav, .site-footer, .back-button, .button, .text-button, .search-form, .home-search-section, .theme-discovery, .share-feedback, .manual-share, .transcript-search { display: none !important; }
+  .theme-control, .top-bar, .section-nav, .site-footer, .back-button, .button, .text-button, .search-form, .home-search-section, .theme-discovery, .share-feedback, .manual-share, .transcript-search, .audio-player { display: none !important; }
   .masthead { padding: 0 0 25px; }
   .masthead h1 { font-size: 30pt; }
   .source-key, .provenance-note, .audio-panel { background: white; }
@@ -605,13 +605,46 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .transcript-line.is-linked { box-shadow: inset 3px 0 var(--rust); background: var(--focus-bg); }
 .audio-file-choice { margin: 20px 0; }
 .audio-file-choice select { font-size: .9rem; }
+.audio-player { display: flex; flex-direction: column; gap: 18px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); }
+.audio-panel audio { display: none; }
 .playback-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
 .playback-controls .button { min-height: 46px; }
+.playback-controls .button[aria-disabled='true'] { cursor: progress; opacity: .82; }
 .playback-speed { margin-left: auto; min-width: 125px; }
 .playback-speed select { min-height: 46px; font-size: .85rem; }
-.audio-panel audio { display: block; width: 100%; min-width: 0; max-width: 100%; height: 54px; margin: 19px 0 6px; border-radius: 6px; color-scheme: inherit; }
-.player-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; font-variant-numeric: tabular-nums; }
+.audio-scrubber { display: flex; flex-direction: column; gap: 4px; }
+.audio-slider-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.audio-slider-header label { color: var(--reading); font-size: .78rem; font-weight: 550; }
+.audio-time-readout, .audio-volume-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+input[type='range'].audio-range { appearance: none; -webkit-appearance: none; width: 100%; min-width: 0; min-height: 44px; height: 44px; padding: 0; margin: 0; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+input[type='range'].audio-range:disabled { cursor: not-allowed; opacity: .55; }
+input[type='range'].audio-range:focus-visible { outline: 3px solid var(--rust); outline-offset: 2px; }
+input[type='range'].audio-range::-webkit-slider-runnable-track { height: 10px; border-radius: 999px; border: 1px solid var(--control-line); background: linear-gradient(to right, var(--primary-bg) 0%, var(--primary-bg) var(--range-progress, 0%), var(--paper-light) var(--range-progress, 0%), var(--paper-light) 100%); }
+input[type='range'].audio-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; margin-top: -7px; border-radius: 50%; background: var(--primary-bg); border: 2px solid var(--paper); box-shadow: 0 0 0 1.5px var(--control-line); transition: background-color 150ms ease; }
+input[type='range'].audio-range:hover:not(:disabled)::-webkit-slider-thumb { background: var(--primary-hover); }
+input[type='range'].audio-range::-moz-range-track { height: 10px; border-radius: 999px; border: 1px solid var(--control-line); background: var(--paper-light); }
+input[type='range'].audio-range::-moz-range-progress { height: 10px; border-radius: 999px 0 0 999px; background: var(--primary-bg); }
+input[type='range'].audio-range::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--primary-bg); border: 2px solid var(--paper); box-shadow: 0 0 0 1.5px var(--control-line); transition: background-color 150ms ease; }
+input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { background: var(--primary-hover); }
+@media (prefers-reduced-motion: reduce) {
+  input[type='range'].audio-range::-webkit-slider-thumb,
+  input[type='range'].audio-range::-moz-range-thumb { transition: none !important; }
+}
+@media (forced-colors: active) {
+  input[type='range'].audio-range::-webkit-slider-runnable-track,
+  input[type='range'].audio-range::-moz-range-track { background: Canvas; border: 1px solid CanvasText; }
+  input[type='range'].audio-range::-moz-range-progress { background: Highlight; }
+  input[type='range'].audio-range::-webkit-slider-thumb,
+  input[type='range'].audio-range::-moz-range-thumb { background: Highlight; border: 2px solid CanvasText; }
+}
+.player-meta { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding-top: 12px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .player-meta .text-link { min-height: 44px; }
+.audio-volume-control { display: flex; align-items: flex-end; gap: 12px; flex: 1 1 240px; max-width: 340px; min-width: 0; }
+.audio-mute-button { min-height: 44px; flex-shrink: 0; background: var(--paper-light); color: var(--ink); }
+.audio-mute-button[aria-pressed='true'] { background: var(--primary-bg); border-color: var(--primary-bg); color: var(--on-primary); }
+.audio-mute-button[aria-pressed='true']:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: var(--on-primary); }
+.audio-volume-slider { flex: 1 1 140px; min-width: 110px; display: flex; flex-direction: column; gap: 2px; }
+.audio-retry-button { margin-top: 14px; }
 .audio-timing-note { margin: 14px 0 0; }
 .audio-provenance { margin: 0 0 18px; }
 .audio-filename { overflow-wrap: anywhere; }
@@ -644,8 +677,10 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 @media (max-width: 440px) {
   .theme-shortcuts { gap: 8px; }
   .theme-shortcut { padding: 10px 12px; font-size: .85rem; }
+  .audio-player { padding: 14px; gap: 14px; }
   .playback-controls > .button.primary { flex-basis: 100%; }
   .playback-speed { flex-basis: 100%; }
+  .audio-volume-control { flex-basis: 100%; max-width: none; }
   .transcript-cue { padding-left: 5px; }
   .moment-actions { gap: 2px 12px; }
   .transcript-playback-tools > .button { flex: 1 1 calc(50% - 6px); }
