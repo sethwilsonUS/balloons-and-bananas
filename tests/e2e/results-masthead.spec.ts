@@ -275,6 +275,7 @@ test('switching Details and List views never leaves a stale "Searching…" statu
   // Switch Details -> List: while awaiting the 36-item response, status says "Updating view…" (never "Searching…")
   await listButton.click();
   await expect(status).toHaveText('Updating view…');
+  await expect.poll(() => slowListStarted).toBe(true);
 
   // Rapidly switch back to Details before the slow List fetch resolves: cancels and restores settled status immediately
   await detailsButton.click();

@@ -2,41 +2,12 @@ import { ArrowRight, Headphones } from 'lucide-react';
 import { trackArchiveEvent } from '../lib/analytics';
 import { formatAge } from '../lib/age';
 import { linguisticMarkers, type LinguisticSpeaker } from '../lib/linguistic-markers';
-import type { RecordingView } from '../lib/results-view';
+import { shortSummary, visibleExcerpt, type RecordingView } from '../lib/results-view';
 import type { SearchResult } from '../lib/types';
 import { originLabels, timeLabel } from './api';
 import { TopicLabels } from './TopicThemes';
 
 export type { RecordingView };
-
-function normalizeForComparison(text: string): string {
-  return text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLocaleLowerCase();
-}
-
-function visibleExcerpt(result: SearchResult): string {
-  if (result.matchedIn === 'browse' || !result.excerpt) return '';
-  const trimmed = result.excerpt.trim();
-  if (!trimmed) return '';
-  if (result.matchedIn === 'summary') {
-    const normalizedExcerpt = normalizeForComparison(trimmed.replace(/^…|…$/g, ''));
-    const normalizedOverview = normalizeForComparison(result.entry.overview);
-    const normalizedTitle = normalizeForComparison(result.entry.title);
-    if (normalizedExcerpt && (normalizedOverview.includes(normalizedExcerpt) || normalizedTitle.includes(normalizedExcerpt))) {
-      return '';
-    }
-  }
-  return trimmed;
-}
-
-function shortSummary(text: string): string {
-  const words = text.trim().split(/\s+/);
-  let summary = '';
-  for (const word of words) {
-    if (summary && summary.length + word.length + 1 > 180) return `${summary}…`;
-    summary += `${summary ? ' ' : ''}${word}`;
-  }
-  return summary;
-}
 
 function SearchExcerpt({ result, excerpt }: { result: SearchResult; excerpt: string }) {
   if (result.matchedIn === 'browse' || !excerpt) return null;
@@ -68,7 +39,7 @@ export default function RecordingResults({ results, view, firstIndex, speaker, o
 }) {
   const rows = results.map((result, index) => {
     const { entry, matchedIn, linguisticEvidence } = result;
-    const excerpt = visibleExcerpt(result);
+    const excerpt = visibleExcerpt(result, view);
     const hasMatches = Boolean(linguisticEvidence || excerpt);
     const markerLabel = linguisticEvidence && linguisticMarkers.find(item => item.id === linguisticEvidence.marker)?.label;
     const headingId = `result-${entry.id}`;

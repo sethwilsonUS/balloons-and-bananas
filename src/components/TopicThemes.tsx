@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Check } from 'lucide-react';
-import { balancedColumnCount } from '../lib/results-view';
+import { balancedColumnCount, compactGridSpans } from '../lib/results-view';
 
 // These shortcuts label existing exact topic filters; they never alter source text.
 export const positiveThemes = [
@@ -22,13 +22,13 @@ export function ThemeShortcuts({ topics, selectedTopic, onSelect }: {
   const available = positiveThemes.filter(theme => topics.some(topic => topic.name === theme.topic));
   if (!available.length) return null;
   const columns = balancedColumnCount(available.length, 4);
-  const compactColumns = balancedColumnCount(available.length, 2);
+  const compactSpans = compactGridSpans(available.length);
   const gridStyle = {
     '--theme-cols': String(columns),
-    '--theme-cols-compact': String(compactColumns),
   } as CSSProperties;
   return <div className="theme-shortcuts" role="group" aria-label="Explore by theme" style={gridStyle}>
-    {available.map(theme => <button key={theme.topic} type="button" className="button secondary theme-shortcut"
+    {available.map((theme, index) => <button key={theme.topic} type="button" className="button secondary theme-shortcut"
+      style={{ '--compact-span': String(compactSpans[index]) } as CSSProperties}
       aria-pressed={selectedTopic === undefined ? undefined : selectedTopic === theme.topic}
       onClick={() => onSelect(theme.topic)}>
       {selectedTopic === theme.topic && <Check size={15} aria-hidden="true" />}

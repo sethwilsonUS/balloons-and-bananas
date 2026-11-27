@@ -205,4 +205,28 @@ test('guide overview and title hits do not duplicate card text or concatenate ti
   assert.equal(repeatedOverview.total, 1);
   assert.equal(repeatedOverview.results[0].matchedIn, 'summary');
   assert.equal(repeatedOverview.results[0].excerpt, '');
+
+  // Long overview (> 180 chars): a term already visible in List's truncated summary stays suppressed,
+  // while a term past the 180-character cut returns an overview excerpt (without title text) for List disclosures.
+  const longOverviewData: ArchiveData = {
+    ...data,
+    entries: [
+      entry('long-overview', {
+        title: 'Long veranda recording',
+        overview: 'Opening remarks about folding paper maps, sorting wooden blocks, and lining up cardboard houses across the kitchen table while naming streets, corners, and bridges before eventually spotting a telescopic lantern hanging beside the back veranda.',
+        transcript: [{ text: 'Here are the wooden blocks.' }],
+      }),
+    ],
+  };
+  const longSearch = makeSearch(longOverviewData);
+  const earlyHit = longSearch({ query: 'paper maps' });
+  assert.equal(earlyHit.total, 1);
+  assert.equal(earlyHit.results[0].matchedIn, 'summary');
+  assert.equal(earlyHit.results[0].excerpt, '');
+
+  const truncatedHit = longSearch({ query: 'telescopic lantern' });
+  assert.equal(truncatedHit.total, 1);
+  assert.equal(truncatedHit.results[0].matchedIn, 'summary');
+  assert.ok(truncatedHit.results[0].excerpt.includes('telescopic lantern'));
+  assert.ok(!truncatedHit.results[0].excerpt.includes('Long veranda recording'));
 });

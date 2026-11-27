@@ -1,5 +1,6 @@
 import MiniSearch, { type SearchResult as MiniSearchResult } from 'minisearch';
 import { makeLinguisticSearch } from './linguistic-search';
+import { shortSummary } from './results-view';
 import type { ArchiveData, ArchiveEntry, EntryCard, SearchPageSize, SearchRequest, SearchResponse } from './types';
 
 const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
@@ -41,50 +42,71 @@ function momentDuplicatesOverview(moment: { title: string; description: string }
     || (duplicatesOverview(moment.description, overview) && (!moment.title.trim() || duplicatesOverview(moment.title, overview)));
 }
 
-function pickMomentExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSearchResult | undefined): string {
-  if (!entry.moments.length) return '';
-  const cardFieldsText = fold([entry.title, entry.sourceName, ...entry.audio.map(a => a.name), entry.topics.join(' '), entry.overview].join('\n'));
-  const missingFromCard = queryTerms.filter(term => !cardFieldsText.includes(term));
-  const momentMatchTerms = matchedTermsForField(hit, 'moments');
-  const highlightTerms = [...new Set([...queryTerms, ...momentMatchTerms])];
+function pickTruncatedOverviewExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSearchResult | undefined): string {
+  const overview = entry.overview.trim();
+  if (!overview) return '';
+  const shortened = shortSummary(overview);
+  if (shortened === overview) return '';
+  const foldedOverview = fold(overview);
+  const foldedShort = fold(shortened);
+  const overviewTerms = [
+    ...new Set([
+      ...queryTerms.filter(term => foldedOverview.includes(term)),
+      ...matchedTermsForField(hit, 'overview'),
+    ]),
+  ];
+  const hiddenInList = overviewTerms.filter(term => !foldedShort.includes(term));
+  if (!hiddenInList.length) return '';
+  return excerpt(overview, hiddenInList);
+}
 
-  const moments = entry.moments.map(moment => {
-    const text = `${moment.title}: ${moment.description}`;
-    const folded = fold(text);
-    const exactQueryHits = queryTerms.filter(term => folded.includes(term)).length;
-    const missingHits = missingFromCard.filter(term => folded.includes(term)).length;
-    const matchedFieldHits = momentMatchTerms.filter(term => folded.includes(term)).length;
-    return { moment, text, exactQueryHits, missingHits, matchedFieldHits };
-  });
+function pickGuideExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSearchResult | undefined): string {
+  if (entry.moments.length) {
+    const cardFieldsText = fold([entry.title, entry.sourceName, ...entry.audio.map(a => a.name), entry.topics.join(' '), entry.overview].join('\n'));
+    const missingFromCard = queryTerms.filter(term => !cardFieldsText.includes(term));
+    const momentMatchTerms = matchedTermsForField(hit, 'moments');
+    const highlightTerms = [...new Set([...queryTerms, ...momentMatchTerms])];
 
-  // Prefer a moment that satisfies all query terms (without repeating overview or concatenating title).
-  const fullMoment = moments.find(item =>
-    queryTerms.length > 0 && item.exactQueryHits === queryTerms.length && !momentDuplicatesOverview(item.moment, item.text, entry.overview),
-  );
-  if (fullMoment) return excerpt(fullMoment.text, highlightTerms);
+    const moments = entry.moments.map(moment => {
+      const text = `${moment.title}: ${moment.description}`;
+      const folded = fold(text);
+      const exactQueryHits = queryTerms.filter(term => folded.includes(term)).length;
+      const missingHits = missingFromCard.filter(term => folded.includes(term)).length;
+      const matchedFieldHits = momentMatchTerms.filter(term => folded.includes(term)).length;
+      return { moment, text, exactQueryHits, missingHits, matchedFieldHits };
+    });
 
-  // If the query required terms not already visible on the card (title/overview/metadata),
-  // show the moment that contributes the most of those terms.
-  if (missingFromCard.length > 0) {
-    const best = moments
-      .filter(item => (item.missingHits > 0 || item.matchedFieldHits > 0) && !momentDuplicatesOverview(item.moment, item.text, entry.overview))
-      .sort((a, b) => (b.missingHits - a.missingHits) || (b.exactQueryHits - a.exactQueryHits) || (b.matchedFieldHits - a.matchedFieldHits))[0];
-    if (best) return excerpt(best.text, [...new Set([...missingFromCard, ...highlightTerms])]);
-  }
+    // Prefer a moment that satisfies all query terms (without repeating overview or concatenating title).
+    const fullMoment = moments.find(item =>
+      queryTerms.length > 0 && item.exactQueryHits === queryTerms.length && !momentDuplicatesOverview(item.moment, item.text, entry.overview),
+    );
+    if (fullMoment) return excerpt(fullMoment.text, highlightTerms);
 
-  // Handle fuzzy matches that landed solely in moments (not already visible in card metadata/overview).
-  if (momentMatchTerms.length > 0) {
-    const matchedFields = new Set(Object.values(hit?.match ?? {}).flat());
-    const onlyInMoments = !matchedFields.has('title') && !matchedFields.has('overview') && !matchedFields.has('sourceName') && !matchedFields.has('topics');
-    if (onlyInMoments) {
+    // If the query required terms not already visible on the card (title/overview/metadata),
+    // show the moment that contributes the most of those terms.
+    if (missingFromCard.length > 0) {
       const best = moments
-        .filter(item => item.matchedFieldHits > 0 && !momentDuplicatesOverview(item.moment, item.text, entry.overview))
-        .sort((a, b) => b.matchedFieldHits - a.matchedFieldHits)[0];
-      if (best) return excerpt(best.text, highlightTerms);
+        .filter(item => (item.missingHits > 0 || item.matchedFieldHits > 0) && !momentDuplicatesOverview(item.moment, item.text, entry.overview))
+        .sort((a, b) => (b.missingHits - a.missingHits) || (b.exactQueryHits - a.exactQueryHits) || (b.matchedFieldHits - a.matchedFieldHits))[0];
+      if (best) return excerpt(best.text, [...new Set([...missingFromCard, ...highlightTerms])]);
+    }
+
+    // Handle fuzzy matches that landed solely in moments (not already visible in card metadata/overview).
+    if (momentMatchTerms.length > 0) {
+      const matchedFields = new Set(Object.values(hit?.match ?? {}).flat());
+      const onlyInMoments = !matchedFields.has('title') && !matchedFields.has('overview') && !matchedFields.has('sourceName') && !matchedFields.has('topics');
+      if (onlyInMoments) {
+        const best = moments
+          .filter(item => item.matchedFieldHits > 0 && !momentDuplicatesOverview(item.moment, item.text, entry.overview))
+          .sort((a, b) => b.matchedFieldHits - a.matchedFieldHits)[0];
+        if (best) return excerpt(best.text, highlightTerms);
+      }
     }
   }
 
-  return '';
+  // If no moment qualified, keep an overview-only excerpt strictly when List view truncates
+  // the matching term past shortSummary(); Details view still suppresses it as already visible.
+  return pickTruncatedOverviewExcerpt(entry, queryTerms, hit);
 }
 
 export function makeSearch(data: ArchiveData) {
@@ -142,7 +164,7 @@ export function makeSearch(data: ArchiveData) {
       if (inSummary) {
         return {
           entry: card(entry),
-          excerpt: pickMomentExcerpt(entry, terms, hit),
+          excerpt: pickGuideExcerpt(entry, terms, hit),
           matchedIn: 'summary',
           ...linguistic,
         };

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adaptSearchForView, balancedColumnCount, formatSearchStatus } from '../src/lib/results-view';
+import { adaptSearchForView, balancedColumnCount, compactGridSpans, formatSearchStatus, shortSummary, visibleExcerpt } from '../src/lib/results-view';
 import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle } from '../src/lib/site';
-import type { EntryCard, SearchResponse } from '../src/lib/types';
+import type { EntryCard, SearchResponse, SearchResult } from '../src/lib/types';
 
 function mockCard(id: string): EntryCard {
   return {
@@ -95,7 +95,7 @@ test('formatSearchStatus distinguishes searching, view updates, and settled resu
   assert.equal(formatSearchStatus(null, null), '');
 });
 
-test('balancedColumnCount avoids single-orphan rows across typical theme counts', () => {
+test('balancedColumnCount and compactGridSpans avoid single-orphan rows across wide and compact counts', () => {
   for (const count of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
     const cols = balancedColumnCount(count, 4);
     assert.ok(cols >= 1 && cols <= 4);
@@ -103,7 +103,68 @@ test('balancedColumnCount avoids single-orphan rows across typical theme counts'
     assert.notEqual(remainder, 1, `Expected count=${count} with cols=${cols} not to leave 1 orphan`);
   }
   assert.equal(balancedColumnCount(8, 4), 4);
-  assert.equal(balancedColumnCount(8, 2), 2);
   assert.equal(balancedColumnCount(6, 4), 3);
   assert.equal(balancedColumnCount(5, 4), 3);
+
+  const rowSizesFromSpans = (spans: number[]): number[] => {
+    const rows: number[] = [];
+    let rowTracks = 0;
+    let rowItems = 0;
+    for (const span of spans) {
+      if (rowTracks + span > 6) {
+        rows.push(rowItems);
+        rowTracks = 0;
+        rowItems = 0;
+      }
+      rowTracks += span;
+      rowItems += 1;
+    }
+    if (rowItems > 0) rows.push(rowItems);
+    return rows;
+  };
+
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(1)), [1]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(2)), [2]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(3)), [3]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(4)), [2, 2]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(5)), [2, 3]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(6)), [2, 2, 2]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(7)), [2, 2, 3]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(8)), [2, 2, 2, 2]);
+  assert.deepEqual(rowSizesFromSpans(compactGridSpans(9)), [2, 2, 2, 3]);
+  for (const count of [2, 3, 4, 5, 6, 7, 8, 9]) {
+    const rows = rowSizesFromSpans(compactGridSpans(count));
+    assert.equal(rows.reduce((sum, n) => sum + n, 0), count);
+    assert.ok(Math.min(...rows) >= 2, `Compact count=${count} left an orphan row: ${rows.join(',')}`);
+  }
+});
+
+test('visibleExcerpt is view-aware: Details suppresses full-overview excerpts while List keeps excerpts hidden past truncation', () => {
+  const longOverview = 'Opening remarks about folding paper maps, sorting wooden blocks, and lining up cardboard houses across the kitchen table while naming streets, corners, and bridges before eventually spotting a telescopic lantern hanging beside the back veranda.';
+  assert.ok(shortSummary(longOverview).length < longOverview.length);
+  assert.ok(!shortSummary(longOverview).includes('telescopic lantern'));
+
+  const truncatedOverviewResult: SearchResult = {
+    entry: { ...mockCard('long-overview'), overview: longOverview },
+    matchedIn: 'summary',
+    excerpt: '…naming streets, corners, and bridges before eventually spotting a telescopic lantern hanging beside the back veranda.',
+  };
+  assert.equal(visibleExcerpt(truncatedOverviewResult, 'details'), '');
+  assert.equal(visibleExcerpt(truncatedOverviewResult, 'list'), truncatedOverviewResult.excerpt);
+
+  const visibleInShortResult: SearchResult = {
+    entry: { ...mockCard('long-overview'), overview: longOverview },
+    matchedIn: 'summary',
+    excerpt: 'Opening remarks about folding paper maps, sorting wooden blocks',
+  };
+  assert.equal(visibleExcerpt(visibleInShortResult, 'details'), '');
+  assert.equal(visibleExcerpt(visibleInShortResult, 'list'), '');
+
+  const momentResult: SearchResult = {
+    entry: { ...mockCard('long-overview'), overview: longOverview },
+    matchedIn: 'summary',
+    excerpt: 'Lantern check: Counting three brass lanterns along the railing.',
+  };
+  assert.equal(visibleExcerpt(momentResult, 'details'), momentResult.excerpt);
+  assert.equal(visibleExcerpt(momentResult, 'list'), momentResult.excerpt);
 });
