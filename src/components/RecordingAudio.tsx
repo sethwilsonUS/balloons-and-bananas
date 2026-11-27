@@ -207,7 +207,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     && !failed,
   ), [failed, selected, source]);
 
-  const seek = useCallback((seconds: number, shouldPlay = true, seekSource?: SeekSource, scrubIntent?: { fromScrub: true; toEnd: boolean }) => {
+  const seek = useCallback((seconds: number, shouldPlay = true, seekSource?: SeekSource) => {
     if (!Number.isFinite(seconds) || seconds < 0) return;
     const player = audio.current;
     const isLoadedSelected = hasLoadedSelected(player);
@@ -221,10 +221,8 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       return;
     }
     recoveryTried.current = false;
-    const activeScrubIntent = scrubIntent && file.id === selected?.id ? scrubIntent : undefined;
-    retryScrubIntent.current = activeScrubIntent ?? null;
+    retryScrubIntent.current = null;
     if (isLoadedSelected && file.id === selected!.id) {
-      retryScrubIntent.current = null;
       if (Number.isFinite(player.duration) && seconds >= player.duration) {
         setMessage('This timestamp falls beyond this recording. Please choose another recording file.');
         return;
@@ -240,7 +238,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       setMessage('');
     } else {
       if (seekSource) report('audio_seek', file.id, { seekSource });
-      void load(file, seconds, shouldPlay, activeScrubIntent);
+      void load(file, seconds, shouldPlay);
     }
   }, [available, hasLoadedSelected, load, onTime, playLoaded, report, selected]);
 
@@ -370,22 +368,42 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
 
   const toggle = useCallback(() => {
     if (busy) return;
-    if (playing) audio.current?.pause();
-    else {
-      const player = audio.current;
-      const loadedDuration = player && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : null;
-      const atEnd = Boolean(player?.ended)
-        || (loadedDuration !== null
-          ? lastPosition.current >= loadedDuration - 0.05
-          : sliderMax > 0 && lastPosition.current >= sliderMax);
-      if (atEnd) {
-        retryScrubIntent.current = null;
-        seek(0, true);
-      } else {
-        seek(lastPosition.current, true, undefined, retryScrubIntent.current ?? undefined);
-      }
+    if (playing) {
+      audio.current?.pause();
+      return;
     }
-  }, [busy, playing, seek, sliderMax]);
+    if (!selected?.available) return;
+    const player = audio.current;
+    const loadedDuration = player && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : null;
+    const atEnd = Boolean(player?.ended)
+      || (loadedDuration !== null
+        ? lastPosition.current >= loadedDuration - 0.05
+        : sliderMax > 0 && lastPosition.current >= sliderMax);
+    const target = atEnd ? 0 : lastPosition.current;
+    const scrubIntent = atEnd ? undefined : (retryScrubIntent.current ?? undefined);
+    recoveryTried.current = false;
+    setMessage('');
+    if (hasLoadedSelected(player)) {
+      retryScrubIntent.current = null;
+      if (atEnd || Math.abs(player.currentTime - target) > 0.05) {
+        telemetry.current.tracker.suspend();
+        programmedSeek.current = { generation: generation.current, target, when: performance.now() };
+        player.currentTime = target;
+        lastPosition.current = target;
+        setPosition(target);
+        onTime(target);
+      }
+      void playLoaded();
+      return;
+    }
+    if (atEnd) {
+      retryScrubIntent.current = null;
+      lastPosition.current = 0;
+      setPosition(0);
+      onTime(0);
+    }
+    void load(selected, target, true, scrubIntent);
+  }, [busy, hasLoadedSelected, load, onTime, playLoaded, playing, selected, sliderMax]);
 
   useImperativeHandle(ref, () => ({ playAt: seconds => seek(seconds, true, 'passage'), toggle }), [seek, toggle]);
 
