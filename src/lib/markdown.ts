@@ -1,7 +1,20 @@
-const FENCE_RE = /^ {0,3}(`{3,}|~{3,})/;
-const ATX_HEADING_RE = /^ {0,3}(#{1,6})(?:[ \t]+|$)/;
+export type BaseHeadingLevel = 2 | 3 | 4;
+export type HtmlHeadingLevel = 2 | 3 | 4 | 5 | 6;
+
 const LEADING_ATX_H1_RE = /^\uFEFF?(?:[ \t]*\r?\n)* {0,3}#[ \t]+([^\r\n]+?)(?:[ \t]+#+[ \t]*)?(?:\r?\n|$)/;
 const LEADING_SETEXT_H1_RE = /^\uFEFF?(?:[ \t]*\r?\n)* {0,3}([^\r\n]+?)[ \t]*\r?\n {0,3}=+[ \t]*(?:\r?\n|$)/;
+
+interface MdastNode {
+  type: string;
+  depth?: number;
+  value?: string;
+  children?: MdastNode[];
+}
+
+export interface NormalizeHeadingsOptions {
+  baseHeadingLevel?: BaseHeadingLevel;
+  documentTitle?: string;
+}
 
 function normalizeHeadingText(value: string): string {
   return value
@@ -12,6 +25,12 @@ function normalizeHeadingText(value: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+function extractNodeText(node: MdastNode): string {
+  if (typeof node.value === 'string') return node.value;
+  if (!Array.isArray(node.children)) return '';
+  return node.children.map(extractNodeText).join('');
 }
 
 /**
@@ -37,62 +56,68 @@ export function stripDuplicateLeadingHeading(markdown: string, documentTitle?: s
 }
 
 /**
- * Find the highest-level (smallest numeric depth, 1–6) markdown heading present
- * outside fenced code blocks so heading shifts never skip levels.
+ * Normalize a sequence of parsed markdown heading depths (1–6) starting at
+ * baseHeadingLevel (2–4) without skipping levels or exceeding h6.
  */
-export function minMarkdownHeadingLevel(markdown: string): 1 | 2 | 3 | 4 | 5 | 6 {
-  const lines = markdown.split(/\r?\n/);
-  let fenceChar = '';
-  let fenceLength = 0;
-  let minLevel = 7;
+export function normalizeHeadingDepths(
+  sourceDepths: readonly number[],
+  baseHeadingLevel: BaseHeadingLevel = 2,
+): HtmlHeadingLevel[] {
+  const stack: Array<{ sourceDepth: number; normalizedDepth: HtmlHeadingLevel }> = [];
+  const result: HtmlHeadingLevel[] = [];
 
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    const fence = FENCE_RE.exec(line);
-    if (fence) {
-      const marker = fence[1];
-      if (!fenceChar) {
-        fenceChar = marker[0];
-        fenceLength = marker.length;
-        continue;
-      }
-      if (marker[0] === fenceChar && marker.length >= fenceLength && line.trim().length === marker.length) {
-        fenceChar = '';
-        fenceLength = 0;
-        continue;
-      }
+  for (const rawDepth of sourceDepths) {
+    const sourceDepth = Math.min(6, Math.max(1, Math.trunc(rawDepth)));
+    while (stack.length > 0 && stack[stack.length - 1].sourceDepth >= sourceDepth) {
+      stack.pop();
     }
-    if (fenceChar) continue;
-
-    const atx = ATX_HEADING_RE.exec(line);
-    if (atx) {
-      minLevel = Math.min(minLevel, atx[1].length);
-      if (minLevel === 1) return 1;
-      continue;
-    }
-
-    if (
-      i + 1 < lines.length
-      && line.trim().length > 0
-      && !/^ {0,3}(?:>|- |\* |\+ |\d+\. |\||```|~~~)/.test(line)
-      && /^ {0,3}(=+|-+)[ \t]*$/.test(lines[i + 1])
-    ) {
-      const level = lines[i + 1].trimStart()[0] === '=' ? 1 : 2;
-      minLevel = Math.min(minLevel, level);
-      if (minLevel === 1) return 1;
-      i += 1;
-    }
+    const nextDepth: HtmlHeadingLevel = stack.length === 0
+      ? baseHeadingLevel
+      : (Math.min(6, stack[stack.length - 1].normalizedDepth + 1) as HtmlHeadingLevel);
+    stack.push({ sourceDepth, normalizedDepth: nextDepth });
+    result.push(nextDepth);
   }
 
-  return (minLevel >= 1 && minLevel <= 6 ? minLevel : 1) as 1 | 2 | 3 | 4 | 5 | 6;
+  return result;
 }
 
-export function resolveMarkdownHeadingLevel(
-  markdownLevel: 1 | 2 | 3 | 4 | 5 | 6,
-  baseHeadingLevel: 2 | 3 | 4 = 2,
-  minLevel: 1 | 2 | 3 | 4 | 5 | 6 = 1,
-): 2 | 3 | 4 | 5 | 6 {
-  const offset = Math.max(0, markdownLevel - minLevel);
-  const resolved = Math.min(6, Math.max(2, baseHeadingLevel + offset));
-  return resolved as 2 | 3 | 4 | 5 | 6;
+function collectHeadingNodes(node: MdastNode, headings: MdastNode[]): void {
+  if (node.type === 'heading' && typeof node.depth === 'number') {
+    headings.push(node);
+    return;
+  }
+  if (!Array.isArray(node.children)) return;
+  for (const child of node.children) {
+    collectHeadingNodes(child, headings);
+  }
+}
+
+/**
+ * Remark plugin that strips a leading H1 duplicating documentTitle and
+ * normalizes all parsed heading nodes (including inside block quotes and lists,
+ * while naturally ignoring code blocks) so rendered heading levels never skip
+ * levels, never emit h1, and never exceed h6.
+ */
+export function remarkNormalizeHeadings(options: NormalizeHeadingsOptions = {}) {
+  const baseHeadingLevel = options.baseHeadingLevel ?? 2;
+  const targetTitle = options.documentTitle?.trim() ? normalizeHeadingText(options.documentTitle) : '';
+
+  return (tree: MdastNode) => {
+    if (targetTitle && Array.isArray(tree.children) && tree.children.length > 0) {
+      const first = tree.children[0];
+      if (first.type === 'heading' && first.depth === 1 && normalizeHeadingText(extractNodeText(first)) === targetTitle) {
+        tree.children.shift();
+      }
+    }
+
+    const headings: MdastNode[] = [];
+    collectHeadingNodes(tree, headings);
+    const normalized = normalizeHeadingDepths(
+      headings.map(heading => heading.depth ?? 1),
+      baseHeadingLevel,
+    );
+    for (let i = 0; i < headings.length; i += 1) {
+      headings[i].depth = normalized[i];
+    }
+  };
 }

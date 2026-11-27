@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ArchiveMarkdown from '../src/components/ArchiveMarkdown';
-import { minMarkdownHeadingLevel, resolveMarkdownHeadingLevel, stripDuplicateLeadingHeading } from '../src/lib/markdown';
+import { normalizeHeadingDepths, stripDuplicateLeadingHeading } from '../src/lib/markdown';
 
 test('stripDuplicateLeadingHeading removes leading H1 matching document title across normalization variants', () => {
   assert.equal(
@@ -29,37 +29,45 @@ test('stripDuplicateLeadingHeading removes leading H1 matching document title ac
   assert.equal(stripDuplicateLeadingHeading(h2Leading, 'Fixture guide'), h2Leading);
 });
 
-test('minMarkdownHeadingLevel ignores headings inside fenced code blocks and detects ATX/Setext levels', () => {
-  const md = [
-    'Intro text.',
-    '```markdown',
-    '# Not a real heading',
-    '```',
-    '## First real section',
-    '### Subsection',
-  ].join('\n');
-  assert.equal(minMarkdownHeadingLevel(md), 2);
+test('normalizeHeadingDepths preserves consecutive nesting, collapses source gaps, and clamps at h6', () => {
+  // Ordinary consecutive headings at base 3: ## -> ### -> ### -> ## -> ###
+  assert.deepEqual(normalizeHeadingDepths([2, 3, 3, 2, 3], 3), [3, 4, 4, 3, 4]);
 
-  assert.equal(minMarkdownHeadingLevel('Subtitle\n---\n\nText.'), 2);
-  assert.equal(minMarkdownHeadingLevel('Title\n===\n\nText.'), 1);
-  assert.equal(minMarkdownHeadingLevel('Plain text only.\n\n---\n\nAfter rule.'), 1);
+  // Source gap (## followed by ####) normalizes to h3 -> h4 instead of skipping to h5
+  assert.deepEqual(normalizeHeadingDepths([2, 4], 3), [3, 4]);
+  assert.deepEqual(normalizeHeadingDepths([2, 4, 5, 3], 3), [3, 4, 5, 4]);
+
+  // Research card (base 4) clamps cleanly at h6
+  assert.deepEqual(normalizeHeadingDepths([1, 2, 3, 4, 5], 4), [4, 5, 6, 6, 6]);
+
+  // Kept leading H1 followed by H2 at base 3 -> h3 -> h4
+  assert.deepEqual(normalizeHeadingDepths([1, 2], 3), [3, 4]);
 });
 
-test('resolveMarkdownHeadingLevel shifts heading depth without skipping levels or emitting h1', () => {
-  // Stripped leading H1 -> minLevel=2; document detail uses baseHeadingLevel=3
-  assert.equal(resolveMarkdownHeadingLevel(2, 3, 2), 3);
-  assert.equal(resolveMarkdownHeadingLevel(3, 3, 2), 4);
-  assert.equal(resolveMarkdownHeadingLevel(4, 3, 2), 5);
-  assert.equal(resolveMarkdownHeadingLevel(6, 3, 2), 6);
+test('ArchiveMarkdown normalizes container headings (block quotes), closes source gaps, and ignores code-block hashes', () => {
+  const quoted = [
+    '```markdown',
+    '# Hash inside fenced code block',
+    '```',
+    '',
+    '> ## Quoted section',
+    '',
+    '#### Skipped depth subsection',
+  ].join('\n');
 
-  // Kept leading H1 -> minLevel=1; document detail uses baseHeadingLevel=3
-  assert.equal(resolveMarkdownHeadingLevel(1, 3, 1), 3);
-  assert.equal(resolveMarkdownHeadingLevel(2, 3, 1), 4);
+  const html = renderToStaticMarkup(
+    createElement(ArchiveMarkdown, {
+      text: quoted,
+      baseHeadingLevel: 3,
+      onEntry: () => {},
+    }),
+  );
 
-  // Research reading card uses baseHeadingLevel=4
-  assert.equal(resolveMarkdownHeadingLevel(2, 4, 2), 4);
-  assert.equal(resolveMarkdownHeadingLevel(3, 4, 2), 5);
-  assert.equal(resolveMarkdownHeadingLevel(5, 4, 2), 6);
+  // Quoted H2 becomes h3 (no skip from document h2 to h4), and #### becomes h4 (no skip to h5)
+  assert.match(html, /<blockquote>\s*<h3>Quoted section<\/h3>\s*<\/blockquote>/);
+  assert.match(html, /<h4>Skipped depth subsection<\/h4>/);
+  assert.doesNotMatch(html, /<h1\b|<h2\b|<h5\b/i);
+  assert.match(html, /<code[^>]*># Hash inside fenced code block/);
 });
 
 test('ArchiveMarkdown strips duplicate leading heading, keeps heading hierarchy intact, and renders escaped pipes in GFM table code spans as 3 intact columns', () => {
