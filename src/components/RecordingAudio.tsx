@@ -195,18 +195,20 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
 
   useEffect(() => { if (source) audio.current?.load(); }, [source]);
 
+  const hasLoadedSelected = useCallback((player: HTMLAudioElement | null): player is HTMLAudioElement => Boolean(
+    selected?.available
+    && source?.fileId === selected.id
+    && Date.now() < source.expiresAt - 15_000
+    && player
+    && player.readyState >= 1
+    && !failed,
+  ), [failed, selected, source]);
+
   const seek = useCallback((seconds: number, shouldPlay = true, seekSource?: SeekSource) => {
     if (!Number.isFinite(seconds) || seconds < 0) return;
     const player = audio.current;
-    const isLoadedSelected = Boolean(
-      selected?.available
-      && source?.fileId === selected.id
-      && Date.now() < source.expiresAt - 15_000
-      && player
-      && player.readyState >= 1
-      && !failed,
-    );
-    const loadedAccepts = isLoadedSelected && Number.isFinite(player!.duration) && seconds < player!.duration;
+    const isLoadedSelected = hasLoadedSelected(player);
+    const loadedAccepts = isLoadedSelected && Number.isFinite(player.duration) && seconds < player.duration;
     let file = selected;
     if (!loadedAccepts && (!file?.available || (file.duration > 0 && seconds >= file.duration))) {
       file = available.find(item => item.duration > seconds);
@@ -217,14 +219,14 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     }
     recoveryTried.current = false;
     if (isLoadedSelected && file.id === selected!.id) {
-      if (Number.isFinite(player!.duration) && seconds >= player!.duration) {
+      if (Number.isFinite(player.duration) && seconds >= player.duration) {
         setMessage('This timestamp falls beyond this recording. Please choose another recording file.');
         return;
       }
       if (seekSource) report('audio_seek', file.id, { seekSource });
       telemetry.current.tracker.suspend();
       programmedSeek.current = { generation: generation.current, target: seconds, when: performance.now() };
-      player!.currentTime = seconds;
+      player.currentTime = seconds;
       lastPosition.current = seconds;
       setPosition(seconds);
       onTime(seconds);
@@ -234,7 +236,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       if (seekSource) report('audio_seek', file.id, { seekSource });
       void load(file, seconds, shouldPlay);
     }
-  }, [available, failed, load, onTime, playLoaded, report, selected, source]);
+  }, [available, hasLoadedSelected, load, onTime, playLoaded, report, selected]);
 
   const scrubTo = useCallback((rawSeconds: number) => {
     if (!selected?.available || !Number.isFinite(rawSeconds) || sliderMax <= 0) return;
@@ -243,7 +245,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     recoveryTried.current = false;
     setMessage('');
     const player = audio.current;
-    if (source?.fileId === selected.id && Date.now() < source.expiresAt - 15_000 && player && player.readyState >= 1 && !failed) {
+    if (hasLoadedSelected(player)) {
       const mediaMax = Number.isFinite(player.duration) && player.duration > 0 ? player.duration : clamped;
       const mediaTarget = clamped >= sliderMax ? mediaMax : Math.min(clamped, mediaMax);
       telemetry.current.tracker.suspend();
@@ -270,7 +272,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     lastPosition.current = clamped;
     setPosition(clamped);
     onTime(clamped);
-  }, [failed, load, onTime, playing, report, scheduleScrubSeek, selected, sliderMax, source]);
+  }, [hasLoadedSelected, load, onTime, playing, report, scheduleScrubSeek, selected, sliderMax, source]);
 
   const handleSeekKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -421,12 +423,12 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             <button type="button" className="button primary" aria-disabled={busy || undefined} onClick={toggle}>{playing ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}{busy ? 'Loading audio…' : playing ? 'Pause' : 'Play recording'}</button>
             <button type="button" className="button secondary" disabled={!source || busy} onClick={() => seek(Math.max(0, lastPosition.current - 15), playing, 'back')}><RotateCcw size={17} aria-hidden="true" /><span className="sr-only">Back 15 seconds</span><span aria-hidden="true">15s</span></button>
             <button type="button" className="button secondary" disabled={!source || busy} onClick={() => {
-              const playerDuration = audio.current?.duration;
-              const bounds = [
-                Number.isFinite(playerDuration) && playerDuration! > 0 ? Math.max(0, playerDuration! - 0.05) : null,
-                selected && selected.duration > 0 ? Math.max(0, selected.duration - 0.05) : null,
-              ].filter((value): value is number => value !== null);
-              const upperBound = bounds.length ? Math.min(...bounds) : lastPosition.current + 30;
+              const player = audio.current;
+              const boundDuration = hasLoadedSelected(player) && Number.isFinite(player.duration) && player.duration > 0
+                ? player.duration
+                : (selected && selected.duration > 0 ? selected.duration : null);
+              const upperBound = boundDuration !== null ? Math.max(0, boundDuration - 0.05) : lastPosition.current + 30;
+              if (boundDuration !== null && lastPosition.current >= upperBound) return;
               seek(Math.min(lastPosition.current + 30, upperBound), playing, 'forward');
             }}><span className="sr-only">Forward 30 seconds</span><span aria-hidden="true">30s</span><RotateCw size={17} aria-hidden="true" /></button>
             <div className="playback-speed field"><label htmlFor="playback-speed">Speed</label><select id="playback-speed" value={speed} onChange={event => {
