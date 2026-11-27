@@ -1,0 +1,23 @@
+{
+  "note": "Invented local AI transcript draft for automated testing.",
+  "segments": [
+    {
+      "id": 0,
+      "start": 0,
+      "end": 4,
+      "text": "Ring the harbor bell once for the morning ferry."
+    },
+    {
+      "id": 1,
+      "start": 4,
+      "end": 10,
+      "text": "The paper lighthouse shines over the windowsill harbor."
+    },
+    {
+      "id": 2,
+      "start": 10,
+      "end": 16,
+      "text": "Can the blue locomotive meet the ferry at the pier?"
+    }
+  ]
+}

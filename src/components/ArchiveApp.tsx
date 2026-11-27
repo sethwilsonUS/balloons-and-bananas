@@ -76,6 +76,7 @@ export default function ArchiveApp() {
   const [shareState, setShareState] = useState<'idle' | 'busy' | 'copied' | 'manual' | 'error'>('idle');
   const [shareUrl, setShareUrl] = useState('');
   const resultHeading = useRef<HTMLHeadingElement>(null);
+  const focusResultsOnLoad = useRef(false);
   const shareInput = useRef<HTMLInputElement>(null);
   const documentHeading = useRef<HTMLHeadingElement>(null);
   const pendingSearchAnalytics = useRef<{ flush: () => void; cancel: () => void } | null>(null);
@@ -200,6 +201,10 @@ export default function ArchiveApp() {
       }).then(data => {
         if (!controller.signal.aborted) {
           setSearch(data); setSearchSpeaker(speaker); setSearchBusy(false);
+          if (focusResultsOnLoad.current) {
+            focusResultsOnLoad.current = false;
+            window.requestAnimationFrame(() => resultHeading.current?.focus());
+          }
           const trimmedQuery = query.trim();
           const repeatedSubmission = searchAttempt > (lastSearchAnalytics.current?.attempt || 0);
           if (trimmedQuery || topic || origin || marker || data.page > 1 || repeatedSubmission) {
@@ -225,6 +230,7 @@ export default function ArchiveApp() {
         }
       }).catch((error: unknown) => {
         if (controller.signal.aborted) return;
+        focusResultsOnLoad.current = false;
         setSearchError('The search could not be completed. Please try again.'); setSearchBusy(false);
       });
     }, query ? 280 : 0);
@@ -239,6 +245,7 @@ export default function ArchiveApp() {
   }, [shareState]);
 
   const navigate = useCallback((next: Section, id: string | null = null, doc: string | null = null, nextPassage: number | null = null, nextMarker: LinguisticMarkerId | '' = '') => {
+    if (next !== 'recordings' || id || doc) focusResultsOnLoad.current = false;
     if (!id && !doc && (next !== section || entryId || documentId)) trackArchiveEvent('section_view', { section: next });
     const url = new URL(window.location.href);
     if (id) url.searchParams.set('entry', id); else url.searchParams.delete('entry');
@@ -256,7 +263,7 @@ export default function ArchiveApp() {
     setShareUrl('');
     window.scrollTo({ top: 0, behavior: 'instant' });
     window.requestAnimationFrame(() => {
-      if (targetPassage !== null) return;
+      if (targetPassage !== null || focusResultsOnLoad.current) return;
       const heading = document.querySelector<HTMLElement>('#main h2');
       if (heading) {
         heading.setAttribute('tabindex', '-1');
@@ -269,6 +276,7 @@ export default function ArchiveApp() {
     const trimmedQuery = nextQuery.trim();
     // The home page searches the whole collection, regardless of earlier filters.
     // Omitting view preserves the reader's Details/List preference.
+    focusResultsOnLoad.current = true;
     restoreFilters({ query: trimmedQuery, topic: nextTopic, origin: '', marker: '', speaker: 'child', sort: trimmedQuery ? 'relevance' : 'oldest', page: 1, linguisticsOpen: false });
     setSearch(null);
     setSearchError('');
@@ -341,7 +349,7 @@ export default function ArchiveApp() {
     <ArchiveAnalytics ready={loadState === 'ready'} section={section} entryId={entryId} documentId={documentId} />
     <a className="skip-link" href="#main">Skip to main content</a>
     <header className="site-header">
-      <div className="top-bar"><button className="brand-button" type="button" onClick={() => navigate('overview')} aria-label="Balloons and Bananas, collection overview"><CollectionMark /><span>Balloons &amp; Bananas</span></button><span className="unlisted-label">Unlisted archive</span><ThemeControl /><button className="button share-button" type="button" disabled={shareState === 'busy'} onClick={() => void copyShareLink()}>{shareState === 'copied' ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />}<span>{shareState === 'busy' ? 'Preparing…' : shareState === 'copied' ? 'Link copied' : 'Copy share link'}</span></button></div>
+      <div className="top-bar"><button className="brand-button" type="button" onClick={() => navigate('overview')} aria-label="Balloons & Bananas, collection overview"><CollectionMark /><span>Balloons &amp; Bananas</span></button><span className="unlisted-label">Unlisted archive</span><ThemeControl /><button className="button share-button" type="button" disabled={shareState === 'busy'} onClick={() => void copyShareLink()}>{shareState === 'copied' ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />}<span>{shareState === 'busy' ? 'Preparing…' : shareState === 'copied' ? 'Link copied' : 'Copy share link'}</span></button></div>
       <div className="share-feedback" role="status">{shareState === 'copied' ? 'Link copied. Anyone can open this archive at its URL.' : shareState === 'error' ? 'That action could not be completed. Please try again.' : ''}</div>
       {shareState === 'manual' && <div className="manual-share"><label htmlFor="share-link">Copy this archive link</label><div><input ref={shareInput} id="share-link" value={shareUrl} readOnly /><button type="button" className="button secondary" onClick={() => { setShareState('idle'); setShareUrl(''); }}><X size={16} aria-hidden="true" />Close</button></div><p className="small muted">Anyone can open this archive at its URL.</p></div>}
       <div className={`masthead ${section !== 'overview' || entryId || documentId ? 'compact' : ''}`}>
@@ -373,8 +381,8 @@ export default function ArchiveApp() {
         {overviewDocs.length > 0 && <section className="overview-context" aria-label="Archive background">{overviewDocs.map(document => <div key={document.id} className="context-document">{document.markdown ? <ArchiveMarkdown text={document.markdown} onEntry={openEntry} onDocument={openDocument} /> : <><h2>{document.title}</h2><p>{document.description}</p></>}{document.assets.length > 0 && <div className="document-downloads">{document.assets.map(asset => <a key={asset.id} className="text-link" href={`/api/assets/${encodeURIComponent(asset.id)}`} download={asset.name} referrerPolicy="no-referrer" onClick={() => trackArchiveEvent('research_open', { documentId: document.id, action: 'download', assetId: asset.id })} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('research_open', { documentId: document.id, action: 'download', assetId: asset.id }); }}><Download size={16} aria-hidden="true" />{asset.label}</a>)}</div>}</div>)}</section>}
       </> : section === 'recordings' ? <section className="browse-section" aria-labelledby="browse-heading">
         <div className="section-heading browse-heading"><h2 id="browse-heading">Find a recording</h2></div>
-        <form className="search-form" onSubmit={event => { event.preventDefault(); setPage(1); setSearchAttempt(value => value + 1); }} role="search" aria-label="Search the collection">
-          <div className="field main-search"><label htmlFor="archive-search">Search recordings and transcripts</label><div className="search-input"><Search size={21} aria-hidden="true" /><input id="archive-search" type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(1); if (!query && event.target.value) setSort('relevance'); }} placeholder="Name, place, or phrase" autoComplete="off" spellCheck={false} /><button type="submit" className="search-submit" aria-label="Search"><ArrowRight size={20} aria-hidden="true" /></button></div></div>
+        <form className="search-form" onSubmit={event => { event.preventDefault(); focusResultsOnLoad.current = true; setPage(1); setSearchAttempt(value => value + 1); }} role="search" aria-label="Search the collection">
+          <div className="field main-search"><label htmlFor="archive-search">Search recordings and transcripts</label><div className="search-input"><Search size={21} aria-hidden="true" /><input id="archive-search" type="search" value={query} onChange={event => { focusResultsOnLoad.current = false; setQuery(event.target.value); setPage(1); if (!query && event.target.value) setSort('relevance'); }} placeholder="Name, place, or phrase" autoComplete="off" spellCheck={false} /><button type="submit" className="search-submit" aria-label="Search"><ArrowRight size={20} aria-hidden="true" /></button></div></div>
           <div className="filter-row"><div className="field"><label htmlFor="topic-filter">Theme</label><select id="topic-filter" value={topic} onChange={event => { trackArchiveEvent('filter_changed', { filter: 'theme', value: event.target.value }); setTopic(event.target.value); setPage(1); }}><option value="">All themes</option>{positiveThemes.map(theme => { const item = catalog.topics.find(value => value.name === theme.topic); return item ? <option key={theme.topic} value={theme.topic}>{theme.label} ({item.count})</option> : null; })}</select></div><div className="field"><label htmlFor="origin-filter">Transcript source</label><select id="origin-filter" value={origin} onChange={event => { trackArchiveEvent('filter_changed', { filter: 'origin', value: event.target.value }); setOrigin(event.target.value as Origin | ''); setPage(1); }}><option value="">All sources</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><div className="field"><label htmlFor="sort-order">Sort by</label><select id="sort-order" value={sort} onChange={event => { trackArchiveEvent('filter_changed', { filter: 'sort', value: event.target.value }); setSort(event.target.value as typeof sort); setPage(1); }}><option value="oldest">Earliest first</option><option value="newest">Latest first</option><option value="relevance">Best match</option></select></div></div>
           <LinguisticFilters marker={marker} speaker={speaker} open={linguisticsOpen} onOpen={setLinguisticsOpen} onMarker={value => { trackArchiveEvent('filter_changed', { filter: 'marker', value }); setMarker(value); setPage(1); }} onSpeaker={value => { trackArchiveEvent('filter_changed', { filter: 'speaker', value }); setSpeaker(value); setPage(1); }} />
         </form>

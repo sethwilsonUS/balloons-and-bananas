@@ -1,0 +1,448 @@
+{
+  "version": 1,
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "entries": [
+    {
+      "id": "fixture-010815-locomotive",
+      "sourceName": "010815.cha",
+      "title": "Blue locomotive and wooden bridge",
+      "overview": "An invented play session assembling a wooden track, naming stations, and sending a blue locomotive across a cardboard bridge.",
+      "origin": "archived_research",
+      "topics": [
+        "Play and imagination",
+        "Learning and questions"
+      ],
+      "dates": [
+        "1983-01-15"
+      ],
+      "ages": [
+        "1;08.15"
+      ],
+      "audio": [
+        {
+          "id": "fixture-audio-locomotive-mp3",
+          "name": "010815-locomotive.mp3",
+          "format": "mp3",
+          "duration": 36,
+          "bytes": 72376,
+          "available": true,
+          "kind": "original"
+        }
+      ],
+      "preferredAudioId": "fixture-audio-locomotive-mp3",
+      "sources": [
+        {
+          "id": "fixture-source-locomotive-cha",
+          "name": "010815-locomotive.cha",
+          "format": "cha",
+          "label": "Original CHAT transcript"
+        },
+        {
+          "id": "fixture-source-locomotive-txt",
+          "name": "010815-locomotive.txt",
+          "format": "txt",
+          "label": "Readable transcript copy"
+        }
+      ],
+      "moments": [
+        {
+          "title": "Crossing the cardboard bridge",
+          "description": "The child tests the blue locomotive on the bridge and asks where the express stops.",
+          "start": 2,
+          "end": 10,
+          "locator": "Source CHAT lines 8–12"
+        },
+        {
+          "title": "Counting station lanterns",
+          "description": "An untimed remark near the end of play asking for three lanterns by the station.",
+          "start": null,
+          "end": null,
+          "locator": "Source CHAT lines 12–13"
+        }
+      ],
+      "limits": [
+        "Invented fixture session for automated browser and accessibility testing.",
+        "Timestamps are synthetic and map onto a generated test tone."
+      ],
+      "transcript": [
+        {
+          "speaker": "Child (CHI, target child)",
+          "text": "blue [/] blue locomotive !",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "speaker": "Parent (FAT, father)",
+          "text": "where does the locomotive go next ?",
+          "start": 4,
+          "end": 9
+        },
+        {
+          "speaker": "Child (CHI, target child)",
+          "text": "where [//] where is the bridge (.) papa ?\n  Note: pointing toward the cardboard arch",
+          "start": 9,
+          "end": 15
+        },
+        {
+          "speaker": "Parent (FAT, father)",
+          "text": "right here by the wooden station .",
+          "start": 15,
+          "end": 22
+        },
+        {
+          "speaker": "Child (CHI, target child)",
+          "text": "no , I want three lanterns over there .",
+          "start": null,
+          "end": null
+        }
+      ],
+      "sourceSha256": "c03aed2c771e6c137def2ac3d021ac016820a72df023dad156a3f20288a50835",
+      "association": "Invented archived research fixture paired with a synthetic MP3 recording."
+    },
+    {
+      "id": "fixture-020110-submarine",
+      "sourceName": "020110-tb.cha",
+      "title": "Yellow submarine in the courtyard",
+      "overview": "An invented courtyard dialogue imagining a yellow submarine diving beneath garden stepping stones.",
+      "origin": "talkbank_ai_draft",
+      "topics": [
+        "Play and imagination",
+        "Outings and nature"
+      ],
+      "dates": [
+        "1983-06-10"
+      ],
+      "ages": [
+        "2;01.10"
+      ],
+      "audio": [
+        {
+          "id": "fixture-audio-submarine-mp3",
+          "name": "020110-submarine-listening.mp3",
+          "format": "mp3",
+          "duration": 18,
+          "bytes": 36380,
+          "available": true,
+          "kind": "listening-copy",
+          "derivedFromId": "fixture-audio-submarine-wav",
+          "encoding": "16 kbps mono synthetic fixture MP3"
+        },
+        {
+          "id": "fixture-audio-submarine-wav",
+          "name": "020110-submarine.wav",
+          "format": "wav",
+          "duration": 1,
+          "bytes": 8078,
+          "available": true,
+          "kind": "original"
+        }
+      ],
+      "preferredAudioId": "fixture-audio-submarine-mp3",
+      "sources": [
+        {
+          "id": "fixture-source-submarine-cha",
+          "name": "020110-tb.cha",
+          "format": "cha",
+          "label": "TalkBank AI CHAT draft"
+        }
+      ],
+      "moments": [
+        {
+          "title": "Submarine periscope check",
+          "description": "Imagining a brass periscope spotting pebbles and paper boats in the courtyard.",
+          "start": 1,
+          "end": 8,
+          "locator": "Source CHAT lines 6–8"
+        }
+      ],
+      "limits": [
+        "Invented TalkBank AI draft fixture; machine-draft wording and timings are unverified."
+      ],
+      "transcript": [
+        {
+          "speaker": "Participant (PAR1)",
+          "text": "the yellow submarine [/] submarine dives under the stone .",
+          "start": 0,
+          "end": 5
+        },
+        {
+          "speaker": "Participant (PAR2)",
+          "text": "what can the periscope see from here ?",
+          "start": 5,
+          "end": 11
+        },
+        {
+          "speaker": "Participant (PAR1)",
+          "text": "paper boats (..) floating past the bench .",
+          "start": 11,
+          "end": 17
+        }
+      ],
+      "sourceSha256": "ad78675019c5d29b2087c755a91d41dfb1ca28248a098ac1e91958565b35065b",
+      "association": "Invented TalkBank AI draft fixture with synthetic WAV original and MP3 listening copy."
+    },
+    {
+      "id": "fixture-020604-lighthouse",
+      "sourceName": "020604-local.json",
+      "title": "Paper lighthouse and harbor bells",
+      "overview": "An invented local speech-recognition draft about folding a paper lighthouse and ringing tiny brass bells on the windowsill.",
+      "origin": "local_ai_draft",
+      "topics": [
+        "Music and stories",
+        "Outings and nature"
+      ],
+      "dates": [],
+      "ages": [],
+      "audio": [
+        {
+          "id": "fixture-audio-lighthouse-mp3",
+          "name": "020604-lighthouse.mp3",
+          "format": "mp3",
+          "duration": 18,
+          "bytes": 36380,
+          "available": true,
+          "kind": "original"
+        }
+      ],
+      "preferredAudioId": "fixture-audio-lighthouse-mp3",
+      "sources": [
+        {
+          "id": "fixture-source-lighthouse-json",
+          "name": "020604-local.json",
+          "format": "json",
+          "label": "Local AI transcript JSON"
+        }
+      ],
+      "moments": [
+        {
+          "title": "Harbor bell chorus",
+          "description": "Ringing three windowsill bells to guide the imaginary morning ferry.",
+          "start": 2,
+          "end": 9,
+          "locator": "Source JSON segments 0–1 (zero-based)"
+        },
+        {
+          "title": "Folding the lantern roof",
+          "description": "An untimed note about taping a paper cone onto the cardboard tower.",
+          "start": null,
+          "end": null,
+          "locator": "Source JSON segments 1–2 (zero-based)"
+        }
+      ],
+      "limits": [
+        "Invented local AI draft fixture; speaker labels are omitted and wording is unverified."
+      ],
+      "transcript": [
+        {
+          "text": "Ring the harbor bell once for the morning ferry.",
+          "start": 0,
+          "end": 4
+        },
+        {
+          "text": "The paper lighthouse shines over the windowsill harbor.",
+          "start": 4,
+          "end": 10
+        },
+        {
+          "text": "Can the blue locomotive meet the ferry at the pier?",
+          "start": 10,
+          "end": 16
+        }
+      ],
+      "sourceSha256": "8ab500008d0c1829c0309b8d0bd4e34972bfb8ac31197561802c44df313650a4",
+      "association": "Invented local AI draft fixture paired with a synthetic MP3 recording."
+    },
+    {
+      "id": "fixture-011103-observatory",
+      "sourceName": "011103.cha",
+      "title": "Cardboard observatory without audio",
+      "overview": "An invented archived research transcript with no associated audio file, describing paper constellations taped to a reading lamp.",
+      "origin": "archived_research",
+      "topics": [
+        "Learning and questions",
+        "Vision and access"
+      ],
+      "dates": [
+        "1983-04-03"
+      ],
+      "ages": [],
+      "audio": [],
+      "preferredAudioId": null,
+      "sources": [
+        {
+          "id": "fixture-source-observatory-cha",
+          "name": "011103.cha",
+          "format": "cha",
+          "label": "Original CHAT transcript"
+        }
+      ],
+      "moments": [
+        {
+          "title": "Naming the paper stars",
+          "description": "Two untimed utterances naming a paper telescope and a compass star.",
+          "start": null,
+          "end": null,
+          "locator": "Source CHAT lines 6–8"
+        }
+      ],
+      "limits": [
+        "No audio file has a confirmed association with this invented fixture session."
+      ],
+      "transcript": [
+        {
+          "speaker": "Child (CHI, target child)",
+          "text": "that is my paper telescope .",
+          "start": null,
+          "end": null
+        },
+        {
+          "speaker": "Parent (FAT, father)",
+          "text": "what constellations can you point to tonight ?",
+          "start": null,
+          "end": null
+        },
+        {
+          "speaker": "Child (CHI, target child)",
+          "text": "the bright [/] bright compass star (.) right here .",
+          "start": null,
+          "end": null
+        }
+      ],
+      "sourceSha256": "180d8b496ba8643ed19acc65f84e51029f3bd8902f9313c200ab6e73f956b1a5",
+      "association": "Invented archived research fixture with transcript only and no associated audio."
+    }
+  ],
+  "documents": [
+    {
+      "id": "fixture-overview-note",
+      "title": "About this invented fixture collection",
+      "description": "Overview note for the synthetic E2E test fixture.",
+      "category": "overview",
+      "markdown": "# About this invented fixture collection\n\nThis small synthetic collection exercises the reader end to end without any real archive text. Start with [Blue locomotive and wooden bridge](/?entry=fixture-010815-locomotive) or review the [fixture annotation provenance guide](/?document=fixture-provenance-guide).\n",
+      "assets": [
+        {
+          "id": "fixture-doc-overview-md",
+          "name": "fixture-overview-note.md",
+          "format": "md",
+          "label": "Download overview note (MD)"
+        }
+      ]
+    },
+    {
+      "id": "fixture-provenance-guide",
+      "title": "Fixture annotation provenance guide",
+      "description": "Explains how invented transcript origins and CHAT notation layers remain separate.",
+      "category": "guide",
+      "markdown": "# Fixture annotation provenance guide\n\nThis invented guide documents how transcript origins and notation layers stay separate in the test fixture.\n\n| Layer | Notation example | Provenance note |\n| --- | --- | --- |\n| Archived research | `[/]` and `(.)` | Invented research transcript with explicit `CHI` speaker labels |\n| TalkBank AI draft | `PAR1` | Machine-generated fixture draft with unverified speakers |\n| Local AI draft | `plain text \\| JSON` | Local speech-recognition fixture without CHAT notation |\n",
+      "assets": [
+        {
+          "id": "fixture-doc-provenance-md",
+          "name": "fixture-provenance-guide.md",
+          "format": "md",
+          "label": "Download provenance guide (MD)"
+        }
+      ]
+    },
+    {
+      "id": "fixture-research-notes",
+      "title": "Fixture research reading list",
+      "description": "Invented corpus inventory table and research background for browser verification.",
+      "category": "research",
+      "markdown": "# Fixture research reading list\n\nThis invented research document accompanies the automated test suite and links to the [annotation provenance guide](/?document=fixture-provenance-guide).\n\n| Session | Transcript origin | Audio availability |\n| --- | --- | --- |\n| `010815.cha` | Archived research | Original synthetic MP3 |\n| `020110-tb.cha` | TalkBank AI draft | Synthetic WAV + MP3 listening copy |\n| `020604-local.json` | Local AI draft | Original synthetic MP3 |\n| `011103.cha` | Archived research | Transcript only (no audio) |\n",
+      "assets": [
+        {
+          "id": "fixture-doc-research-md",
+          "name": "fixture-research-notes.md",
+          "format": "md",
+          "label": "Download research notes (MD)"
+        }
+      ]
+    }
+  ],
+  "assets": {
+    "fixture-audio-locomotive-mp3": {
+      "pathname": "archive/v1/files/010815-locomotive.mp3",
+      "name": "010815-locomotive.mp3",
+      "contentType": "audio/mpeg",
+      "bytes": 72376,
+      "sha256": "9874363d5a15dec20753c85973b82e4f4dfec9d607b5ba8cdb920117d412118f"
+    },
+    "fixture-source-locomotive-cha": {
+      "pathname": "archive/v1/files/010815-locomotive.cha",
+      "name": "010815-locomotive.cha",
+      "contentType": "text/plain; charset=utf-8",
+      "bytes": 444,
+      "sha256": "c03aed2c771e6c137def2ac3d021ac016820a72df023dad156a3f20288a50835"
+    },
+    "fixture-source-locomotive-txt": {
+      "pathname": "archive/v1/files/010815-locomotive.txt",
+      "name": "010815-locomotive.txt",
+      "contentType": "text/plain; charset=utf-8",
+      "bytes": 384,
+      "sha256": "72df27aaaa62cf29d3711695a1a4fd59f46092b252375fdb2807d741bd902502"
+    },
+    "fixture-audio-submarine-mp3": {
+      "pathname": "archive/v1/files/020110-submarine-listening.mp3",
+      "name": "020110-submarine-listening.mp3",
+      "contentType": "audio/mpeg",
+      "bytes": 36380,
+      "sha256": "17fd8054d71cf052fa03d12df7b9b5cc82f27b2e810a2b2cdb50892ccef6afa5"
+    },
+    "fixture-audio-submarine-wav": {
+      "pathname": "archive/v1/files/020110-submarine.wav",
+      "name": "020110-submarine.wav",
+      "contentType": "audio/wav",
+      "bytes": 8078,
+      "sha256": "de1b2d3a260ca93348d23cd864bf0ff806d694f05fd1c620d13740126a56cdae"
+    },
+    "fixture-source-submarine-cha": {
+      "pathname": "archive/v1/files/020110-tb.cha",
+      "name": "020110-tb.cha",
+      "contentType": "text/plain; charset=utf-8",
+      "bytes": 320,
+      "sha256": "ad78675019c5d29b2087c755a91d41dfb1ca28248a098ac1e91958565b35065b"
+    },
+    "fixture-audio-lighthouse-mp3": {
+      "pathname": "archive/v1/files/020604-lighthouse.mp3",
+      "name": "020604-lighthouse.mp3",
+      "contentType": "audio/mpeg",
+      "bytes": 36380,
+      "sha256": "512c7b348e61d9f27de75dd5d0e2c859489415708945d0c654df4792125884ef"
+    },
+    "fixture-source-lighthouse-json": {
+      "pathname": "archive/v1/files/020604-local.json",
+      "name": "020604-local.json",
+      "contentType": "application/json",
+      "bytes": 488,
+      "sha256": "8ab500008d0c1829c0309b8d0bd4e34972bfb8ac31197561802c44df313650a4"
+    },
+    "fixture-source-observatory-cha": {
+      "pathname": "archive/v1/files/011103.cha",
+      "name": "011103.cha",
+      "contentType": "text/plain; charset=utf-8",
+      "bytes": 256,
+      "sha256": "180d8b496ba8643ed19acc65f84e51029f3bd8902f9313c200ab6e73f956b1a5"
+    },
+    "fixture-doc-overview-md": {
+      "pathname": "archive/v1/files/fixture-overview-note.md",
+      "name": "fixture-overview-note.md",
+      "contentType": "text/markdown; charset=utf-8",
+      "bytes": 309,
+      "sha256": "9eaef805490d08b3359e601a2ce588da1cdae5cd66fa98f0877a6f75f135610f"
+    },
+    "fixture-doc-provenance-md": {
+      "pathname": "archive/v1/files/fixture-provenance-guide.md",
+      "name": "fixture-provenance-guide.md",
+      "contentType": "text/markdown; charset=utf-8",
+      "bytes": 510,
+      "sha256": "006bf08c07a8c3555b43023bcb2a97ee36aab0af81b08ac9d39c7696e2cb516e"
+    },
+    "fixture-doc-research-md": {
+      "pathname": "archive/v1/files/fixture-research-notes.md",
+      "name": "fixture-research-notes.md",
+      "contentType": "text/markdown; charset=utf-8",
+      "bytes": 532,
+      "sha256": "6e0e549b34c4e71dc445383a1a181aecdf9e3493fb6f4a49ff5c6f2c7df91fa6"
+    }
+  }
+}

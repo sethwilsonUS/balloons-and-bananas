@@ -1,0 +1,14 @@
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Child Target_Child, FAT Parent Father
+@ID:	eng|fixture|CHI|1;08.15||||Target_Child|||
+@ID:	eng|fixture|FAT|||||Father|||
+@Date:	15-JAN-1983
+*CHI:	blue [/] blue locomotive !
+*FAT:	where does the locomotive go next ?
+*CHI:	where [//] where is the bridge (.) papa ?
+%com:	pointing toward the cardboard arch
+*FAT:	right here by the wooden station .
+*CHI:	no , I want three lanterns over there .
+@End
