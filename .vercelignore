@@ -1,0 +1,10 @@
+private-data/
+.env*
+.git/
+tests/
+scripts/
+README.md
+AGENTS.md
+CLAUDE.md
+*.tsbuildinfo
+private-config/

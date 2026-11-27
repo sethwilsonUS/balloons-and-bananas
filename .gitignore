@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.vercel/
+.env*
+!.env.example
+private-data/
+*.tsbuildinfo
+.DS_Store
+coverage/
+.vercel
+__pycache__/
+*.py[cod]
+private-config/
