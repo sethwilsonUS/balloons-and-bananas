@@ -2,9 +2,26 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { remarkNormalizeHeadings, type BaseHeadingLevel } from '../lib/markdown';
 
-export default function ArchiveMarkdown({ text, onEntry, onDocument }: { text: string; onEntry: (id: string) => void; onDocument?: (id: string) => void }) {
-  return <div className="prose"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+export interface ArchiveMarkdownProps {
+  text: string;
+  onEntry: (id: string) => void;
+  onDocument?: (id: string) => void;
+  documentTitle?: string;
+  baseHeadingLevel?: BaseHeadingLevel;
+}
+
+export default function ArchiveMarkdown({
+  text,
+  onEntry,
+  onDocument,
+  documentTitle,
+  baseHeadingLevel = 2,
+}: ArchiveMarkdownProps) {
+  const tableLabel = documentTitle ? `${documentTitle} table` : 'Scrollable table';
+
+  return <div className="prose"><ReactMarkdown remarkPlugins={[remarkGfm, [remarkNormalizeHeadings, { baseHeadingLevel, documentTitle }]]} remarkRehypeOptions={{ footnoteLabelTagName: `h${baseHeadingLevel}` }} components={{
     a: ({ href, children }) => {
       const entryMatch = href?.match(/^(?:\/)?\?entry=([^&#]+)/);
       if (entryMatch) {
@@ -26,9 +43,6 @@ export default function ArchiveMarkdown({ text, onEntry, onDocument }: { text: s
       return <a href={href} rel="noopener noreferrer nofollow" referrerPolicy="no-referrer" target={external ? '_blank' : undefined}>{children}{external && <span className="sr-only"> (opens in a new tab)</span>}</a>;
     },
     img: ({ alt }) => <span className="muted">{alt ? `[Image: ${alt}]` : '[Image omitted]'}</span>,
-    h1: ({ children }) => <h2>{children}</h2>,
-    h2: ({ children }) => <h3>{children}</h3>,
-    h3: ({ children }) => <h4>{children}</h4>,
-    table: ({ children }) => <div className="table-scroll" tabIndex={0} role="region" aria-label="Scrollable table"><table>{children}</table></div>,
+    table: ({ children }) => <div className="table-scroll" tabIndex={0} role="region" aria-label={tableLabel}><table>{children}</table></div>,
   }}>{text}</ReactMarkdown></div>;
 }
