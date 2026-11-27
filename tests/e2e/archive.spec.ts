@@ -168,7 +168,11 @@ test('opening a recording plays fixture audio without Blob, serves private downl
   await expect(audioEl).toHaveAttribute('src', '/api/assets/fixture-audio-locomotive-mp3?local=1');
   await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).readyState)).toBeGreaterThanOrEqual(1);
   await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).duration)).toBeGreaterThan(30);
+  await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(false);
+  await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).currentTime)).toBeGreaterThan(0);
   await expect(page.getByRole('button', { name: 'Forward 30 seconds' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(true);
 
   // Verify Range streaming and private headers on local fixture audio and downloadable source
   const rangeRes = await request.get('/api/assets/fixture-audio-locomotive-mp3?local=1', {

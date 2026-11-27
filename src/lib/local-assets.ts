@@ -1,4 +1,4 @@
-import { open, realpath, stat } from 'node:fs/promises';
+import { open, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { privateHeaders } from './responses';
 import type { ArchiveData } from './types';
@@ -93,6 +93,22 @@ function parseSingleByteRange(header: string, size: number): { start: number; en
   return { start, end };
 }
 
+async function readExactRange(filePath: string, offset: number, length: number): Promise<Uint8Array<ArrayBuffer>> {
+  const buffer = Buffer.alloc(length);
+  const handle = await open(/*turbopackIgnore: true*/ filePath, 'r');
+  try {
+    let totalRead = 0;
+    while (totalRead < length) {
+      const { bytesRead } = await handle.read(buffer, totalRead, length - totalRead, offset + totalRead);
+      if (bytesRead === 0) break;
+      totalRead += bytesRead;
+    }
+    return new Uint8Array(buffer.subarray(0, totalRead));
+  } finally {
+    await handle.close();
+  }
+}
+
 export async function serveLocalAsset(
   request: Request,
   data: ArchiveData,
@@ -125,36 +141,30 @@ export async function serveLocalAsset(
     }
     if (parsed) {
       const length = parsed.end - parsed.start + 1;
-      const buffer = Buffer.alloc(length);
-      const handle = await open(/*turbopackIgnore: true*/ filePath, 'r');
-      try {
-        const { bytesRead } = await handle.read(buffer, 0, length, parsed.start);
-        return new Response(new Uint8Array(buffer.subarray(0, bytesRead)), {
-          status: 206,
-          headers: {
-            ...baseHeaders,
-            'Content-Range': `bytes ${parsed.start}-${parsed.start + bytesRead - 1}/${size}`,
-            'Content-Length': String(bytesRead),
-          },
+      const chunk = await readExactRange(filePath, parsed.start, length);
+      if (chunk.byteLength === 0) {
+        return new Response(null, {
+          status: 416,
+          headers: { ...privateHeaders, 'Content-Range': `bytes */${size}` },
         });
-      } finally {
-        await handle.close();
       }
+      return new Response(chunk, {
+        status: 206,
+        headers: {
+          ...baseHeaders,
+          'Content-Range': `bytes ${parsed.start}-${parsed.start + chunk.byteLength - 1}/${size}`,
+          'Content-Length': String(chunk.byteLength),
+        },
+      });
     }
   }
 
-  const buffer = Buffer.alloc(size);
-  const handle = await open(/*turbopackIgnore: true*/ filePath, 'r');
-  try {
-    const { bytesRead } = await handle.read(buffer, 0, size, 0);
-    return new Response(new Uint8Array(buffer.subarray(0, bytesRead)), {
-      status: 200,
-      headers: {
-        ...baseHeaders,
-        'Content-Length': String(bytesRead),
-      },
-    });
-  } finally {
-    await handle.close();
-  }
+  const fileBytes = await readFile(/*turbopackIgnore: true*/ filePath);
+  return new Response(new Uint8Array(fileBytes), {
+    status: 200,
+    headers: {
+      ...baseHeaders,
+      'Content-Length': String(fileBytes.byteLength),
+    },
+  });
 }
