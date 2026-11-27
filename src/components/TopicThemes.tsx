@@ -1,4 +1,6 @@
+import type { CSSProperties } from 'react';
 import { Check } from 'lucide-react';
+import { balancedColumnCount } from '../lib/results-view';
 
 // These shortcuts label existing exact topic filters; they never alter source text.
 export const positiveThemes = [
@@ -18,7 +20,14 @@ export function ThemeShortcuts({ topics, selectedTopic, onSelect }: {
   onSelect: (topic: string) => void;
 }) {
   const available = positiveThemes.filter(theme => topics.some(topic => topic.name === theme.topic));
-  return <div className="theme-shortcuts" role="group" aria-label="Explore by theme">
+  if (!available.length) return null;
+  const columns = balancedColumnCount(available.length, 4);
+  const compactColumns = balancedColumnCount(available.length, 2);
+  const gridStyle = {
+    '--theme-cols': String(columns),
+    '--theme-cols-compact': String(compactColumns),
+  } as CSSProperties;
+  return <div className="theme-shortcuts" role="group" aria-label="Explore by theme" style={gridStyle}>
     {available.map(theme => <button key={theme.topic} type="button" className="button secondary theme-shortcut"
       aria-pressed={selectedTopic === undefined ? undefined : selectedTopic === theme.topic}
       onClick={() => onSelect(theme.topic)}>

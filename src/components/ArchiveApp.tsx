@@ -5,11 +5,13 @@ import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Down
 import type { Catalog, Origin, SearchResponse } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
 import { isLinguisticMarkerId, isLinguisticSpeaker, type LinguisticMarkerId, type LinguisticSpeaker } from '../lib/linguistic-markers';
+import { adaptSearchForView, formatSearchStatus, pageSizeForView, type RecordingView, type SearchBusyKind } from '../lib/results-view';
+import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle } from '../lib/site';
 import ArchiveMarkdown from './ArchiveMarkdown';
 import ArchiveAnalytics from './ArchiveAnalytics';
 import LinguisticFilters from './LinguisticFilters';
 import RecordingDetail from './RecordingDetail';
-import RecordingResults, { type RecordingView } from './RecordingResults';
+import RecordingResults from './RecordingResults';
 import ThemeControl from './ThemeControl';
 import { positiveThemes, ThemeShortcuts } from './TopicThemes';
 import { originLabels, request } from './api';
@@ -70,14 +72,18 @@ export default function ArchiveApp() {
   const [recordingView, setRecordingView] = useState<RecordingView>('details');
   const [search, setSearch] = useState<SearchResponse | null>(null);
   const [searchSpeaker, setSearchSpeaker] = useState<LinguisticSpeaker>('child');
-  const [searchBusy, setSearchBusy] = useState(false);
+  const [busyKind, setBusyKind] = useState<SearchBusyKind>(null);
   const [searchError, setSearchError] = useState('');
   const [searchAttempt, setSearchAttempt] = useState(0);
+  const [loadedEntry, setLoadedEntry] = useState<{ id: string; title: string | null; notFound: boolean } | null>(null);
   const [shareState, setShareState] = useState<'idle' | 'busy' | 'copied' | 'manual' | 'error'>('idle');
   const [shareUrl, setShareUrl] = useState('');
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const focusResultsOnLoad = useRef(false);
   const focusResultsFrame = useRef<number | null>(null);
+  const loadedSearchRef = useRef<{ filterKey: string; response: SearchResponse } | null>(null);
+  const debounceNextSearch = useRef(false);
+  const pendingViewChange = useRef(false);
   const shareInput = useRef<HTMLInputElement>(null);
   const documentHeading = useRef<HTMLHeadingElement>(null);
   const pendingSearchAnalytics = useRef<{ flush: () => void; cancel: () => void } | null>(null);
@@ -111,6 +117,7 @@ export default function ArchiveApp() {
   const changeRecordingView = (value: RecordingView) => {
     if (value === recordingView) return;
     trackArchiveEvent('view_changed', { view: value });
+    pendingViewChange.current = true;
     setRecordingView(value);
     setPage(1);
     try { window.localStorage.setItem(VIEW_STORAGE_KEY, value); } catch {
@@ -199,18 +206,46 @@ export default function ArchiveApp() {
   }, [loadState, documentId, entryId, linguisticsOpen, marker, origin, page, query, recordingView, section, sort, speaker, topic]);
 
   useEffect(() => {
-    if (loadState !== 'ready' || section !== 'recordings' || entryId) return;
+    if (loadState !== 'ready' || section !== 'recordings' || entryId) {
+      debounceNextSearch.current = false;
+      pendingViewChange.current = false;
+      setBusyKind(null);
+      return;
+    }
+    const targetPageSize = pageSizeForView(recordingView);
+    const filterKey = JSON.stringify({ query, topic, origin, sort, marker, speaker, searchAttempt });
+    const loaded = loadedSearchRef.current;
+    const sameFilters = loaded !== null && loaded.filterKey === filterKey;
+
+    if (sameFilters && page === 1) {
+      const adapted = adaptSearchForView(loaded.response, recordingView);
+      if (adapted) {
+        debounceNextSearch.current = false;
+        pendingViewChange.current = false;
+        setSearch(adapted);
+        setSearchError('');
+        setBusyKind(null);
+        return;
+      }
+    }
+
     const controller = new AbortController();
     let pendingAnalytics: { flush: () => void; cancel: () => void } | null = null;
-    setSearchBusy(true);
+    const isViewOnlyChange = pendingViewChange.current && sameFilters && !debounceNextSearch.current;
+    const delay = debounceNextSearch.current && query && !focusResultsOnLoad.current ? 280 : 0;
+
+    setBusyKind(isViewOnlyChange ? 'view' : 'search');
     setSearchError('');
     const timer = window.setTimeout(() => {
+      debounceNextSearch.current = false;
+      pendingViewChange.current = false;
       void request<SearchResponse>('/api/search', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, topic, origin, page, sort, marker, speaker, pageSize: recordingView === 'list' ? 36 : 18 }), signal: controller.signal,
+        body: JSON.stringify({ query, topic, origin, page, sort, marker, speaker, pageSize: targetPageSize }), signal: controller.signal,
       }).then(data => {
         if (!controller.signal.aborted) {
-          setSearch(data); setSearchSpeaker(speaker); setSearchBusy(false);
+          loadedSearchRef.current = { filterKey, response: data };
+          setSearch(data); setSearchSpeaker(speaker); setBusyKind(null);
           if (focusResultsOnLoad.current) {
             focusResultsOnLoad.current = false;
             cancelFocusResultsFrame();
@@ -245,9 +280,9 @@ export default function ArchiveApp() {
       }).catch((error: unknown) => {
         if (controller.signal.aborted) return;
         focusResultsOnLoad.current = false;
-        setSearchError('The search could not be completed. Please try again.'); setSearchBusy(false);
+        setSearchError('The search could not be completed. Please try again.'); setBusyKind(null);
       });
-    }, query ? 280 : 0);
+    }, delay);
     return () => {
       window.clearTimeout(timer); controller.abort(); pendingAnalytics?.cancel();
       if (pendingSearchAnalytics.current === pendingAnalytics) pendingSearchAnalytics.current = null;
@@ -294,13 +329,24 @@ export default function ArchiveApp() {
     // The home page searches the whole collection, regardless of earlier filters.
     // Omitting view preserves the reader's Details/List preference.
     focusResultsOnLoad.current = true;
+    debounceNextSearch.current = false;
+    pendingViewChange.current = false;
+    loadedSearchRef.current = null;
     restoreFilters({ query: trimmedQuery, topic: nextTopic, origin: '', marker: '', speaker: 'child', sort: trimmedQuery ? 'relevance' : 'oldest', page: 1, linguisticsOpen: false });
     setSearch(null);
     setSearchError('');
-    setSearchBusy(true);
+    setBusyKind('search');
     setSearchAttempt(value => value + 1);
     navigate('recordings');
   };
+
+  const handleEntryState = useCallback((state: { id: string; title: string | null; notFound: boolean }) => {
+    setLoadedEntry(current =>
+      current && current.id === state.id && current.title === state.title && current.notFound === state.notFound
+        ? current
+        : state,
+    );
+  }, []);
 
   const openEntry = useCallback((id: string) => { pendingSearchAnalytics.current?.flush(); navigate('recordings', id); }, [navigate]);
   const openResultPassage = useCallback((id: string, targetPassage: number) => { pendingSearchAnalytics.current?.flush(); navigate('recordings', id, null, targetPassage); }, [navigate]);
@@ -347,10 +393,33 @@ export default function ArchiveApp() {
     }
   };
 
+  const searchBusy = busyKind !== null;
+  const hasFilters = Boolean(query || topic || origin || marker);
+  const selectedDocument = catalog?.documents.find(document => document.id === documentId);
+  const cachedEntryTitle = entryId ? search?.results.find(item => item.entry.id === entryId)?.entry.title : undefined;
+  const entryMeta = entryId && loadedEntry?.id === entryId ? loadedEntry : null;
+  const documentTitle = loadState === 'loading'
+    ? formatDocumentTitle({ kind: 'loading' })
+    : loadState === 'error' || !catalog
+      ? formatDocumentTitle({ kind: 'error' })
+      : entryId
+        ? formatDocumentTitle({ kind: 'recording', title: entryMeta?.title ?? cachedEntryTitle, notFound: entryMeta?.notFound })
+        : documentId
+          ? formatDocumentTitle({ kind: 'document', title: selectedDocument?.title })
+          : section === 'recordings'
+            ? formatDocumentTitle({ kind: 'recordings', hasFilters })
+            : section === 'research'
+              ? formatDocumentTitle({ kind: 'research' })
+              : formatDocumentTitle({ kind: 'overview' });
+
+  useEffect(() => {
+    document.title = documentTitle;
+  }, [documentTitle]);
+
   if (loadState !== 'ready' || !catalog) return <div className="entrance">
-    <header className="entrance-brand"><span className="entrance-wordmark"><CollectionMark /><span>Balloons &amp; Bananas</span></span><ThemeControl /></header>
+    <header className="entrance-brand"><span className="entrance-wordmark"><CollectionMark /><span>{ARCHIVE_NAME}</span></span><ThemeControl /></header>
     <main id="main" className="entrance-content">
-      <h1>The Seth tapes</h1>
+      <h1>{ARCHIVE_NAME}</h1>
       <p className="entrance-description" role={loadState === 'error' ? 'alert' : 'status'}>{loadState === 'loading' ? 'Opening the archive…' : loadMessage}</p>
       {loadState === 'error' && <button type="button" className="button primary" onClick={() => setBootstrapAttempt(value => value + 1)}>Try again<ArrowRight size={17} aria-hidden="true" /></button>}
     </main>
@@ -359,24 +428,22 @@ export default function ArchiveApp() {
 
   const overviewDocs = catalog.documents.filter(document => document.category === 'overview');
   const researchDocs = catalog.documents.filter(document => document.category !== 'overview');
-  const hasFilters = Boolean(query || topic || origin || marker);
-  const selectedDocument = catalog.documents.find(document => document.id === documentId);
 
   return <div className="archive-shell">
     <ArchiveAnalytics ready={loadState === 'ready'} section={section} entryId={entryId} documentId={documentId} />
     <a className="skip-link" href="#main">Skip to main content</a>
     <header className="site-header">
-      <div className="top-bar"><button className="brand-button" type="button" onClick={() => navigate('overview')} aria-label="Balloons & Bananas, collection overview"><CollectionMark /><span>Balloons &amp; Bananas</span></button><span className="unlisted-label">Unlisted archive</span><ThemeControl /><button className="button share-button" type="button" disabled={shareState === 'busy'} onClick={() => void copyShareLink()}>{shareState === 'copied' ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />}<span>{shareState === 'busy' ? 'Preparing…' : shareState === 'copied' ? 'Link copied' : 'Copy share link'}</span></button></div>
+      <div className="top-bar"><button className="brand-button" type="button" onClick={() => navigate('overview')} aria-label={`${ARCHIVE_NAME}, collection overview`}><CollectionMark /><span>{ARCHIVE_NAME}</span></button><span className="unlisted-label">Unlisted archive</span><ThemeControl /><button className="button share-button" type="button" disabled={shareState === 'busy'} onClick={() => void copyShareLink()}>{shareState === 'copied' ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />}<span>{shareState === 'busy' ? 'Preparing…' : shareState === 'copied' ? 'Link copied' : 'Copy share link'}</span></button></div>
       <div className="share-feedback" role="status">{shareState === 'copied' ? 'Link copied. Anyone can open this archive at its URL.' : shareState === 'error' ? 'That action could not be completed. Please try again.' : ''}</div>
       {shareState === 'manual' && <div className="manual-share"><label htmlFor="share-link">Copy this archive link</label><div><input ref={shareInput} id="share-link" value={shareUrl} readOnly /><button type="button" className="button secondary" onClick={() => { setShareState('idle'); setShareUrl(''); }}><X size={16} aria-hidden="true" />Close</button></div><p className="small muted">Anyone can open this archive at its URL.</p></div>}
       <div className={`masthead ${section !== 'overview' || entryId || documentId ? 'compact' : ''}`}>
         <h1>{catalog.title}</h1>
-        {section === 'overview' && !entryId && !documentId && <p>Family conversations recorded during Seth Wilson’s childhood, collected for his father’s research on language development.</p>}
+        {section === 'overview' && !entryId && !documentId && <p>{ARCHIVE_SUBTITLE}</p>}
       </div>
       <nav className="section-nav" aria-label="Collection sections">{(['overview', 'recordings', 'research'] as const).map(item => <button key={item} type="button" onClick={() => navigate(item)} aria-current={section === item ? 'page' : undefined}>{item === 'overview' ? 'Overview' : item === 'recordings' ? 'Recordings' : 'Research & context'}{item === 'recordings' && <span className="nav-count">{catalog.counts.entries}</span>}</button>)}</nav>
     </header>
     <main id="main" tabIndex={-1}>
-      {entryId ? <RecordingDetail id={entryId} passage={passage} onMarker={openMarker} onBack={() => navigate('recordings')} /> : documentId ? <article className="document-detail"><button className="text-button back-button" type="button" onClick={() => navigate('research')}><ArrowLeft size={17} aria-hidden="true" />Back to research &amp; context</button><h2 ref={documentHeading} tabIndex={-1}>{selectedDocument?.title || 'Document not found'}</h2>{selectedDocument ? <><p className="section-intro">{selectedDocument.description}</p>{selectedDocument.markdown && <ArchiveMarkdown text={selectedDocument.markdown} documentTitle={selectedDocument.title} baseHeadingLevel={3} onEntry={openEntry} onDocument={openDocument} />}<div className="document-downloads">{selectedDocument.assets.map(asset => <a key={asset.id} className="button secondary" href={`/api/assets/${encodeURIComponent(asset.id)}`} download={asset.name} referrerPolicy="no-referrer" onClick={() => trackArchiveEvent('research_open', { documentId: selectedDocument.id, action: 'download', assetId: asset.id })} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('research_open', { documentId: selectedDocument.id, action: 'download', assetId: asset.id }); }}><Download size={16} aria-hidden="true" />{asset.label}</a>)}</div></> : <p>The document in this link is not available in the collection.</p>}</article> : section === 'overview' ? <>
+      {entryId ? <RecordingDetail id={entryId} passage={passage} onMarker={openMarker} onEntryState={handleEntryState} onBack={() => navigate('recordings')} /> : documentId ? <article className="document-detail"><button className="text-button back-button" type="button" onClick={() => navigate('research')}><ArrowLeft size={17} aria-hidden="true" />Back to research &amp; context</button><h2 ref={documentHeading} tabIndex={-1}>{selectedDocument?.title || 'Document not found'}</h2>{selectedDocument ? <><p className="section-intro">{selectedDocument.description}</p>{selectedDocument.markdown && <ArchiveMarkdown text={selectedDocument.markdown} documentTitle={selectedDocument.title} baseHeadingLevel={3} onEntry={openEntry} onDocument={openDocument} />}<div className="document-downloads">{selectedDocument.assets.map(asset => <a key={asset.id} className="button secondary" href={`/api/assets/${encodeURIComponent(asset.id)}`} download={asset.name} referrerPolicy="no-referrer" onClick={() => trackArchiveEvent('research_open', { documentId: selectedDocument.id, action: 'download', assetId: asset.id })} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('research_open', { documentId: selectedDocument.id, action: 'download', assetId: asset.id }); }}><Download size={16} aria-hidden="true" />{asset.label}</a>)}</div></> : <p>The document in this link is not available in the collection.</p>}</article> : section === 'overview' ? <>
         <section className="home-search-section" aria-labelledby="home-search-heading">
           <form className="home-search-form" role="search" aria-labelledby="home-search-heading" onSubmit={event => { event.preventDefault(); startArchiveSearch(homeQuery); }}>
             <h2 id="home-search-heading"><label htmlFor="home-search">Search the archive</label></h2>
@@ -398,14 +465,13 @@ export default function ArchiveApp() {
         {overviewDocs.length > 0 && <section className="overview-context" aria-label="Archive background">{overviewDocs.map(document => <div key={document.id} className="context-document">{document.markdown ? <ArchiveMarkdown text={document.markdown} onEntry={openEntry} onDocument={openDocument} /> : <><h2>{document.title}</h2><p>{document.description}</p></>}{document.assets.length > 0 && <div className="document-downloads">{document.assets.map(asset => <a key={asset.id} className="text-link" href={`/api/assets/${encodeURIComponent(asset.id)}`} download={asset.name} referrerPolicy="no-referrer" onClick={() => trackArchiveEvent('research_open', { documentId: document.id, action: 'download', assetId: asset.id })} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('research_open', { documentId: document.id, action: 'download', assetId: asset.id }); }}><Download size={16} aria-hidden="true" />{asset.label}</a>)}</div>}</div>)}</section>}
       </> : section === 'recordings' ? <section className="browse-section" aria-labelledby="browse-heading">
         <div className="section-heading browse-heading"><h2 id="browse-heading">Find a recording</h2></div>
-        <form className="search-form" onSubmit={event => { event.preventDefault(); focusResultsOnLoad.current = true; setPage(1); setSearchAttempt(value => value + 1); }} role="search" aria-label="Search the collection">
-          <div className="field main-search"><label htmlFor="archive-search">Search recordings and transcripts</label><div className="search-input"><Search size={21} aria-hidden="true" /><input id="archive-search" type="search" value={query} onChange={event => { focusResultsOnLoad.current = false; cancelFocusResultsFrame(); setQuery(event.target.value); setPage(1); if (!query && event.target.value) setSort('relevance'); }} placeholder="Name, place, or phrase" autoComplete="off" spellCheck={false} /><button type="submit" className="search-submit" aria-label="Search"><ArrowRight size={20} aria-hidden="true" /></button></div></div>
+        <form className="search-form" onSubmit={event => { event.preventDefault(); focusResultsOnLoad.current = true; debounceNextSearch.current = false; pendingViewChange.current = false; setPage(1); setSearchAttempt(value => value + 1); }} role="search" aria-label="Search the collection">
+          <div className="field main-search"><label htmlFor="archive-search">Search recordings and transcripts</label><div className="search-input"><Search size={21} aria-hidden="true" /><input id="archive-search" type="search" value={query} onChange={event => { focusResultsOnLoad.current = false; debounceNextSearch.current = true; pendingViewChange.current = false; cancelFocusResultsFrame(); setQuery(event.target.value); setPage(1); if (!query && event.target.value) setSort('relevance'); }} placeholder="Name, place, or phrase" autoComplete="off" spellCheck={false} /><button type="submit" className="search-submit" aria-label="Search"><ArrowRight size={20} aria-hidden="true" /></button></div></div>
           <div className="filter-row"><div className="field"><label htmlFor="topic-filter">Theme</label><select id="topic-filter" value={topic} onChange={event => { trackArchiveEvent('filter_changed', { filter: 'theme', value: event.target.value }); setTopic(event.target.value); setPage(1); }}><option value="">All themes</option>{positiveThemes.map(theme => { const item = catalog.topics.find(value => value.name === theme.topic); return item ? <option key={theme.topic} value={theme.topic}>{theme.label} ({item.count})</option> : null; })}</select></div><div className="field"><label htmlFor="origin-filter">Transcript source</label><select id="origin-filter" value={origin} onChange={event => { trackArchiveEvent('filter_changed', { filter: 'origin', value: event.target.value }); setOrigin(event.target.value as Origin | ''); setPage(1); }}><option value="">All sources</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><div className="field"><label htmlFor="sort-order">Sort by</label><select id="sort-order" value={sort} onChange={event => { trackArchiveEvent('filter_changed', { filter: 'sort', value: event.target.value }); setSort(event.target.value as typeof sort); setPage(1); }}><option value="oldest">Earliest first</option><option value="newest">Latest first</option><option value="relevance">Best match</option></select></div></div>
           <LinguisticFilters marker={marker} speaker={speaker} open={linguisticsOpen} onOpen={setLinguisticsOpen} onMarker={value => { trackArchiveEvent('filter_changed', { filter: 'marker', value }); setMarker(value); setPage(1); }} onSpeaker={value => { trackArchiveEvent('filter_changed', { filter: 'speaker', value }); setSpeaker(value); setPage(1); }} />
         </form>
-        <div className="browse-themes"><p>Browse by theme</p><ThemeShortcuts topics={catalog.topics} selectedTopic={topic} onSelect={value => { const next = topic === value ? '' : value; trackArchiveEvent('filter_changed', { filter: 'theme', value: next }); setTopic(next); setPage(1); }} /></div>
         {marker && <p className="small muted linguistic-intersection-note">Each result has matching transcript passages. Text search, theme, and source filters narrow the same guide; their matches may occur elsewhere in it. Passage counts are not normalized frequencies.</p>}
-        <div className="results-toolbar"><h3 ref={resultHeading} tabIndex={-1}>{search ? `${search.total.toLocaleString()} ${search.total === 1 ? 'guide' : 'guides'}` : 'Recording guides'}</h3>{hasFilters && <button type="button" className="text-button small" onClick={() => { trackArchiveEvent('filter_changed', { filter: 'clear', value: 'all' }); setQuery(''); setTopic(''); setOrigin(''); setMarker(''); setSpeaker('child'); setPage(1); setSort('oldest'); }}><X size={15} aria-hidden="true" />Clear filters</button>}<div className="recording-view-control" role="group" aria-label="Recording view"><span className="small muted">View</span><button type="button" className="button secondary theme-shortcut" aria-pressed={recordingView === 'details'} aria-describedby="recording-view-help" onClick={() => changeRecordingView('details')}>Details</button><button type="button" className="button secondary theme-shortcut" aria-pressed={recordingView === 'list'} aria-describedby="recording-view-help" onClick={() => changeRecordingView('list')}>List</button></div><p className="small muted search-status" role="status">{searchBusy ? 'Searching…' : search ? search.total ? `${(search.page - 1) * search.pageSize + 1}–${Math.min(search.page * search.pageSize, search.total)} of ${search.total.toLocaleString()} guides${search.pages > 1 ? ` · page ${search.page} of ${search.pages}` : ''}` : '0 results' : ''}</p></div>
+        <div className="results-toolbar"><h3 ref={resultHeading} tabIndex={-1}>{search ? `${search.total.toLocaleString()} ${search.total === 1 ? 'guide' : 'guides'}` : 'Recording guides'}</h3>{hasFilters && <button type="button" className="text-button small" onClick={() => { trackArchiveEvent('filter_changed', { filter: 'clear', value: 'all' }); setQuery(''); setTopic(''); setOrigin(''); setMarker(''); setSpeaker('child'); setPage(1); setSort('oldest'); }}><X size={15} aria-hidden="true" />Clear filters</button>}<div className="recording-view-control" role="group" aria-label="Recording view"><span className="small muted">View</span><button type="button" className="button secondary theme-shortcut" aria-pressed={recordingView === 'details'} aria-describedby="recording-view-help" onClick={() => changeRecordingView('details')}>Details</button><button type="button" className="button secondary theme-shortcut" aria-pressed={recordingView === 'list'} aria-describedby="recording-view-help" onClick={() => changeRecordingView('list')}>List</button></div><p className="small muted search-status" role="status">{formatSearchStatus(search, busyKind)}</p></div>
         <p id="recording-view-help" className="small muted results-reading-note">{recordingView === 'list' ? 'List shows up to 36 guides per page; expand a match to see source excerpts.' : 'Details shows up to 18 guides per page with summaries and source excerpts.'} Guide summaries are AI-written; labels identify the transcript source.</p>
         {searchError && <div className="error-panel" role="alert"><p>{searchError}</p><button type="button" className="button secondary" onClick={() => setSearchAttempt(value => value + 1)}>Try search again</button></div>}
         <div className="results-list" aria-busy={searchBusy}>{search && <RecordingResults results={search.results} view={recordingView} firstIndex={(search.page - 1) * search.pageSize + 1} speaker={searchSpeaker} onEntry={openEntry} onPassage={openResultPassage} />}</div>
@@ -417,6 +483,6 @@ export default function ArchiveApp() {
         return <article className="research-document" key={document.id} aria-labelledby={headingId}><p className="eyebrow">{document.category === 'research' ? 'Research material' : 'Archive guide'}</p><h3 id={headingId}><a href={`/?document=${encodeURIComponent(document.id)}`} onClick={event => { if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) { trackArchiveEvent('research_open', { documentId: document.id, action: 'read' }); return; } event.preventDefault(); openDocument(document.id); }} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('research_open', { documentId: document.id, action: 'read' }); }}>{document.title}<ArrowRight size={19} aria-hidden="true" /></a></h3><p>{document.description}</p>{document.assets.length > 0 && <div className="document-downloads">{document.assets.map(asset => <a key={asset.id} aria-describedby={headingId} href={`/api/assets/${encodeURIComponent(asset.id)}`} className="button secondary" download={asset.name} referrerPolicy="no-referrer" onClick={() => trackArchiveEvent('research_open', { documentId: document.id, action: 'download', assetId: asset.id })} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('research_open', { documentId: document.id, action: 'download', assetId: asset.id }); }}><Download size={16} aria-hidden="true" />{asset.label}</a>)}</div>}{document.markdown && <details className="document-reading" onToggle={event => { if (event.currentTarget.open) trackArchiveEvent('research_open', { documentId: document.id, action: 'read' }); }}><summary id={summaryId} aria-labelledby={`${summaryId} ${headingId}`}>Read document</summary><ArchiveMarkdown text={document.markdown} documentTitle={document.title} baseHeadingLevel={4} onEntry={openEntry} onDocument={openDocument} /></details>}</article>;
       })}</div></section>}
     </main>
-    <footer className="site-footer"><div><CollectionMark /><p>Balloons &amp; Bananas<br /><span>An unlisted public archive. Anyone with the link can visit.</span><br /><span>Usage analytics exclude search and transcript text.</span></p></div></footer>
+    <footer className="site-footer"><div><CollectionMark /><p>{ARCHIVE_NAME}<br /><span>An unlisted public archive. Anyone with the link can visit.</span><br /><span>Usage analytics exclude search and transcript text.</span></p></div></footer>
   </div>;
 }

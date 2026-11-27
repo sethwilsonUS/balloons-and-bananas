@@ -53,7 +53,7 @@ test('linguistic evidence filters transcript speech while retaining entry-level 
   assert.equal(result.total, 1);
   assert.equal(result.results[0].entry.id, 'child-question');
   assert.equal(result.results[0].matchedIn, 'summary');
-  assert.ok(result.results[0].excerpt.includes('Garden adventure'));
+  assert.equal(result.results[0].excerpt, '');
   assert.equal(result.results[0].linguisticEvidence!.examples[0].text, 'where is it ?');
   assert.equal(result.results[0].linguisticEvidence!.examples[0].segmentIndex, 0);
   assert.equal(result.results[0].linguisticEvidence!.examples[0].start, 4.5);
@@ -133,4 +133,76 @@ test('page-size validation allows only numeric 18 or 36 and direct callers remai
   const invalid = makeSearch(many)({ pageSize: 1000 as 18 });
   assert.equal(invalid.pageSize, 18);
   assert.equal(invalid.results.length, 18);
+});
+
+test('guide overview and title hits do not duplicate card text or concatenate title text into excerpts', () => {
+  const entries: ArchiveData = {
+    ...data,
+    entries: [
+      entry('overview-only', {
+        title: 'Wooden bridge session',
+        overview: 'Assembling a painted track and sending a blue locomotive across the table.',
+        moments: [
+          { title: 'Counting station lanterns', description: 'Asking for three paper lanterns near the shed.', start: 12, end: 18, locator: 'Lines 4–6' },
+        ],
+        transcript: [{ text: 'Look at the station shed right here.' }],
+      }),
+      entry('moment-hit', {
+        title: 'Harbor bells in the afternoon',
+        overview: 'Folding paper shapes beside the window.',
+        moments: [
+          { title: 'Brass periscope check', description: 'Spotting pebbles and folding boats through a cardboard periscope.', start: 2, end: 9, locator: 'Lines 1–3' },
+        ],
+        transcript: [{ text: 'Here is a paper boat.' }],
+      }),
+      entry('duplicate-moment', {
+        title: 'Duplicate moment session',
+        overview: 'Counting paper stars taped to the reading lamp.',
+        moments: [
+          { title: 'Counting paper stars', description: 'taped to the reading lamp.', start: null, end: null, locator: 'Lines 1–2' },
+        ],
+        transcript: [{ text: 'Look up there.' }],
+      }),
+    ],
+  };
+  const search = makeSearch(entries);
+
+  // Overview-only hit: no excerpt repeating the overview already shown on the card.
+  const overviewOnly = search({ query: 'painted track' });
+  assert.equal(overviewOnly.total, 1);
+  assert.equal(overviewOnly.results[0].matchedIn, 'summary');
+  assert.equal(overviewOnly.results[0].excerpt, '');
+
+  // Title-only hit: matchedIn stays 'summary' and title text is never concatenated into an excerpt.
+  const titleOnly = search({ query: 'Wooden bridge session' });
+  assert.equal(titleOnly.total, 1);
+  assert.equal(titleOnly.results[0].matchedIn, 'summary');
+  assert.equal(titleOnly.results[0].excerpt, '');
+
+  // Source filename hit: never fabricates an unrelated transcript excerpt.
+  const sourceOnly = search({ query: 'overview-only.txt' });
+  assert.equal(sourceOnly.total, 1);
+  assert.equal(sourceOnly.results[0].matchedIn, 'summary');
+  assert.equal(sourceOnly.results[0].excerpt, '');
+
+  // Moment-only hit: excerpt comes strictly from the matching moment without title or overview concatenated.
+  const momentHit = search({ query: 'periscope' });
+  assert.equal(momentHit.total, 1);
+  assert.equal(momentHit.results[0].matchedIn, 'summary');
+  assert.ok(momentHit.results[0].excerpt.includes('Brass periscope check:'));
+  assert.ok(!momentHit.results[0].excerpt.includes('Harbor bells in the afternoon'));
+  assert.ok(!momentHit.results[0].excerpt.includes('Folding paper shapes beside the window.'));
+
+  // Cross-field title + moment hit: excerpt comes strictly from the moment providing the unseen term.
+  const crossField = search({ query: 'harbor periscope' });
+  assert.equal(crossField.total, 1);
+  assert.equal(crossField.results[0].matchedIn, 'summary');
+  assert.ok(crossField.results[0].excerpt.includes('Brass periscope check:'));
+  assert.ok(!crossField.results[0].excerpt.includes('Harbor bells in the afternoon'));
+
+  // A moment whose content repeats the overview verbatim is suppressed rather than duplicated.
+  const repeatedOverview = search({ query: 'paper stars' });
+  assert.equal(repeatedOverview.total, 1);
+  assert.equal(repeatedOverview.results[0].matchedIn, 'summary');
+  assert.equal(repeatedOverview.results[0].excerpt, '');
 });

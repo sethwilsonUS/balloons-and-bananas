@@ -2,11 +2,31 @@ import { ArrowRight, Headphones } from 'lucide-react';
 import { trackArchiveEvent } from '../lib/analytics';
 import { formatAge } from '../lib/age';
 import { linguisticMarkers, type LinguisticSpeaker } from '../lib/linguistic-markers';
+import type { RecordingView } from '../lib/results-view';
 import type { SearchResult } from '../lib/types';
 import { originLabels, timeLabel } from './api';
 import { TopicLabels } from './TopicThemes';
 
-export type RecordingView = 'details' | 'list';
+export type { RecordingView };
+
+function normalizeForComparison(text: string): string {
+  return text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLocaleLowerCase();
+}
+
+function visibleExcerpt(result: SearchResult): string {
+  if (result.matchedIn === 'browse' || !result.excerpt) return '';
+  const trimmed = result.excerpt.trim();
+  if (!trimmed) return '';
+  if (result.matchedIn === 'summary') {
+    const normalizedExcerpt = normalizeForComparison(trimmed.replace(/^…|…$/g, ''));
+    const normalizedOverview = normalizeForComparison(result.entry.overview);
+    const normalizedTitle = normalizeForComparison(result.entry.title);
+    if (normalizedExcerpt && (normalizedOverview.includes(normalizedExcerpt) || normalizedTitle.includes(normalizedExcerpt))) {
+      return '';
+    }
+  }
+  return trimmed;
+}
 
 function shortSummary(text: string): string {
   const words = text.trim().split(/\s+/);
@@ -18,9 +38,9 @@ function shortSummary(text: string): string {
   return summary;
 }
 
-function SearchExcerpt({ result }: { result: SearchResult }) {
-  if (result.matchedIn === 'browse' || !result.excerpt) return null;
-  return <div className="search-excerpt"><span className="excerpt-label">{result.matchedIn === 'transcript' ? 'From the transcript' : 'From the guide'}</span><p>{result.excerpt}</p></div>;
+function SearchExcerpt({ result, excerpt }: { result: SearchResult; excerpt: string }) {
+  if (result.matchedIn === 'browse' || !excerpt) return null;
+  return <div className="search-excerpt"><span className="excerpt-label">{result.matchedIn === 'transcript' ? 'From the transcript' : 'From the guide'}</span><p>{excerpt}</p></div>;
 }
 
 function MatchingPassages({ result, speaker, view, onPassage }: { result: SearchResult; speaker: LinguisticSpeaker; view: RecordingView; onPassage: (id: string, passage: number) => void }) {
@@ -47,8 +67,9 @@ export default function RecordingResults({ results, view, firstIndex, speaker, o
   onPassage: (id: string, passage: number) => void;
 }) {
   const rows = results.map((result, index) => {
-    const { entry, matchedIn, excerpt, linguisticEvidence } = result;
-    const hasMatches = Boolean(linguisticEvidence || (matchedIn !== 'browse' && excerpt));
+    const { entry, matchedIn, linguisticEvidence } = result;
+    const excerpt = visibleExcerpt(result);
+    const hasMatches = Boolean(linguisticEvidence || excerpt);
     const markerLabel = linguisticEvidence && linguisticMarkers.find(item => item.id === linguisticEvidence.marker)?.label;
     const headingId = `result-${entry.id}`;
     const content = <article className={view === 'list' ? 'recording-list-row' : 'recording-card'} aria-labelledby={headingId}>
@@ -57,11 +78,11 @@ export default function RecordingResults({ results, view, firstIndex, speaker, o
         <div className="entry-meta"><span>{entry.sourceName}</span>{entry.ages.length > 0 && <span>Age {entry.ages.map(formatAge).join(' / ')}</span>}{entry.dates.length > 0 && <span>{entry.dates.join(' / ')}</span>}</div>
         <h4 id={headingId}><a href={`?entry=${encodeURIComponent(entry.id)}`} onClick={event => { trackArchiveEvent('recording_open', { recordingId: entry.id, origin: entry.origin, view, action: 'guide' }); if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return; event.preventDefault(); onEntry(entry.id); }} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('recording_open', { recordingId: entry.id, origin: entry.origin, view, action: 'guide' }); }}>{entry.title}<ArrowRight size={view === 'list' ? 17 : 20} aria-hidden="true" /></a></h4>
         <p className="card-overview">{view === 'list' ? shortSummary(entry.overview) : entry.overview}</p>
-        {view === 'details' && <><SearchExcerpt result={result} /><MatchingPassages result={result} speaker={speaker} view={view} onPassage={onPassage} /></>}
+        {view === 'details' && <><SearchExcerpt result={result} excerpt={excerpt} /><MatchingPassages result={result} speaker={speaker} view={view} onPassage={onPassage} /></>}
         <div className="card-bottom"><span className={`origin-badge ${entry.origin}`}>{originLabels[entry.origin]}</span>{view === 'details' && <span className="audio-count small muted"><Headphones size={15} aria-hidden="true" />{entry.audio.some(file => file.available && file.format.toLowerCase() === 'mp3') ? 'MP3 playback available' : entry.audio.length ? 'MP3 playback not yet available' : 'Transcript only'}</span>}</div>
         {view === 'details' ? <TopicLabels topics={entry.topics} compact /> : hasMatches && <details className="compact-result-matches" key={`${entry.id}-${linguisticEvidence?.marker || 'text'}-${speaker}`}>
           <summary>{linguisticEvidence ? <>Matching passages <span className="small muted">· {linguisticEvidence.count.toLocaleString()} · {markerLabel}</span></> : <>Search match <span className="small muted">· {matchedIn === 'transcript' ? 'transcript' : 'guide'}</span></>}</summary>
-          <SearchExcerpt result={result} /><MatchingPassages result={result} speaker={speaker} view={view} onPassage={onPassage} />
+          <SearchExcerpt result={result} excerpt={excerpt} /><MatchingPassages result={result} speaker={speaker} view={view} onPassage={onPassage} />
         </details>}
       </div>
     </article>;
