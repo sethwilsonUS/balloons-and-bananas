@@ -65,7 +65,7 @@ Vercel's platform DDoS mitigation remains in place.
 
 No archive text or tokens belong in this repository, public assets, build-time
 page output, source maps, browser storage, or logs. Only nonsensitive theme and
-recording-view preferences are saved in persistent browser storage. `private-data/`, `private-workspace/`, and `.env*` are excluded
+recording-view preferences are saved in persistent browser storage. `private-data/`, `private-workspace/`, `private-config/`, and `.env*` are excluded
 from both Git and Vercel uploads.
 
 ## Development
@@ -148,13 +148,13 @@ Use Node 24.x (matching Vercel) and install dependencies with `npm ci`.
 
    Set `ARCHIVE_LOCAL_DATA=private-data/archive.json` in `.env.local` so local development reads the archive server-side from disk without calling Vercel Blob (and set `ARCHIVE_DATA_PATH=archive/v1/archive.json` as shown in `.env.example`). Never commit `.env.local` or expose server variables as `NEXT_PUBLIC_*`.
 
-2. **Import the local archive catalog:** Place the required workspace inputs (`work/web-app/archive-file-inventory.json`, `work/web-app/RESEARCH-LINKS.md`, and `outputs/Why-some-recordings-lack-archive-transcripts.md`) in the ignored `private-workspace/` directory, then run the importer against the local source library (default `~/dev/sethlang`) to generate `private-data/archive.json`:
+2. **Import the local archive catalog:** Place the required workspace inputs (`work/web-app/archive-file-inventory.json`, `work/web-app/RESEARCH-LINKS.md`, and `outputs/Why-some-recordings-lack-archive-transcripts.md`) in the ignored `private-workspace/` directory, and obtain the vetted local privacy configuration file from the archive maintainer (placed at the importer's default git-ignored `private-config/` path, or passed via `--privacy-config`; the importer refuses to run without it). Then run the importer against your local source library (replacing `~/dev/sethlang` if stored elsewhere) to generate `private-data/archive.json`:
 
    ```bash
-   python3 scripts/import-archive.py --workspace private-workspace
+   python3 scripts/import-archive.py --library ~/dev/sethlang --workspace private-workspace
    ```
 
-   Confirm the imported counts match the published collection: 391 sessions and 477 original recordings across the three transcript origins (78 archived research, 13 TalkBank AI drafts, and 300 local AI drafts).
+   Confirm the imported counts match the published collection: 391 sessions (each bundling one transcript source with its guide and associated recordings; uniqueness as distinct real-world recording events is not verified) and 477 original recordings across the three transcript origins (78 archived research, 13 TalkBank AI drafts, and 300 local AI drafts).
 
 3. **Run and verify locally:**
 
@@ -165,7 +165,7 @@ Use Node 24.x (matching Vercel) and install dependencies with `npm ci`.
    npm run build
    ```
 
-`.env.local`, `.vercel/`, `private-data/`, and `private-workspace/` are excluded from Git and Vercel uploads.
+`.env.local`, `.vercel/`, `private-data/`, `private-workspace/`, and `private-config/` are excluded from Git and Vercel uploads.
 
 ### Publishing and archive preparation
 
