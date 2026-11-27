@@ -50,7 +50,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
-  const [mediaDuration, setMediaDuration] = useState<number | null>(null);
+  const [mediaDuration, setMediaDuration] = useState<{ fileId: string; seconds: number } | null>(null);
   const [speed, setSpeed] = useState(1);
   const [volumeLevel, setVolumeLevel] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -78,8 +78,11 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const available = playbackFiles.filter(file => file.available);
   const originalSource = files.find(file => file.id === selected?.derivedFromId && file.kind !== 'listening-copy');
 
-  const effectiveDuration = mediaDuration !== null && Number.isFinite(mediaDuration) && mediaDuration > 0
-    ? mediaDuration
+  const selectedMediaDuration = mediaDuration && selected && mediaDuration.fileId === selected.id
+    ? mediaDuration.seconds
+    : null;
+  const effectiveDuration = selectedMediaDuration !== null && Number.isFinite(selectedMediaDuration) && selectedMediaDuration > 0
+    ? selectedMediaDuration
     : (selected?.duration || 0);
   const sliderMax = Math.max(0, Math.floor(effectiveDuration));
   const sliderValue = sliderMax > 0 ? Math.min(sliderMax, Math.max(0, Math.floor(position))) : 0;
@@ -374,16 +377,20 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     }
     if (!selected?.available) return;
     const player = audio.current;
-    const loadedDuration = player && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : null;
-    const atEnd = Boolean(player?.ended)
-      || (loadedDuration !== null
-        ? lastPosition.current >= loadedDuration - 0.05
-        : sliderMax > 0 && lastPosition.current >= sliderMax);
+    const loaded = hasLoadedSelected(player);
+    const retainedScrub = !loaded ? retryScrubIntent.current : null;
+    const loadedDuration = loaded && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : null;
+    const atEnd = retainedScrub
+      ? retainedScrub.toEnd
+      : Boolean(player?.ended)
+        || (loadedDuration !== null
+          ? lastPosition.current >= loadedDuration - 0.05
+          : effectiveDuration > 0 && lastPosition.current >= effectiveDuration - 0.05);
     const target = atEnd ? 0 : lastPosition.current;
-    const scrubIntent = atEnd ? undefined : (retryScrubIntent.current ?? undefined);
+    const scrubIntent = atEnd ? undefined : (retainedScrub ?? undefined);
     recoveryTried.current = false;
     setMessage('');
-    if (hasLoadedSelected(player)) {
+    if (loaded) {
       retryScrubIntent.current = null;
       if (atEnd || Math.abs(player.currentTime - target) > 0.05) {
         telemetry.current.tracker.suspend();
@@ -403,7 +410,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       onTime(0);
     }
     void load(selected, target, true, scrubIntent);
-  }, [busy, hasLoadedSelected, load, onTime, playLoaded, playing, selected, sliderMax]);
+  }, [busy, effectiveDuration, hasLoadedSelected, load, onTime, playLoaded, playing, selected]);
 
   useImperativeHandle(ref, () => ({ playAt: seconds => seek(seconds, true, 'passage'), toggle }), [seek, toggle]);
 
@@ -423,7 +430,9 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     if (!isCurrentMedia(player)) return;
     const next = pending.current;
     if (next && next.generation !== generation.current) return;
-    if (Number.isFinite(player.duration) && player.duration > 0) setMediaDuration(player.duration);
+    if (Number.isFinite(player.duration) && player.duration > 0) {
+      setMediaDuration({ fileId: source!.fileId, seconds: player.duration });
+    }
     player.playbackRate = preferredSpeed.current;
     player.volume = volume.current;
     player.muted = muted.current;
@@ -558,7 +567,9 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
           onDurationChange={event => {
             if (!isCurrentMedia(event.currentTarget)) return;
             const duration = event.currentTarget.duration;
-            if (Number.isFinite(duration) && duration > 0) setMediaDuration(duration);
+            if (Number.isFinite(duration) && duration > 0) {
+              setMediaDuration({ fileId: source!.fileId, seconds: duration });
+            }
           }}
           onTimeUpdate={event => {
             if (!isCurrentMedia(event.currentTarget) || loading.current) return;
