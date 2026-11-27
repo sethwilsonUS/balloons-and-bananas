@@ -59,7 +59,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const [failed, setFailed] = useState(false);
   const audio = useRef<HTMLAudioElement>(null);
   const generation = useRef(0);
-  const pending = useRef<{ at: number; play: boolean; generation: number } | null>(null);
+  const pending = useRef<{ at: number; play: boolean; generation: number; fromScrub?: boolean; toEnd?: boolean } | null>(null);
   const controller = useRef<AbortController | null>(null);
   const loading = useRef(false);
   const recoveryTried = useRef(false);
@@ -156,7 +156,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     }
   }, [reportError]);
 
-  const load = useCallback(async (file: AudioFile, at: number, shouldPlay: boolean) => {
+  const load = useCallback(async (file: AudioFile, at: number, shouldPlay: boolean, options?: { fromScrub?: boolean; toEnd?: boolean }) => {
     if (!file.available || file.format.toLowerCase() !== 'mp3') return;
     telemetry.current.tracker.suspend();
     selectTelemetry(file.id);
@@ -169,7 +169,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     const next = new AbortController();
     controller.current = next;
     loading.current = true;
-    pending.current = { at, play: shouldPlay, generation: nextGeneration };
+    pending.current = { at, play: shouldPlay, generation: nextGeneration, fromScrub: options?.fromScrub, toEnd: options?.toEnd };
     releaseMedia(audio.current);
     setSource(null);
     setPlaying(false);
@@ -258,7 +258,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       return;
     }
     if (loading.current && pending.current && pending.current.generation === generation.current) {
-      pending.current = { ...pending.current, at: clamped };
+      pending.current = { ...pending.current, at: clamped, fromScrub: true, toEnd: clamped >= sliderMax };
       lastPosition.current = clamped;
       setPosition(clamped);
       onTime(clamped);
@@ -266,7 +266,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     }
     if (playing && source && Date.now() >= source.expiresAt - 15_000) {
       report('audio_seek', selected.id, { seekSource: 'native' });
-      void load(selected, clamped, true);
+      void load(selected, clamped, true, { fromScrub: true, toEnd: clamped >= sliderMax });
       return;
     }
     lastPosition.current = clamped;
@@ -376,15 +376,20 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     setBusy(false);
     if (!next) return;
     pending.current = null;
-    if (Number.isFinite(player.duration) && next.at >= player.duration) {
+    let target = next.at;
+    if (next.fromScrub) {
+      if (Number.isFinite(player.duration) && player.duration > 0) {
+        target = next.toEnd ? player.duration : Math.min(next.at, player.duration);
+      }
+    } else if (Number.isFinite(player.duration) && next.at >= player.duration) {
       setMessage('This timestamp falls beyond the loaded recording. Please choose another recording file.');
       return;
     }
-    programmedSeek.current = { generation: generation.current, target: next.at, when: performance.now() };
-    player.currentTime = next.at;
-    lastPosition.current = next.at;
-    setPosition(next.at);
-    onTime(next.at);
+    programmedSeek.current = { generation: generation.current, target, when: performance.now() };
+    player.currentTime = target;
+    lastPosition.current = target;
+    setPosition(target);
+    onTime(target);
     if (next.play) void playLoaded();
   };
 
