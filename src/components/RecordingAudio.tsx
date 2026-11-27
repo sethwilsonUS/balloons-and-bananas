@@ -207,7 +207,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     && !failed,
   ), [failed, selected, source]);
 
-  const seek = useCallback((seconds: number, shouldPlay = true, seekSource?: SeekSource) => {
+  const seek = useCallback((seconds: number, shouldPlay = true, seekSource?: SeekSource, scrubIntent?: { fromScrub: true; toEnd: boolean }) => {
     if (!Number.isFinite(seconds) || seconds < 0) return;
     const player = audio.current;
     const isLoadedSelected = hasLoadedSelected(player);
@@ -221,8 +221,10 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       return;
     }
     recoveryTried.current = false;
-    retryScrubIntent.current = null;
+    const activeScrubIntent = scrubIntent && file.id === selected?.id ? scrubIntent : undefined;
+    retryScrubIntent.current = activeScrubIntent ?? null;
     if (isLoadedSelected && file.id === selected!.id) {
+      retryScrubIntent.current = null;
       if (Number.isFinite(player.duration) && seconds >= player.duration) {
         setMessage('This timestamp falls beyond this recording. Please choose another recording file.');
         return;
@@ -238,7 +240,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       setMessage('');
     } else {
       if (seekSource) report('audio_seek', file.id, { seekSource });
-      void load(file, seconds, shouldPlay);
+      void load(file, seconds, shouldPlay, activeScrubIntent);
     }
   }, [available, hasLoadedSelected, load, onTime, playLoaded, report, selected]);
 
@@ -286,6 +288,9 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       setMessage('');
       const intent = { fromScrub: true as const, toEnd };
       retryScrubIntent.current = intent;
+      lastPosition.current = clamped;
+      setPosition(clamped);
+      onTime(clamped);
       report('audio_seek', selected.id, { seekSource: 'native' });
       void load(selected, clamped, true, intent);
       return;
@@ -373,7 +378,12 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         || (loadedDuration !== null
           ? lastPosition.current >= loadedDuration - 0.05
           : sliderMax > 0 && lastPosition.current >= sliderMax);
-      seek(atEnd ? 0 : lastPosition.current, true);
+      if (atEnd) {
+        retryScrubIntent.current = null;
+        seek(0, true);
+      } else {
+        seek(lastPosition.current, true, undefined, retryScrubIntent.current ?? undefined);
+      }
     }
   }, [busy, playing, seek, sliderMax]);
 
