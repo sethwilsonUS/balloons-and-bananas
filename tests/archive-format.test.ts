@@ -2,7 +2,29 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { buildCatalog, parseStoredArchiveData } from '../src/lib/archive-format';
+import { buildCatalog, parseStoredArchiveData, type StoredSession } from '../src/lib/archive-format';
+
+function validStoredSession(overrides: Partial<Record<keyof StoredSession, unknown>> = {}): Record<string, unknown> {
+  return {
+    id: 'fixture-valid',
+    sourceName: '010815.cha',
+    title: 'Valid synthetic session',
+    overview: 'Synthetic overview.',
+    origin: 'archived_research',
+    topics: ['Play and imagination'],
+    dates: ['1983-01-15'],
+    ages: ['1;08.15'],
+    audio: [],
+    preferredAudioId: null,
+    sources: [],
+    moments: [],
+    limits: [],
+    transcript: [],
+    sourceSha256: '0'.repeat(64),
+    association: 'Synthetic fixture.',
+    ...overrides,
+  };
+}
 
 test('parseStoredArchiveData maps unchanged stored archive.json v1 keys into glossary domain objects', async () => {
   const raw = JSON.parse(await readFile(path.resolve('tests/fixtures/archive.json'), 'utf8')) as Record<string, unknown>;
@@ -33,14 +55,24 @@ test('parseStoredArchiveData maps unchanged stored archive.json v1 keys into glo
   });
 });
 
-test('parseStoredArchiveData rejects malformed stored payloads', () => {
+test('parseStoredArchiveData rejects malformed stored payloads and incomplete session entries', () => {
+  const wrap = (entries: unknown[]) => ({ version: 1, generatedAt: '', entries, documents: [], assets: {} });
+
   for (const invalid of [
     null,
     [],
     {},
     { version: 2, generatedAt: '', entries: [], documents: [], assets: {} },
     { version: 1, generatedAt: '', entries: 'not-array', documents: [], assets: {} },
-    { version: 1, generatedAt: '', entries: [{ id: 'bad-session' }], documents: [], assets: {} },
+    wrap([{ id: 'bad-session' }]),
+    // Arrays present, but missing required fields like topics/title/origin/etc.
+    wrap([{ id: 'incomplete-session', audio: [], transcript: [], moments: [] }]),
+    wrap([validStoredSession({ topics: undefined })]),
+    wrap([validStoredSession({ topics: [123] })]),
+    wrap([validStoredSession({ origin: 'unknown_origin' })]),
+    wrap([validStoredSession({ preferredAudioId: 42 })]),
+    wrap([validStoredSession({ sources: null })]),
+    wrap([validStoredSession({ sourceSha256: undefined })]),
     { version: 1, generatedAt: '', entries: [], documents: [], assets: null },
   ]) {
     assert.throws(() => parseStoredArchiveData(invalid), /Archive format mismatch/);

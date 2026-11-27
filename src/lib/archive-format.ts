@@ -44,12 +44,43 @@ export interface StoredArchiveData {
   assets: Record<string, ArchiveAsset>;
 }
 
+const VALID_ORIGINS = new Set<string>(['archived_research', 'talkbank_ai_draft', 'local_ai_draft']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+
+function isTranscriptOrigin(value: unknown): value is TranscriptOrigin {
+  return typeof value === 'string' && VALID_ORIGINS.has(value);
+}
+
 function mapStoredSession(raw: unknown): Session {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+  if (!isRecord(raw)) {
     throw new Error('Archive format mismatch');
   }
   const stored = raw as Partial<StoredSession>;
-  if (typeof stored.id !== 'string' || !Array.isArray(stored.audio) || !Array.isArray(stored.transcript) || !Array.isArray(stored.moments)) {
+  if (
+    typeof stored.id !== 'string'
+    || typeof stored.sourceName !== 'string'
+    || typeof stored.title !== 'string'
+    || typeof stored.overview !== 'string'
+    || !isTranscriptOrigin(stored.origin)
+    || !isStringArray(stored.topics)
+    || !isStringArray(stored.dates)
+    || !isStringArray(stored.ages)
+    || !Array.isArray(stored.audio)
+    || (stored.preferredAudioId !== null && stored.preferredAudioId !== undefined && typeof stored.preferredAudioId !== 'string')
+    || !Array.isArray(stored.sources)
+    || !Array.isArray(stored.moments)
+    || !isStringArray(stored.limits)
+    || !Array.isArray(stored.transcript)
+    || typeof stored.sourceSha256 !== 'string'
+    || typeof stored.association !== 'string'
+  ) {
     throw new Error('Archive format mismatch');
   }
   const { audio, preferredAudioId, ...rest } = stored as StoredSession;
@@ -61,7 +92,7 @@ function mapStoredSession(raw: unknown): Session {
 }
 
 export function parseStoredArchiveData(raw: unknown): ArchiveData {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+  if (!isRecord(raw)) {
     throw new Error('Archive format mismatch');
   }
   const data = raw as Partial<StoredArchiveData>;
@@ -70,9 +101,7 @@ export function parseStoredArchiveData(raw: unknown): ArchiveData {
     || typeof data.generatedAt !== 'string'
     || !Array.isArray(data.entries)
     || !Array.isArray(data.documents)
-    || !data.assets
-    || typeof data.assets !== 'object'
-    || Array.isArray(data.assets)
+    || !isRecord(data.assets)
   ) {
     throw new Error('Archive format mismatch');
   }
@@ -81,7 +110,7 @@ export function parseStoredArchiveData(raw: unknown): ArchiveData {
     generatedAt: data.generatedAt,
     sessions: data.entries.map(mapStoredSession),
     documents: data.documents,
-    assets: data.assets,
+    assets: data.assets as Record<string, ArchiveAsset>,
   };
 }
 
