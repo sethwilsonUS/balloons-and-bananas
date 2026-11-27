@@ -117,9 +117,9 @@ async function main() {
   check(/\bnoindex\b/i.test(root.headers.get('x-robots-tag') || ''), 'public_root:noindex');
   check(root.headers.get('referrer-policy') === 'no-referrer', 'public_root:no_referrer');
   const html = await root.text();
-  const markers = ['The Seth tapes', 'Seth Wilson', data.entries[0].title, data.entries[0].sourceName];
+  const markers = ['Seth Wilson', 'An unlisted collection', data.entries[0].title, data.entries[0].sourceName, data.entries[0].overview].filter(Boolean);
   check(markers.every(marker => !html.includes(marker)), 'public_root:no_static_archive');
-  check(/<title>\s*An unlisted collection\s*<\/title>/i.test(html), 'public_root:neutral_title');
+  check(/<title>\s*The Seth Tapes\s*<\/title>/.test(html), 'public_root:archive_title');
   check((root.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'public_root:frame_protection');
   if (!local) check(!(root.headers.get('content-security-policy') || '').includes("'unsafe-eval'"), 'production:no_unsafe_eval');
   const robots = await call('/robots.txt', 'robots');

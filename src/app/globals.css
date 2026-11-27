@@ -580,12 +580,11 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .theme-discovery { margin: 0 0 28px; }
 .theme-discovery h2 { font-family: var(--sans); font-size: 1rem; letter-spacing: 0; margin-bottom: 12px; }
 .theme-discovery .theme-help { color: var(--muted); font-size: .8rem; margin: 12px 0 0; }
-.theme-shortcuts { display: flex; flex-wrap: wrap; gap: 10px; }
+.theme-shortcuts { display: grid; grid-template-columns: repeat(var(--theme-cols, 4), minmax(0, 1fr)); gap: 10px; max-width: 860px; }
 .theme-shortcut { min-height: 44px; border-radius: 5px; background: var(--paper-light); color: var(--forest); }
+.theme-shortcuts .theme-shortcut { width: 100%; padding: 10px 12px; text-align: center; }
 .theme-shortcut[aria-pressed='true'],
 .theme-shortcut[aria-pressed='true']:hover { background: var(--primary-bg); border-color: var(--primary-bg); color: var(--on-primary); }
-.browse-themes { margin-top: 24px; }
-.browse-themes > p { color: var(--reading); font-size: .85rem; margin-bottom: 10px; }
 .linguistic-filters { margin-top: 22px; border-top: 1px solid var(--line); }
 .linguistic-filters > summary { min-height: 48px; padding: 13px 0; color: var(--forest); font-size: .92rem; }
 .linguistic-filters > summary > span { overflow-wrap: anywhere; }
@@ -644,6 +643,8 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .cue-button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; max-width: 100%; min-height: 44px; padding: 7px; font: inherit; font-size: .75rem; font-variant-numeric: tabular-nums; border: 1px solid var(--control-line); border-radius: 4px; background: var(--paper-light); color: var(--forest); }
 .cue-button:hover { color: var(--forest); background: var(--forest-soft); }
 @media (max-width: 720px) {
+  .theme-shortcuts { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .theme-shortcuts .theme-shortcut { grid-column: span var(--compact-span, 3); }
   .playback-speed select, .audio-file-choice select { font-size: 1rem; }
   .playback-speed { margin-left: 0; }
   .transcript-line { grid-template-columns: 82px minmax(0, 1fr); gap: 10px; }

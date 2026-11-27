@@ -218,9 +218,16 @@ function Transcript({ entry, jump, message, linkedIndex, activeIndex, playing, h
   </section>;
 }
 
-export default function RecordingDetail({ id, passage = null, onBack, onMarker }: { id: string; passage?: number | null; onBack: () => void; onMarker: (marker: LinguisticMarkerId, sourcePassage: number) => void }) {
+export default function RecordingDetail({ id, passage = null, onBack, onMarker, onEntryState }: {
+  id: string;
+  passage?: number | null;
+  onBack: () => void;
+  onMarker: (marker: LinguisticMarkerId, sourcePassage: number) => void;
+  onEntryState?: (state: { id: string; title: string | null; notFound: boolean }) => void;
+}) {
   const [entry, setEntry] = useState<ArchiveEntry | null>(null);
   const [error, setError] = useState('');
+  const [notFound, setNotFound] = useState(false);
   const [retry, setRetry] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
 
@@ -228,14 +235,21 @@ export default function RecordingDetail({ id, passage = null, onBack, onMarker }
     const controller = new AbortController();
     setEntry(null);
     setError('');
+    setNotFound(false);
     void request<ArchiveEntry>(`/api/entries/${encodeURIComponent(id)}`, { signal: controller.signal }).then(data => {
       if (!controller.signal.aborted) setEntry(data);
     }).catch((reason: unknown) => {
       if (controller.signal.aborted) return;
-      setError(reason instanceof ApiError && reason.status === 404 ? 'This recording guide could not be found.' : 'This guide could not be loaded. Please try again.');
+      const missing = reason instanceof ApiError && reason.status === 404;
+      setNotFound(missing);
+      setError(missing ? 'This recording guide could not be found.' : 'This guide could not be loaded. Please try again.');
     });
     return () => controller.abort();
   }, [id, retry]);
+
+  useEffect(() => {
+    onEntryState?.({ id, title: entry?.id === id ? entry.title : null, notFound });
+  }, [entry, id, notFound, onEntryState]);
 
   useEffect(() => {
     if (entry) trackArchiveEvent('recording_view', { recordingId: entry.id, origin: entry.origin });

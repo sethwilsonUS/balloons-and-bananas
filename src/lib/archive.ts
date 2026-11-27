@@ -1,5 +1,6 @@
 import 'server-only';
 import { get, issueSignedToken, presignUrl } from '@vercel/blob';
+import { ARCHIVE_NAME } from './site';
 import type { ArchiveData, Catalog } from './types';
 
 let pending: Promise<ArchiveData> | undefined;
@@ -28,7 +29,7 @@ export function catalog(data: ArchiveData): Catalog {
   const topics = new Map<string, number>();
   for (const entry of data.entries) for (const topic of entry.topics) topics.set(topic, (topics.get(topic) ?? 0) + 1);
   return {
-    title: 'The Seth tapes',
+    title: ARCHIVE_NAME,
     counts: {
       entries: data.entries.length,
       audio: new Set(data.entries.flatMap(entry => entry.audio.filter(file => file.kind !== 'listening-copy').map(file => file.id))).size,
