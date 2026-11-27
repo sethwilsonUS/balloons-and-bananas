@@ -1,39 +1,39 @@
 import type { SearchPageSize, SearchResponse, SearchResult } from './types';
 
-export type RecordingView = 'details' | 'list';
+export type SessionView = 'details' | 'list';
 export type SearchBusyKind = null | 'search' | 'view';
 
 const foldWords = (text: string) =>
   text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLocaleLowerCase();
 
-export function pageSizeForView(view: RecordingView): SearchPageSize {
+export function pageSizeForView(view: SessionView): SearchPageSize {
   return view === 'list' ? 36 : 18;
 }
 
-export function shortSummary(text: string): string {
+export function shortOverview(text: string): string {
   const words = text.trim().split(/\s+/);
-  let summary = '';
+  let overview = '';
   for (const word of words) {
-    if (summary && summary.length + word.length + 1 > 180) return `${summary}…`;
-    summary += `${summary ? ' ' : ''}${word}`;
+    if (overview && overview.length + word.length + 1 > 180) return `${overview}…`;
+    overview += `${overview ? ' ' : ''}${word}`;
   }
-  return summary;
+  return overview;
 }
 
 /**
- * Returns the excerpt to display for a card in the active view.
- * Suppresses summary excerpts whose text is already visible in the card's
- * title or overview (full overview in Details, truncated summary in List).
+ * Returns the excerpt to display for a session card in the active view.
+ * Suppresses guide excerpts whose text is already visible in the card's
+ * title or overview (full overview in Details, truncated overview in List).
  */
-export function visibleExcerpt(result: SearchResult, view: RecordingView): string {
+export function visibleExcerpt(result: SearchResult, view: SessionView): string {
   if (result.matchedIn === 'browse' || !result.excerpt) return '';
   const trimmed = result.excerpt.trim();
   if (!trimmed) return '';
-  if (result.matchedIn === 'summary') {
+  if (result.matchedIn === 'guide') {
     const normalizedExcerpt = foldWords(trimmed.replace(/^…|…$/g, ''));
-    const displayedOverview = view === 'list' ? shortSummary(result.entry.overview) : result.entry.overview;
+    const displayedOverview = view === 'list' ? shortOverview(result.session.overview) : result.session.overview;
     const normalizedOverview = foldWords(displayedOverview);
-    const normalizedTitle = foldWords(result.entry.title);
+    const normalizedTitle = foldWords(result.session.title);
     if (normalizedExcerpt && (normalizedOverview.includes(normalizedExcerpt) || normalizedTitle.includes(normalizedExcerpt))) {
       return '';
     }
@@ -45,7 +45,7 @@ export function visibleExcerpt(result: SearchResult, view: RecordingView): strin
  * Reuses already-loaded page 1 results when switching Details <-> List so
  * switching views never triggers a redundant search or a stale "Searching…" status.
  */
-export function adaptSearchForView(current: SearchResponse, view: RecordingView): SearchResponse | null {
+export function adaptSearchForView(current: SearchResponse, view: SessionView): SearchResponse | null {
   const pageSize = pageSizeForView(view);
   if (current.page !== 1) return null;
   const needed = Math.min(pageSize, current.total);
@@ -65,7 +65,7 @@ export function formatSearchStatus(search: SearchResponse | null, busyKind: Sear
   if (!search.total) return '0 results';
   const first = (search.page - 1) * search.pageSize + 1;
   const last = Math.min(search.page * search.pageSize, search.total);
-  return `${first}–${last} of ${search.total.toLocaleString()} guides${search.pages > 1 ? ` · page ${search.page} of ${search.pages}` : ''}`;
+  return `${first}–${last} of ${search.total.toLocaleString()} ${search.total === 1 ? 'session' : 'sessions'}${search.pages > 1 ? ` · page ${search.page} of ${search.pages}` : ''}`;
 }
 
 /**

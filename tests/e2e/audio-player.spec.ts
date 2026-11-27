@@ -302,7 +302,7 @@ test('audio player preserves load/media error status, signed-URL recovery, keybo
   await expect(page.getByRole('heading', { level: 2, name: 'Paper lighthouse and harbor bells' })).toBeVisible();
   await tabUntilFocused(page, audioPanel.getByRole('button', { name: 'Play recording' }));
   await page.keyboard.press('Enter');
-  await expect(status).toContainText('This recording could not be played. Retry from your current position, or choose another file.');
+  await expect(status).toContainText('This recording could not be played. Retry from your current position, or choose another recording.');
   await expect(audioPanel.getByRole('button', { name: 'Retry audio' })).toBeVisible();
   await page.unroute('**/api/assets/fixture-audio-lighthouse-mp3?local=1');
 
@@ -312,7 +312,7 @@ test('audio player preserves load/media error status, signed-URL recovery, keybo
   await expect(audioPanel.locator('audio')).not.toBeVisible();
   await expect(audioPanel).toContainText('MP3 listening copy.');
   await expect(audioPanel.getByRole('link', { name: 'Download MP3 listening copy' })).toBeVisible();
-  await expect(audioPanel.getByText('Original WAV file')).toBeVisible();
+  await expect(audioPanel.getByText('Original WAV recording')).toBeVisible();
   await setTheme(page, 'light');
   await expectNoSeriousAxeViolations(page, 'listening-copy audio player (light)');
   await setTheme(page, 'dark');

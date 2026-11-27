@@ -1,5 +1,5 @@
 import { linguisticMarkers, type LinguisticMarkerId, type LinguisticSpeaker } from './linguistic-markers';
-import type { ArchiveEntry, LinguisticEvidence, TranscriptSegment } from './types';
+import type { LinguisticEvidence, Passage, Session } from './types';
 
 const WH_WORDS = new Set(['what', 'who', 'whom', 'whose', 'which', 'when', 'where', 'why', 'how']);
 const FIRST_PERSON = new Set(['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our', 'ours', 'ourselves']);
@@ -13,11 +13,11 @@ function isSourceChild(speaker: string | undefined) {
   return !!speaker && /^(?:\*?CHI:?|[^()]+\(CHI(?:,\s*[^()]*)?\))$/.test(speaker.trim());
 }
 
-export function utteranceText(segment: TranscriptSegment): string {
+export function utteranceText(passage: Passage): string {
   // The reading-copy importer puts speech on the first line and dependent
   // tiers / observation notes on subsequent lines. Those are not spoken words.
   // Remove delimited editorial comments first, including any embedded inline.
-  return segment.text
+  return passage.text
     .replace(/\[\[LOCAL AI[\s\S]*?END LOCAL AI EDITORIAL COMMENT\]\]/g, '')
     .split(/\r?\n/, 1)[0]
     .trim();
@@ -94,34 +94,34 @@ function evidenceExcerpt(speech: string, at: number): string {
   return `${from ? '…' : ''}${speech.slice(from, to)}${to < speech.length ? '…' : ''}`;
 }
 
-type EntryEvidence = Map<string, LinguisticEvidence>;
-type MarkerIndex = Map<LinguisticMarkerId, Record<LinguisticSpeaker, EntryEvidence>>;
+type SessionEvidence = Map<string, LinguisticEvidence>;
+type MarkerIndex = Map<LinguisticMarkerId, Record<LinguisticSpeaker, SessionEvidence>>;
 
-function buildIndex(entries: ArchiveEntry[]): MarkerIndex {
+function buildIndex(sessions: Session[]): MarkerIndex {
   const index: MarkerIndex = new Map(linguisticMarkers.map(marker => [marker.id, { child: new Map(), any: new Map() }]));
-  for (const entry of entries) {
-    entry.transcript.forEach((segment, segmentIndex) => {
-      const chatEligible = entry.origin !== 'local_ai_draft' && !!segment.speaker?.trim();
-      // Source metadata has no speaker. Local ASR segments are speech drafts,
+  for (const session of sessions) {
+    session.transcript.forEach((passage, passageIndex) => {
+      const chatEligible = session.origin !== 'local_ai_draft' && !!passage.speaker?.trim();
+      // Source metadata has no speaker. Local ASR passages are speech drafts,
       // but have no established identity and can only enter the "any" scope.
-      if (entry.origin !== 'local_ai_draft' && !chatEligible) return;
-      const speech = utteranceText(segment);
+      if (session.origin !== 'local_ai_draft' && !chatEligible) return;
+      const speech = utteranceText(passage);
       if (!speech || /^(?:\[Source\b|Source \(|Note:|Phonetic transcription\b|Speech-act annotation\b|[%@]\w)/i.test(speech)) return;
-      const scopes: LinguisticSpeaker[] = entry.origin === 'archived_research' && isSourceChild(segment.speaker) ? ['child', 'any'] : ['any'];
+      const scopes: LinguisticSpeaker[] = session.origin === 'archived_research' && isSourceChild(passage.speaker) ? ['child', 'any'] : ['any'];
       for (const { marker, at } of matchedMarkers(speech, chatEligible)) {
         for (const scope of scopes) {
-          const entryEvidence = index.get(marker)![scope];
-          let evidence = entryEvidence.get(entry.id);
+          const sessionEvidence = index.get(marker)![scope];
+          let evidence = sessionEvidence.get(session.id);
           if (!evidence) {
             evidence = { marker, count: 0, examples: [] };
-            entryEvidence.set(entry.id, evidence);
+            sessionEvidence.set(session.id, evidence);
           }
           evidence.count++;
           if (evidence.examples.length < 3) {
             evidence.examples.push({
-              segmentIndex, text: evidenceExcerpt(speech, at),
-              ...(segment.speaker ? { speaker: segment.speaker } : {}),
-              ...(segment.start !== undefined ? { start: segment.start } : {}),
+              passageIndex, text: evidenceExcerpt(speech, at),
+              ...(passage.speaker ? { speaker: passage.speaker } : {}),
+              ...(passage.start !== undefined ? { start: passage.start } : {}),
             });
           }
         }
@@ -131,12 +131,12 @@ function buildIndex(entries: ArchiveEntry[]): MarkerIndex {
   return index;
 }
 
-export function makeLinguisticSearch(entries: ArchiveEntry[]) {
+export function makeLinguisticSearch(sessions: Session[]) {
   // All markers and both scopes are indexed in one pass on first use. Ordinary
   // search pays no extra cost, and subsequent filter changes don't rescan text.
   let index: MarkerIndex | undefined;
   return (marker: LinguisticMarkerId, speaker: LinguisticSpeaker = 'child'): ReadonlyMap<string, LinguisticEvidence> => {
-    index ??= buildIndex(entries);
+    index ??= buildIndex(sessions);
     return index.get(marker)![speaker];
   };
 }

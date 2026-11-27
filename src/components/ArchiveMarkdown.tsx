@@ -6,7 +6,7 @@ import { remarkNormalizeHeadings, type BaseHeadingLevel } from '../lib/markdown'
 
 export interface ArchiveMarkdownProps {
   text: string;
-  onEntry: (id: string) => void;
+  onSession: (id: string) => void;
   onDocument?: (id: string) => void;
   documentTitle?: string;
   baseHeadingLevel?: BaseHeadingLevel;
@@ -14,7 +14,7 @@ export interface ArchiveMarkdownProps {
 
 export default function ArchiveMarkdown({
   text,
-  onEntry,
+  onSession,
   onDocument,
   documentTitle,
   baseHeadingLevel = 2,
@@ -23,12 +23,13 @@ export default function ArchiveMarkdown({
 
   return <div className="prose"><ReactMarkdown remarkPlugins={[remarkGfm, [remarkNormalizeHeadings, { baseHeadingLevel, documentTitle }]]} remarkRehypeOptions={{ footnoteLabelTagName: `h${baseHeadingLevel}` }} components={{
     a: ({ href, children }) => {
-      const entryMatch = href?.match(/^(?:\/)?\?entry=([^&#]+)/);
-      if (entryMatch) {
+      // Legacy `?entry=` query links remain supported for session links inside archive documents.
+      const sessionMatch = href?.match(/^(?:\/)?\?entry=([^&#]+)/);
+      if (sessionMatch) {
         return <a href={href} onClick={event => {
           if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
-          onEntry(decodeURIComponent(entryMatch[1]));
+          onSession(decodeURIComponent(sessionMatch[1]));
         }}>{children}</a>;
       }
       const documentMatch = href?.match(/^(?:\/)?\?document=([^&#]+)/);

@@ -1,7 +1,7 @@
 import { initBotId } from 'botid/client/core';
 
 // Runs before hydration so the first interactive request has invisible proof.
-// Read-only catalog/entry requests and native download links stay public.
+// Read-only catalog/session requests and native download links stay public.
 try {
   initBotId({ protect: [
     { path: '/api/search', method: 'POST', advancedOptions: { checkLevel: 'basic' } },

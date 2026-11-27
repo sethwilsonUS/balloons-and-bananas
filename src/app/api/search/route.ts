@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     if (['query', 'topic', 'origin', 'sort', 'marker', 'speaker'].some(k => input[k] !== undefined && typeof input[k] !== 'string')) return json({ error: 'Invalid search.' }, 400);
     if (input.page !== undefined && (typeof input.page !== 'number' || !Number.isFinite(input.page))) return json({ error: 'Invalid page.' }, 400);
     if (input.pageSize !== undefined && !isSearchPageSize(input.pageSize)) return json({ error: 'Invalid page size.' }, 400);
-    if (input.origin && !['archived_research', 'talkbank_ai_draft', 'local_ai_draft'].includes(input.origin as string)) return json({ error: 'Invalid source filter.' }, 400);
+    if (input.origin && !['archived_research', 'talkbank_ai_draft', 'local_ai_draft'].includes(input.origin as string)) return json({ error: 'Invalid transcript origin filter.' }, 400);
     if (input.sort && !['relevance', 'oldest', 'newest'].includes(input.sort as string)) return json({ error: 'Invalid sort.' }, 400);
     if (input.marker !== undefined && input.marker !== '' && !isLinguisticMarkerId(input.marker)) return json({ error: 'Invalid linguistic marker.' }, 400);
     if (input.speaker !== undefined && !isLinguisticSpeaker(input.speaker)) return json({ error: 'Invalid speaker scope.' }, 400);

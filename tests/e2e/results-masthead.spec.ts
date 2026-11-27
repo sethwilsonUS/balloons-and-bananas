@@ -74,19 +74,19 @@ test('archive uses one name, displays the masthead subtitle, and sets descriptiv
   await expect(page.locator('body')).not.toContainText('Balloons & Bananas');
   await expect(page).toHaveTitle('Overview · The Seth Tapes');
 
-  // Recordings view (unfiltered)
-  await page.getByRole('button', { name: /Recordings/i }).click();
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a recording' })).toBeVisible();
-  await expect(page).toHaveTitle('Recordings · The Seth Tapes');
+  // Sessions view (unfiltered)
+  await page.getByRole('button', { name: /Sessions/i }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  await expect(page).toHaveTitle('Sessions · The Seth Tapes');
 
-  // Recordings view (filtered) uses a descriptive title without leaking the raw query
-  const archiveSearch = page.getByLabel('Search recordings and transcripts');
+  // Sessions view (filtered) uses a descriptive title without leaking the raw query
+  const archiveSearch = page.getByLabel('Search sessions and transcripts');
   await archiveSearch.fill('wooden track');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 guide');
+  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
   await expect(page).toHaveTitle('Search results · The Seth Tapes');
 
-  // Recording detail view sets "<Title> · The Seth Tapes"
+  // Session detail view sets "<Title> · The Seth Tapes"
   await page.getByRole('link', { name: /Blue locomotive and wooden bridge/i }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
   await expect(page).toHaveTitle('Blue locomotive and wooden bridge · The Seth Tapes');
@@ -101,10 +101,10 @@ test('archive uses one name, displays the masthead subtitle, and sets descriptiv
   await expect(page.locator('.document-detail > h2')).toHaveText('Fixture annotation provenance guide');
   await expect(page).toHaveTitle('Fixture annotation provenance guide · The Seth Tapes');
 
-  // Direct link to an unknown recording sets a clear not-found title
+  // Direct link to an unknown session sets a clear not-found title
   await page.goto('/?entry=nonexistent-fixture-session');
-  await expect(page.getByText('This recording guide could not be found.')).toBeVisible();
-  await expect(page).toHaveTitle('Recording not found · The Seth Tapes');
+  await expect(page.getByText('This session could not be found.')).toBeVisible();
+  await expect(page).toHaveTitle('Session not found · The Seth Tapes');
 });
 
 test('results view removes duplicated theme chip row while preserving overview shortcuts and Theme filter', async ({ page }) => {
@@ -114,10 +114,10 @@ test('results view removes duplicated theme chip row while preserving overview s
   const overviewShortcuts = page.locator('.theme-discovery .theme-shortcuts button');
   await expect(overviewShortcuts).toHaveCount(8);
 
-  // Clicking a theme shortcut navigates to Recordings with the Theme filter selected
+  // Clicking a theme shortcut navigates to Sessions with the Theme filter selected
   await overviewShortcuts.filter({ hasText: 'Imagination' }).click();
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a recording' })).toBeVisible();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('2 guides');
+  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
 
   // Duplicated Browse by theme chip row is gone from results
   await expect(page.locator('.browse-themes')).toHaveCount(0);
@@ -130,7 +130,7 @@ test('results view removes duplicated theme chip row while preserving overview s
 
   // Changing the Theme select updates results cleanly
   await themeSelect.selectOption('Vision and access');
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 guide');
+  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
   await expect(page.getByRole('link', { name: /Cardboard observatory without audio/i })).toBeVisible();
 
   await auditBothThemes(page, 'results without duplicate theme chips');
@@ -138,31 +138,31 @@ test('results view removes duplicated theme chip row while preserving overview s
 
 test('excerpts do not repeat the card overview or concatenate titles, while moment and transcript excerpts still appear', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Recordings/i }).click();
-  const searchInput = page.getByLabel('Search recordings and transcripts');
+  await page.getByRole('button', { name: /Sessions/i }).click();
+  const searchInput = page.getByLabel('Search sessions and transcripts');
   const submit = page.locator('.search-form').getByRole('button', { name: 'Search' });
 
   // 1. Overview-only hit ("wooden track" appears only in Blue locomotive's overview)
   await searchInput.fill('wooden track');
   await submit.click();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 guide');
-  const overviewCard = page.locator('.recording-card').first();
+  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
+  const overviewCard = page.locator('.session-card').first();
   await expect(overviewCard.locator('.card-overview')).toContainText('wooden track');
   await expect(overviewCard.locator('.search-excerpt')).toHaveCount(0);
 
   // 2. Title-only hit ("Yellow submarine in the courtyard") never concatenates title text into an excerpt
   await searchInput.fill('Yellow submarine in the courtyard');
   await submit.click();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 guide');
-  const titleCard = page.locator('.recording-card').first();
+  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
+  const titleCard = page.locator('.session-card').first();
   await expect(titleCard.locator('h4')).toContainText('Yellow submarine in the courtyard');
   await expect(titleCard.locator('.search-excerpt')).toHaveCount(0);
 
   // 3. Moment-only hit ("periscope") shows the moment excerpt without repeating the overview or title
   await searchInput.fill('periscope');
   await submit.click();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 guide');
-  const momentCard = page.locator('.recording-card').first();
+  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
+  const momentCard = page.locator('.session-card').first();
   const momentExcerpt = momentCard.locator('.search-excerpt');
   await expect(momentExcerpt).toBeVisible();
   await expect(momentExcerpt.locator('.excerpt-label')).toHaveText('From the guide');
@@ -173,8 +173,8 @@ test('excerpts do not repeat the card overview or concatenate titles, while mome
   // 4. Transcript-only hit ("morning ferry" matches Paper lighthouse via moment & transcript; "pier" is transcript-only)
   await searchInput.fill('pier');
   await submit.click();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 guide');
-  const transcriptCard = page.locator('.recording-card').first();
+  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
+  const transcriptCard = page.locator('.session-card').first();
   const transcriptExcerpt = transcriptCard.locator('.search-excerpt');
   await expect(transcriptExcerpt).toBeVisible();
   await expect(transcriptExcerpt.locator('.excerpt-label')).toHaveText('From the transcript');
@@ -185,59 +185,59 @@ test('excerpts do not repeat the card overview or concatenate titles, while mome
 
 test('switching Details and List views never leaves a stale "Searching…" status, even with slow paginated responses', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Recordings/i }).click();
+  await page.getByRole('button', { name: /Sessions/i }).click();
 
   const status = page.locator('.search-status');
   const detailsButton = page.getByRole('button', { name: 'Details', exact: true });
   const listButton = page.getByRole('button', { name: 'List', exact: true });
 
-  await expect(status).toHaveText('1–4 of 4 guides');
+  await expect(status).toHaveText('1–4 of 4 sessions');
   await expect(detailsButton).toHaveAttribute('aria-pressed', 'true');
 
   // Switching Details -> List -> Details with all results on page 1 never enters "Searching…"
   await listButton.click();
   await expect(listButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.recordings-compact-list')).toBeVisible();
-  await expect(status).toHaveText('1–4 of 4 guides');
+  await expect(page.locator('.sessions-compact-list')).toBeVisible();
+  await expect(status).toHaveText('1–4 of 4 sessions');
   await expect(status).not.toContainText('Searching');
 
   await detailsButton.click();
   await expect(detailsButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.recording-card').first()).toBeVisible();
-  await expect(status).toHaveText('1–4 of 4 guides');
+  await expect(page.locator('.session-card').first()).toBeVisible();
+  await expect(status).toHaveText('1–4 of 4 sessions');
   await expect(status).not.toContainText('Searching');
 
   // With an active query, switching Details <-> List never flashes or leaves "Searching…"
-  await page.getByLabel('Search recordings and transcripts').fill('locomotive');
+  await page.getByLabel('Search sessions and transcripts').fill('locomotive');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
-  await expect(status).toHaveText('1–2 of 2 guides');
+  await expect(status).toHaveText('1–2 of 2 sessions');
 
   await listButton.click();
-  await expect(status).toHaveText('1–2 of 2 guides');
+  await expect(status).toHaveText('1–2 of 2 sessions');
   await expect(status).not.toContainText('Searching');
 
   await detailsButton.click();
-  await expect(status).toHaveText('1–2 of 2 guides');
+  await expect(status).toHaveText('1–2 of 2 sessions');
   await expect(status).not.toContainText('Searching');
 
   // Simulate a large paginated archive (>18 items) with a slow List fetch and rapid List -> Details toggle
   await page.getByRole('button', { name: /Clear filters/i }).click();
-  await expect(status).toHaveText('1–4 of 4 guides');
+  await expect(status).toHaveText('1–4 of 4 sessions');
 
   let releaseSlowList = () => {};
   let slowListStarted = false;
   const makeSyntheticResults = (count: number) => Array.from({ length: count }, (_, i) => ({
-    entry: {
+    session: {
       id: `fixture-010815-locomotive-${i + 1}`,
       sourceName: `0108${String(i + 1).padStart(2, '0')}.cha`,
       title: `Synthetic session ${i + 1}`,
-      overview: 'Synthetic paginated entry for view-switch testing.',
+      overview: 'Synthetic paginated session for view-switch testing.',
       origin: 'archived_research',
       topics: ['Play and imagination'],
       dates: ['1983-01-15'],
       ages: ['1;08.15'],
-      audio: [],
-      preferredAudioId: null,
+      recordings: [],
+      preferredRecordingId: null,
     },
     excerpt: '',
     matchedIn: 'browse',
@@ -270,7 +270,7 @@ test('switching Details and List views never leaves a stale "Searching…" statu
 
   // Trigger a fresh search so the mocked 40-item Details page (18 items) loads
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
-  await expect(status).toHaveText('1–18 of 40 guides · page 1 of 3');
+  await expect(status).toHaveText('1–18 of 40 sessions · page 1 of 3');
 
   // Switch Details -> List: while awaiting the 36-item response, status says "Updating view…" (never "Searching…")
   await listButton.click();
@@ -279,17 +279,17 @@ test('switching Details and List views never leaves a stale "Searching…" statu
 
   // Rapidly switch back to Details before the slow List fetch resolves: cancels and restores settled status immediately
   await detailsButton.click();
-  await expect(status).toHaveText('1–18 of 40 guides · page 1 of 3');
+  await expect(status).toHaveText('1–18 of 40 sessions · page 1 of 3');
   releaseSlowList();
 
   // Now switch Details -> List cleanly and verify settled List status
   await listButton.click();
-  await expect(status).toHaveText('1–36 of 40 guides · page 1 of 2');
+  await expect(status).toHaveText('1–36 of 40 sessions · page 1 of 2');
   await expect(page.locator('.results-list')).toHaveAttribute('aria-busy', 'false');
 
   // Switching List -> Details settles immediately with zero refetch or "Searching…"
   await detailsButton.click();
-  await expect(status).toHaveText('1–18 of 40 guides · page 1 of 3');
+  await expect(status).toHaveText('1–18 of 40 sessions · page 1 of 3');
 
   await page.unroute('**/api/search');
   await auditBothThemes(page, 'results view switching');

@@ -1,10 +1,10 @@
-import type { Origin, TranscriptSegment } from './types';
+import type { Passage, TranscriptOrigin } from './types';
 import type { LinguisticMarkerId } from './linguistic-markers';
 
 // A conservative display projection, not a corrected transcript or CHAT parser.
 // CHAT §§8.4–8.6, 9.10, 10.2–10.3 and the §11.1 flow-tier convention:
 // https://talkbank.org/0info/manuals/CHAT.html
-// Source mode must always render segment.text directly. Never persist this
+// Source mode must always render passage.text directly. Never persist this
 // projection over source text, index it as research evidence, or infer speakers.
 const EDITORIAL = /\[\[LOCAL AI[\s\S]*?END LOCAL AI EDITORIAL COMMENT\]\]/g;
 
@@ -84,10 +84,10 @@ function displayUtterance(speech: string): string {
   return result.replace(/\s+/g, ' ').replace(/\s+([,.!?;])/g, '$1').trim();
 }
 
-export function readingText(segment: TranscriptSegment, origin: Origin): string {
-  if (origin === 'local_ai_draft' || !segment.speaker?.trim()) return segment.text;
-  const editorialComments = [...segment.text.matchAll(EDITORIAL)].map(match => match[0]);
-  const speech = segment.text.replace(EDITORIAL, '').split(/\r?\n/, 1)[0];
+export function readingText(passage: Passage, origin: TranscriptOrigin): string {
+  if (origin === 'local_ai_draft' || !passage.speaker?.trim()) return passage.text;
+  const editorialComments = [...passage.text.matchAll(EDITORIAL)].map(match => match[0]);
+  const speech = passage.text.replace(EDITORIAL, '').split(/\r?\n/, 1)[0];
   const reading = displayUtterance(speech);
   // These local AI explanations must remain explicitly labelled and separate
   // even when linguistic/dependent tiers are hidden in the easier reading view.
@@ -96,10 +96,10 @@ export function readingText(segment: TranscriptSegment, origin: Origin): string 
 
 export interface NotationLink { start: number; end: number; marker: LinguisticMarkerId }
 
-export function getNotationLinks(segment: TranscriptSegment, origin: Origin): NotationLink[] {
-  if (origin === 'local_ai_draft' || !segment.speaker?.trim()) return [];
+export function getNotationLinks(passage: Passage, origin: TranscriptOrigin): NotationLink[] {
+  if (origin === 'local_ai_draft' || !passage.speaker?.trim()) return [];
   // Mask rather than remove: offsets must address the untouched source string.
-  const speech = segment.text
+  const speech = passage.text
     .replace(EDITORIAL, comment => comment.replace(/[^\r\n]/g, ' '))
     .split(/\r?\n/, 1)[0];
   if (/^\s*(?:\[Source\b|Source \(|Note:|Phonetic transcription\b|Speech-act annotation\b|[%@]\w)/i.test(speech)) return [];

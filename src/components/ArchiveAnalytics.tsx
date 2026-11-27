@@ -4,10 +4,10 @@ import { useEffect } from 'react';
 import { disableArchiveAnalytics, enableArchiveAnalytics, trackArchivePage } from '../lib/analytics';
 import type { AnalyticsPath } from '../lib/analytics-policy';
 
-export default function ArchiveAnalytics({ ready, section, entryId, documentId }: {
+export default function ArchiveAnalytics({ ready, section, sessionId, documentId }: {
   ready: boolean;
-  section: 'overview' | 'recordings' | 'research';
-  entryId: string | null;
+  section: 'overview' | 'sessions' | 'research';
+  sessionId: string | null;
   documentId: string | null;
 }) {
   useEffect(() => {
@@ -17,9 +17,11 @@ export default function ArchiveAnalytics({ ready, section, entryId, documentId }
 
   useEffect(() => {
     if (!ready) return;
-    const path: AnalyticsPath = entryId ? '/recording' : documentId ? '/document' : `/${section}`;
-    // The key only deduplicates in memory; recording/document IDs are not URLs.
-    trackArchivePage(path, `${path}:${entryId ?? documentId ?? ''}`);
-  }, [ready, section, entryId, documentId]);
+    // Analytics virtual paths stay unchanged ('/recordings', '/recording') per the telemetry contract.
+    const sectionPath: AnalyticsPath = section === 'sessions' ? '/recordings' : `/${section}`;
+    const path: AnalyticsPath = sessionId ? '/recording' : documentId ? '/document' : sectionPath;
+    // The key only deduplicates in memory; session/document IDs are not URLs.
+    trackArchivePage(path, `${path}:${sessionId ?? documentId ?? ''}`);
+  }, [ready, section, sessionId, documentId]);
   return null;
 }

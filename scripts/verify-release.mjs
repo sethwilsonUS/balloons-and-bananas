@@ -61,7 +61,7 @@ async function main() {
   catch { throw new VerificationFailure('privacy_config_present'); }
   const excluded = Object.keys(privacy.excludedDocuments || {});
   check(excluded.length > 0, 'privacy_config_lists_excluded_documents');
-  check(data.entries.length === 391, 'local_expected_guide_count');
+  check(data.entries.length === 391, 'local_expected_session_count');
   check(excluded.every(id => !data.documents.some(document => document.id === id)), 'local_personal_briefs_excluded');
   check(Object.values(data.assets).every(asset => !/^application\/pdf/i.test(asset.contentType) && !/\.pdf$/i.test(asset.name)), 'local_no_pdfs');
   const audioFiles = data.entries.flatMap(entry => entry.audio);
@@ -83,8 +83,8 @@ async function main() {
       typeof planned.localPath === 'string';
   }), 'local_audio_manifest_and_upload_plan_match');
   const expected = {
-    entries: data.entries.length,
-    audio: originalAudio.length,
+    sessions: data.entries.length,
+    recordings: originalAudio.length,
     moments: data.entries.reduce((n, entry) => n + entry.moments.length, 0),
     original: data.entries.filter(entry => entry.origin === 'archived_research').length,
     talkbankAi: data.entries.filter(entry => entry.origin === 'talkbank_ai_draft').length,
@@ -163,7 +163,7 @@ async function main() {
   await expectStatus(detailResponse, 200, 'entry_detail');
   const detail = await bodyJson(detailResponse, 'entry_detail');
   check(detail.id === representative.id && detail.transcript.length === representative.transcript.length && detail.moments.length === representative.moments.length, 'entry_detail:content_counts_match');
-  check(detail.audio.length === representative.audio.length && detail.audio.every(audio => audio.available === true), 'entry_detail:audio_available');
+  check(detail.recordings.length === representative.audio.length && detail.recordings.every(recording => recording.available === true), 'entry_detail:audio_available');
 
   // Production BotID deliberately rejects this non-browser search client.
   // Exercise search semantics locally; verify real browser search separately.
@@ -179,19 +179,19 @@ async function main() {
       await expectStatus(response, 200, label);
       return bodyJson(response, label);
     };
-    const titleResult = await runSearch({ query: entry.title }, `summary_search_${index}`);
-    const summaryMatch = titleResult.results.find(result => result.entry.id === entry.id && result.matchedIn === 'summary');
-    check(Boolean(summaryMatch), `summary_search_${index}:found`);
-    check(summaryMatch.entry.audio.length === entry.audio.length && summaryMatch.entry.audio.every(audio => audio.available === true), `summary_search_${index}:audio_available`);
+    const titleResult = await runSearch({ query: entry.title }, `guide_search_${index}`);
+    const guideMatch = titleResult.results.find(result => result.session.id === entry.id && result.matchedIn === 'guide');
+    check(Boolean(guideMatch), `guide_search_${index}:found`);
+    check(guideMatch.session.recordings.length === entry.audio.length && guideMatch.session.recordings.every(recording => recording.available === true), `guide_search_${index}:audio_available`);
     const nonTranscript = [entry.title, entry.sourceName, entry.overview, ...entry.topics, ...entry.audio.map(audio => audio.name), ...entry.moments.flatMap(moment => [moment.title, moment.description])].join(' ').toLowerCase();
-    const word = entry.transcript.flatMap(segment => segment.text.match(/\b[a-zA-Z]{5,25}\b/g) || []).find(value => !nonTranscript.includes(value.toLowerCase()));
+    const word = entry.transcript.flatMap(passage => passage.text.match(/\b[a-zA-Z]{5,25}\b/g) || []).find(value => !nonTranscript.includes(value.toLowerCase()));
     check(Boolean(word), `transcript_search_${index}:distinct_query_available`);
     const transcriptResult = await runSearch({ query: `${entry.sourceName} ${word}`, origin }, `transcript_search_${index}`);
-    check(transcriptResult.results.some(result => result.entry.id === entry.id && result.matchedIn === 'transcript'), `transcript_search_${index}:found`);
+    check(transcriptResult.results.some(result => result.session.id === entry.id && result.matchedIn === 'transcript'), `transcript_search_${index}:found`);
     const filtered = await runSearch({ query: entry.sourceName, origin, topic: entry.topics[0] }, `filtered_search_${index}`);
-    check(filtered.total > 0 && filtered.results.every(result => result.entry.origin === origin && result.entry.topics.includes(entry.topics[0])), `filtered_search_${index}:filters_hold`);
+    check(filtered.total > 0 && filtered.results.every(result => result.session.origin === origin && result.session.topics.includes(entry.topics[0])), `filtered_search_${index}:filters_hold`);
   }
-  counts.summarySearchExamples = origins.length;
+  counts.guideSearchExamples = origins.length;
   counts.transcriptSearchExamples = origins.length;
   counts.filteredSearchExamples = origins.length;
 

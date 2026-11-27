@@ -2,7 +2,7 @@
 
 import { type CSSProperties, type KeyboardEvent, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Download, Headphones, Pause, Play, RotateCcw, RotateCw, Volume1, Volume2, VolumeX } from 'lucide-react';
-import type { AudioFile, Origin } from '../lib/types';
+import type { Recording, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
 import {
   clampSeekPosition,
@@ -19,14 +19,14 @@ import { request, timeLabel } from './api';
 
 export interface RecordingAudioHandle { playAt: (seconds: number) => void; toggle: () => void }
 interface Props {
-  recordingId: string;
-  origin: Origin;
-  files: AudioFile[];
-  preferredId: string | null;
+  sessionId: string;
+  origin: TranscriptOrigin;
+  recordings: Recording[];
+  preferredRecordingId: string | null;
   onTime: (seconds: number) => void;
   onPlaying: (playing: boolean) => void;
 }
-type SignedAudio = { url: string; expiresAt: number; fileId: string; generation: number };
+type SignedRecording = { url: string; expiresAt: number; recordingId: string; generation: number };
 type ScrubIntent = { fromScrub: true; toEnd: boolean; target: number; reportSeek: boolean };
 type SeekSource = 'native' | 'back' | 'forward' | 'passage';
 type AudioEvent = 'audio_start' | 'audio_resume' | 'audio_pause' | 'audio_end' | 'audio_listen_milestone' | 'audio_seek' | 'audio_rate' | 'audio_file_change' | 'audio_error' | 'audio_download';
@@ -40,18 +40,18 @@ function releaseMedia(player: HTMLAudioElement | null) {
   player.load();
 }
 
-const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function RecordingAudio({ recordingId, origin, files, preferredId, onTime, onPlaying }, ref) {
-  const playbackFiles = files.filter(file => file.format.toLowerCase() === 'mp3');
-  const originalWavs = files.filter(file => file.format.toLowerCase() === 'wav' && file.kind !== 'listening-copy');
-  const initial = playbackFiles.find(file => file.id === preferredId && file.available)
-    || playbackFiles.find(file => file.available && file.kind !== 'listening-copy')
-    || playbackFiles.find(file => file.available) || playbackFiles[0];
+const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function RecordingAudio({ sessionId, origin, recordings, preferredRecordingId, onTime, onPlaying }, ref) {
+  const playableRecordings = recordings.filter(recording => recording.format.toLowerCase() === 'mp3');
+  const originalWavs = recordings.filter(recording => recording.format.toLowerCase() === 'wav' && recording.kind !== 'listening-copy');
+  const initial = playableRecordings.find(recording => recording.id === preferredRecordingId && recording.available)
+    || playableRecordings.find(recording => recording.available && recording.kind !== 'listening-copy')
+    || playableRecordings.find(recording => recording.available) || playableRecordings[0];
   const [selectedId, setSelectedId] = useState(initial?.id || '');
-  const [source, setSource] = useState<SignedAudio | null>(null);
+  const [source, setSource] = useState<SignedRecording | null>(null);
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
-  const [mediaDuration, setMediaDuration] = useState<{ fileId: string; seconds: number } | null>(null);
+  const [mediaDuration, setMediaDuration] = useState<{ recordingId: string; seconds: number } | null>(null);
   const [speed, setSpeed] = useState(1);
   const [volumeLevel, setVolumeLevel] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -70,16 +70,16 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const lastNonZeroVolume = useRef(1);
   const muted = useRef(false);
   const preferredSpeed = useRef(1);
-  const telemetry = useRef({ fileId: initial?.id || '', tracker: new PlaybackTelemetry() });
+  const telemetry = useRef({ recordingId: initial?.id || '', tracker: new PlaybackTelemetry() });
   const reportedErrors = useRef(new Set<string>());
   const programmedSeek = useRef<{ generation: number; target: number; when: number } | null>(null);
   const nativeSeek = useRef(false);
   const seekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selected = playbackFiles.find(file => file.id === selectedId);
-  const available = playbackFiles.filter(file => file.available);
-  const originalSource = files.find(file => file.id === selected?.derivedFromId && file.kind !== 'listening-copy');
+  const selected = playableRecordings.find(recording => recording.id === selectedId);
+  const available = playableRecordings.filter(recording => recording.available);
+  const originalRecording = recordings.find(recording => recording.id === selected?.derivedFromId && recording.kind !== 'listening-copy');
 
-  const selectedMediaDuration = mediaDuration && selected && mediaDuration.fileId === selected.id
+  const selectedMediaDuration = mediaDuration && selected && mediaDuration.recordingId === selected.id
     ? mediaDuration.seconds
     : null;
   const effectiveDuration = selectedMediaDuration !== null && Number.isFinite(selectedMediaDuration) && selectedMediaDuration > 0
@@ -94,33 +94,34 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   const effectiveVolumePercent = effectiveMuted ? 0 : clampVolumePercent(volumeLevel * 100);
   const volumeValueText = formatVolumeValueText(effectiveVolumePercent, effectiveMuted);
 
-  const report = useCallback((name: AudioEvent, fileId: string, properties: Record<string, string | number | boolean> = {}) => {
-    if (!files.some(file => file.id === fileId)) return;
-    trackArchiveEvent(name, { recordingId, origin, audioId: fileId, ...properties });
-  }, [files, origin, recordingId]);
-  const observe = useCallback((events: PlaybackEvent[], fileId: string) => {
+  const report = useCallback((name: AudioEvent, audioRecordingId: string, properties: Record<string, string | number | boolean> = {}) => {
+    if (!recordings.some(recording => recording.id === audioRecordingId)) return;
+    // Analytics wire properties stay `recordingId` (the session ID) and `audioId` (the recording ID).
+    trackArchiveEvent(name, { recordingId: sessionId, origin, audioId: audioRecordingId, ...properties });
+  }, [origin, recordings, sessionId]);
+  const observe = useCallback((events: PlaybackEvent[], audioRecordingId: string) => {
     for (const event of events) {
-      if (event.type === 'milestone') report('audio_listen_milestone', fileId, { milestoneSeconds: event.seconds });
-      else report(`audio_${event.type}`, fileId);
+      if (event.type === 'milestone') report('audio_listen_milestone', audioRecordingId, { milestoneSeconds: event.seconds });
+      else report(`audio_${event.type}`, audioRecordingId);
     }
   }, [report]);
-  const reportError = useCallback((fileId: string, errorCode: 'load' | 'play' | 'aborted' | 'network' | 'decode' | 'unsupported') => {
-    const key = `${fileId}:${generation.current}:${errorCode}`;
+  const reportError = useCallback((audioRecordingId: string, errorCode: 'load' | 'play' | 'aborted' | 'network' | 'decode' | 'unsupported') => {
+    const key = `${audioRecordingId}:${generation.current}:${errorCode}`;
     if (reportedErrors.current.has(key)) return;
     reportedErrors.current.add(key);
-    report('audio_error', fileId, { errorCode });
+    report('audio_error', audioRecordingId, { errorCode });
   }, [report]);
-  const selectTelemetry = useCallback((fileId: string) => {
-    if (telemetry.current.fileId === fileId) return;
-    if (telemetry.current.fileId) report('audio_file_change', fileId);
-    telemetry.current = { fileId, tracker: new PlaybackTelemetry() };
+  const selectTelemetry = useCallback((audioRecordingId: string) => {
+    if (telemetry.current.recordingId === audioRecordingId) return;
+    if (telemetry.current.recordingId) report('audio_file_change', audioRecordingId);
+    telemetry.current = { recordingId: audioRecordingId, tracker: new PlaybackTelemetry() };
   }, [report]);
-  const scheduleScrubSeek = useCallback((fileId: string) => {
+  const scheduleScrubSeek = useCallback((audioRecordingId: string) => {
     if (seekTimer.current) clearTimeout(seekTimer.current);
     const seekGeneration = generation.current;
     seekTimer.current = setTimeout(() => {
       seekTimer.current = null;
-      if (generation.current === seekGeneration) report('audio_seek', fileId, { seekSource: 'native' });
+      if (generation.current === seekGeneration) report('audio_seek', audioRecordingId, { seekSource: 'native' });
     }, 350);
   }, [report]);
 
@@ -155,16 +156,16 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     try { await player?.play(); }
     catch {
       if (activeGeneration === generation.current && player === audio.current) {
-        reportError(telemetry.current.fileId, 'play');
+        reportError(telemetry.current.recordingId, 'play');
         setMessage('The audio is ready. Press play in the audio controls to listen.');
       }
     }
   }, [reportError]);
 
-  const load = useCallback(async (file: AudioFile, at: number, shouldPlay: boolean, options?: ScrubIntent) => {
-    if (!file.available || file.format.toLowerCase() !== 'mp3') return;
+  const load = useCallback(async (recording: Recording, at: number, shouldPlay: boolean, options?: ScrubIntent) => {
+    if (!recording.available || recording.format.toLowerCase() !== 'mp3') return;
     telemetry.current.tracker.suspend();
-    selectTelemetry(file.id);
+    selectTelemetry(recording.id);
     if (seekTimer.current) {
       clearTimeout(seekTimer.current);
       seekTimer.current = null;
@@ -193,18 +194,18 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     setBusy(true);
     setFailed(false);
     setMessage('');
-    setSelectedId(file.id);
+    setSelectedId(recording.id);
     try {
-      const signed = await request<{ url: string; expiresAt: number }>(`/api/assets/${encodeURIComponent(file.id)}?json=1`, { signal: next.signal });
+      const signed = await request<{ url: string; expiresAt: number }>(`/api/assets/${encodeURIComponent(recording.id)}?json=1`, { signal: next.signal });
       if (next.signal.aborted || generation.current !== nextGeneration) return;
-      setSource({ ...signed, fileId: file.id, generation: nextGeneration });
+      setSource({ ...signed, recordingId: recording.id, generation: nextGeneration });
     } catch (error) {
       if (next.signal.aborted || generation.current !== nextGeneration) return;
       pending.current = null;
       loading.current = false;
       setBusy(false);
       setFailed(true);
-      reportError(file.id, 'load');
+      reportError(recording.id, 'load');
       setMessage(error instanceof Error ? error.message : 'The recording could not be loaded. Please try again.');
     }
   }, [onPlaying, reportError, selectTelemetry]);
@@ -213,7 +214,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
 
   const hasLoadedSelected = useCallback((player: HTMLAudioElement | null): player is HTMLAudioElement => Boolean(
     selected?.available
-    && source?.fileId === selected.id
+    && source?.recordingId === selected.id
     && Date.now() < source.expiresAt - 15_000
     && player
     && player.readyState >= 1
@@ -225,22 +226,22 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     const player = audio.current;
     const isLoadedSelected = hasLoadedSelected(player);
     const loadedAccepts = isLoadedSelected && Number.isFinite(player.duration) && seconds < player.duration;
-    let file = selected;
-    if (!loadedAccepts && (!file?.available || (file.duration > 0 && seconds >= file.duration))) {
-      file = available.find(item => item.duration > seconds);
+    let recording = selected;
+    if (!loadedAccepts && (!recording?.available || (recording.duration > 0 && seconds >= recording.duration))) {
+      recording = available.find(item => item.duration > seconds);
     }
-    if (!file) {
+    if (!recording) {
       setMessage('This timestamp falls beyond the available recording. The transcript and source locator are still available below.');
       return;
     }
     recoveryTried.current = false;
     retryScrubIntent.current = null;
-    if (isLoadedSelected && file.id === selected!.id) {
+    if (isLoadedSelected && recording.id === selected!.id) {
       if (Number.isFinite(player.duration) && seconds >= player.duration) {
-        setMessage('This timestamp falls beyond this recording. Please choose another recording file.');
+        setMessage('This timestamp falls beyond this recording. Please choose another recording.');
         return;
       }
-      if (seekSource) report('audio_seek', file.id, { seekSource });
+      if (seekSource) report('audio_seek', recording.id, { seekSource });
       telemetry.current.tracker.suspend();
       programmedSeek.current = { generation: generation.current, target: seconds, when: performance.now() };
       player.currentTime = seconds;
@@ -250,8 +251,8 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       if (shouldPlay) void playLoaded();
       setMessage('');
     } else {
-      if (seekSource) report('audio_seek', file.id, { seekSource });
-      void load(file, seconds, shouldPlay);
+      if (seekSource) report('audio_seek', recording.id, { seekSource });
+      void load(recording, seconds, shouldPlay);
     }
   }, [available, hasLoadedSelected, load, onTime, playLoaded, report, selected]);
 
@@ -441,7 +442,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     const next = pending.current;
     if (next && next.generation !== generation.current) return;
     if (Number.isFinite(player.duration) && player.duration > 0) {
-      setMediaDuration({ fileId: source!.fileId, seconds: player.duration });
+      setMediaDuration({ recordingId: source!.recordingId, seconds: player.duration });
     }
     player.playbackRate = preferredSpeed.current;
     player.volume = volume.current;
@@ -457,7 +458,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         target = next.toEnd ? player.duration : Math.min(next.at, player.duration);
       }
     } else if (Number.isFinite(player.duration) && next.at >= player.duration) {
-      setMessage('This timestamp falls beyond the loaded recording. Please choose another recording file.');
+      setMessage('This timestamp falls beyond the loaded recording. Please choose another recording.');
       return;
     }
     programmedSeek.current = { generation: generation.current, target, when: performance.now() };
@@ -465,14 +466,14 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     lastPosition.current = target;
     setPosition(target);
     onTime(target);
-    if (next.reportSeek) scheduleScrubSeek(source!.fileId);
+    if (next.reportSeek) scheduleScrubSeek(source!.recordingId);
     if (next.play) void playLoaded();
   };
 
   return <section className="audio-panel" aria-labelledby="listen-heading">
     <div className="section-label"><Headphones size={18} aria-hidden="true" /><h3 id="listen-heading">Listen to the recording</h3></div>
-    {!files.length ? <p>The archive has a transcript for this session, but no corresponding audio file.</p> : <>
-      {playbackFiles.length > 0 && <div className="field audio-file-choice"><label htmlFor="recording-file">MP3 recording file</label><select id="recording-file" value={selectedId} disabled={!available.length} onChange={event => {
+    {!recordings.length ? <p>The archive has a transcript for this session, but no corresponding recording.</p> : <>
+      {playableRecordings.length > 0 && <div className="field audio-file-choice"><label htmlFor="recording-select">MP3 recording</label><select id="recording-select" value={selectedId} disabled={!available.length} onChange={event => {
         telemetry.current.tracker.suspend();
         selectTelemetry(event.target.value);
         if (seekTimer.current) {
@@ -497,8 +498,8 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         setPosition(0);
         onTime(0);
         setMessage('');
-      }}>{playbackFiles.map(file => <option key={file.id} value={file.id} disabled={!file.available}>{file.name} · {file.kind === 'listening-copy' ? 'MP3 listening copy' : 'Original MP3'} · {timeLabel(file.duration)}{!file.available ? ' · Not yet available' : ''}</option>)}</select></div>}
-      {selected && <p className="small muted audio-provenance">{selected.kind === 'listening-copy' ? <><strong>MP3 listening copy.</strong> Converted from{originalSource ? <> <span className="audio-filename">{originalSource.name}</span></> : ' the original WAV'} for playback. The original WAV is preserved.{selected.encoding ? ` Encoding: ${selected.encoding}.` : ''}</> : <><strong>Original MP3.</strong> This is the MP3 supplied in the archive.</>}</p>}
+      }}>{playableRecordings.map(recording => <option key={recording.id} value={recording.id} disabled={!recording.available}>{recording.name} · {recording.kind === 'listening-copy' ? 'MP3 listening copy' : 'Original MP3'} · {timeLabel(recording.duration)}{!recording.available ? ' · Not yet available' : ''}</option>)}</select></div>}
+      {selected && <p className="small muted audio-provenance">{selected.kind === 'listening-copy' ? <><strong>MP3 listening copy.</strong> Converted from{originalRecording ? <> <span className="audio-filename">{originalRecording.name}</span></> : ' the original WAV'} for playback. The original WAV is preserved.{selected.encoding ? ` Encoding: ${selected.encoding}.` : ''}</> : <><strong>Original MP3.</strong> This is the MP3 supplied in the archive.</>}</p>}
       {available.length ? <>
         <div className="audio-player" aria-busy={busy || undefined}>
           <div className="playback-controls">
@@ -515,7 +516,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             }}><span className="sr-only">Forward 30 seconds</span><span aria-hidden="true">30s</span><RotateCw size={17} aria-hidden="true" /></button>
             <div className="playback-speed field"><label htmlFor="playback-speed">Speed</label><select id="playback-speed" value={speed} onChange={event => {
               const rate = Number(event.target.value);
-              if (audio.current) observe(telemetry.current.tracker.sample(playbackSample(audio.current)), telemetry.current.fileId);
+              if (audio.current) observe(telemetry.current.tracker.sample(playbackSample(audio.current)), telemetry.current.recordingId);
               if (rate !== preferredSpeed.current && selected) report('audio_rate', selected.id, { rateBucket: rateBucket(rate) });
               setSpeed(rate);
               preferredSpeed.current = rate;
@@ -579,14 +580,14 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             if (!isCurrentMedia(event.currentTarget)) return;
             const duration = event.currentTarget.duration;
             if (Number.isFinite(duration) && duration > 0) {
-              setMediaDuration({ fileId: source!.fileId, seconds: duration });
+              setMediaDuration({ recordingId: source!.recordingId, seconds: duration });
             }
           }}
           onTimeUpdate={event => {
             if (!isCurrentMedia(event.currentTarget) || loading.current) return;
             const time = event.currentTarget.currentTime;
             if (event.currentTarget.seeking) telemetry.current.tracker.suspend();
-            else observe(telemetry.current.tracker.sample(playbackSample(event.currentTarget)), source!.fileId);
+            else observe(telemetry.current.tracker.sample(playbackSample(event.currentTarget)), source!.recordingId);
             if (retryScrubIntent.current) return;
             lastPosition.current = time;
             setPosition(time);
@@ -610,10 +611,10 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             setPlaying(true);
             onPlaying(true);
           }}
-          onPlaying={event => { if (isCurrentMedia(event.currentTarget)) observe(telemetry.current.tracker.playing(playbackSample(event.currentTarget)), source!.fileId); }}
+          onPlaying={event => { if (isCurrentMedia(event.currentTarget)) observe(telemetry.current.tracker.playing(playbackSample(event.currentTarget)), source!.recordingId); }}
           onWaiting={event => {
             if (!isCurrentMedia(event.currentTarget)) return;
-            if (!event.currentTarget.seeking) observe(telemetry.current.tracker.sample(playbackSample(event.currentTarget)), source!.fileId);
+            if (!event.currentTarget.seeking) observe(telemetry.current.tracker.sample(playbackSample(event.currentTarget)), source!.recordingId);
             telemetry.current.tracker.suspend();
           }}
           onSeeking={event => {
@@ -630,16 +631,16 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             if (!isCurrentMedia(event.currentTarget)) return;
             const player = event.currentTarget;
             if (!player.paused && !player.ended && player.readyState >= 3) telemetry.current.tracker.reanchor(playbackSample(player));
-            if (nativeSeek.current && !retryScrubIntent.current) scheduleScrubSeek(source!.fileId);
+            if (nativeSeek.current && !retryScrubIntent.current) scheduleScrubSeek(source!.recordingId);
             nativeSeek.current = false;
             programmedSeek.current = null;
           }}
           onPause={event => { if (isCurrentMedia(event.currentTarget)) {
-            if (!event.currentTarget.ended && !event.currentTarget.error && !loading.current) observe(telemetry.current.tracker.pause(playbackSample(event.currentTarget)), source!.fileId);
+            if (!event.currentTarget.ended && !event.currentTarget.error && !loading.current) observe(telemetry.current.tracker.pause(playbackSample(event.currentTarget)), source!.recordingId);
             setPlaying(false); onPlaying(false);
           } }}
           onEnded={event => { if (isCurrentMedia(event.currentTarget)) {
-            observe(telemetry.current.tracker.end(playbackSample(event.currentTarget)), source!.fileId);
+            observe(telemetry.current.tracker.end(playbackSample(event.currentTarget)), source!.recordingId);
             if (!retryScrubIntent.current) {
               lastPosition.current = event.currentTarget.currentTime;
               setPosition(event.currentTarget.currentTime);
@@ -660,8 +661,8 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             if (!isCurrentMedia(event.currentTarget) || loading.current) return;
             const rate = event.currentTarget.playbackRate;
             if (Number.isFinite(rate) && rate > 0) {
-              observe(telemetry.current.tracker.sample(playbackSample(event.currentTarget)), source!.fileId);
-              if (rate !== preferredSpeed.current) report('audio_rate', source!.fileId, { rateBucket: rateBucket(rate) });
+              observe(telemetry.current.tracker.sample(playbackSample(event.currentTarget)), source!.recordingId);
+              if (rate !== preferredSpeed.current) report('audio_rate', source!.recordingId, { rateBucket: rateBucket(rate) });
               preferredSpeed.current = rate;
               setSpeed(rate);
             }
@@ -681,12 +682,12 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             retryScrubIntent.current = activeIntent;
             telemetry.current.tracker.suspend();
             const code = event.currentTarget.error?.code;
-            reportError(source.fileId, code === 1 ? 'aborted' : code === 2 ? 'network' : code === 3 ? 'decode' : 'unsupported');
+            reportError(source.recordingId, code === 1 ? 'aborted' : code === 2 ? 'network' : code === 3 ? 'decode' : 'unsupported');
             setBusy(false);
             setFailed(true);
             setPlaying(false);
             onPlaying(false);
-            setMessage('This recording could not be played. Retry from your current position, or choose another file.');
+            setMessage('This recording could not be played. Retry from your current position, or choose another recording.');
           }} />
         {failed && <button className="button secondary audio-retry-button" type="button" onClick={() => {
           recoveryTried.current = false;
@@ -694,9 +695,9 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
           const intent = retryScrubIntent.current;
           void load(selected, intent ? intent.target : lastPosition.current, true, intent ?? undefined);
         }}>Retry audio</button>}
-        <p className="small muted audio-timing-note">Audio loads when you choose to listen. Transcript times are approximate and have not been independently verified against the recordings; alternate files may differ.</p>
+        <p className="small muted audio-timing-note">Audio loads when you choose to listen. Transcript times are approximate and have not been independently verified against the recordings; alternate recordings may differ.</p>
       </> : <p className="small muted">MP3 playback for this session is not available on the site yet. You can read the transcript and guide below.</p>}
-      {originalWavs.length > 0 && <details className="original-audio-downloads"><summary>Original WAV {originalWavs.length === 1 ? 'file' : 'files'}</summary><p className="small muted">These larger files are preserved for download. The player uses MP3 audio.</p><ul>{originalWavs.map(file => <li key={file.id}>{file.available ? <a className="text-link small" href={`/api/assets/${encodeURIComponent(file.id)}?download=1`} download={file.name} referrerPolicy="no-referrer" onClick={() => report('audio_download', file.id, { format: 'wav', fileKind: 'original' })}><Download size={15} aria-hidden="true" /><span>Download original WAV: <span className="audio-filename">{file.name}</span> ({(file.bytes / 1_000_000).toFixed(1)} MB)</span></a> : <span className="small muted audio-filename">{file.name} · Not yet available</span>}</li>)}</ul></details>}
+      {originalWavs.length > 0 && <details className="original-audio-downloads"><summary>Original WAV {originalWavs.length === 1 ? 'recording' : 'recordings'}</summary><p className="small muted">These larger recordings are preserved for download. The player uses MP3 audio.</p><ul>{originalWavs.map(recording => <li key={recording.id}>{recording.available ? <a className="text-link small" href={`/api/assets/${encodeURIComponent(recording.id)}?download=1`} download={recording.name} referrerPolicy="no-referrer" onClick={() => report('audio_download', recording.id, { format: 'wav', fileKind: 'original' })}><Download size={15} aria-hidden="true" /><span>Download original WAV: <span className="audio-filename">{recording.name}</span> ({(recording.bytes / 1_000_000).toFixed(1)} MB)</span></a> : <span className="small muted audio-filename">{recording.name} · Not yet available</span>}</li>)}</ul></details>}
     </>}
     <p className="small player-status" role="status">{message}</p>
   </section>;
