@@ -154,7 +154,7 @@ Use Node 24.x (matching Vercel) and install dependencies with `npm ci`.
    python3 scripts/import-archive.py --library ~/dev/sethlang --workspace private-workspace
    ```
 
-   Confirm the imported counts match the published collection: 391 sessions (each bundling one transcript source with its guide and associated recordings; uniqueness as distinct real-world recording events is not verified) and 477 original recordings across the three transcript origins (78 archived research, 13 TalkBank AI drafts, and 300 local AI drafts).
+   Confirm the imported counts match the published collection: 391 sessions across the three transcript origins (78 archived research, 13 TalkBank AI drafts, and 300 local AI drafts) and 477 original recordings. Each session bundles one transcript source with its guide and associated recordings; uniqueness as distinct real-world recording events is not verified.
 
 3. **Run and verify locally:**
 
