@@ -65,7 +65,11 @@ test('every route shares the canonical frame alignment, unified vertical rhythm,
 
       const nonCanonicalButtons = [...document.querySelectorAll<HTMLElement>('main button')]
         .filter(el => el.offsetParent !== null)
-        .filter(el => !/\b(button|text-button|search-submit)\b/.test(el.className))
+        .filter(el => !(
+          el.classList.contains('button')
+          || el.classList.contains('text-button')
+          || el.classList.contains('search-submit')
+        ))
         .map(el => ({ cls: el.className, text: (el.textContent || '').trim() }));
 
       const fieldIssues = [...document.querySelectorAll<HTMLElement>(
