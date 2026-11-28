@@ -89,35 +89,43 @@ export default async function AboutPage() {
             <p>
               Every session, excerpt, and search hit visibly names its <strong>transcript origin</strong> so you can tell immediately where the speech text came from:
             </p>
-            <dl className="catalog-record about-origins-record">
+            <dl className="catalog-record catalog-record--full about-origins-record">
               <div className="catalog-record-row">
                 <dt>Archived research</dt>
+                {' '}
                 <dd className="about-origin-detail">
                   <span className="origin-badge archived_research">
                     {plural(stats.original, 'archived research session', 'archived research sessions')}
                   </span>
+                  {' '}
                   <p>
                     The original study transcripts from the Peters/Wilson corpus in CHAT format. Their speech text comes from the archived research transcripts; linguistic annotation tiers may include later automated additions.
                   </p>
                 </dd>
               </div>
+              {' '}
               <div className="catalog-record-row">
                 <dt>TalkBank AI drafts</dt>
+                {' '}
                 <dd className="about-origin-detail">
                   <span className="origin-badge talkbank_ai_draft">
                     {plural(stats.talkbankAi, 'TalkBank AI draft', 'TalkBank AI drafts')}
                   </span>
+                  {' '}
                   <p>
                     Unreviewed machine speech-recognition drafts supplied by TalkBank. Wording, speaker labels, and timings require checking against the recording.
                   </p>
                 </dd>
               </div>
+              {' '}
               <div className="catalog-record-row">
                 <dt>Local AI drafts</dt>
+                {' '}
                 <dd className="about-origin-detail">
                   <span className="origin-badge local_ai_draft">
                     {plural(stats.localAi, 'local AI draft', 'local AI drafts')}
                   </span>
+                  {' '}
                   <p>
                     Unreviewed machine speech-recognition drafts generated locally with Whisper for this collection so recordings without archived transcripts can still be searched and browsed. Words, speakers, and timing remain unverified.
                   </p>

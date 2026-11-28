@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Headphones, Search, X } from 'lucide-react';
+import { ArrowRight, Search, X } from 'lucide-react';
 import { trackArchiveEvent } from '../lib/analytics';
 import { shortOverview, type SessionView } from '../lib/results-view';
 import {
@@ -18,15 +18,9 @@ import {
 } from '../lib/sessions-browse';
 import type { TranscriptOrigin } from '../lib/types';
 import ArchiveAnalytics from './ArchiveAnalytics';
-import SessionAge from './SessionAge';
+import CatalogRecord from './CatalogRecord';
 import { TopicLabels } from './TopicThemes';
 import { transcriptOriginLabels } from './api';
-
-function audioAvailabilityLabel(status: SessionBrowseItem['audioStatus']): string {
-  if (status === 'mp3') return 'MP3 playback available';
-  if (status === 'no-mp3') return 'MP3 playback not yet available';
-  return 'Transcript only';
-}
 
 export default function SessionsBrowseClient({
   sessions,
@@ -234,16 +228,6 @@ export default function SessionsBrowseClient({
                           {String(group.startIndex + index).padStart(2, '0')}
                         </div>
                         <div className="session-card-body">
-                          <div className="session-meta">
-                            <span>{session.sourceName}</span>{' '}
-                            <SessionAge ages={session.ages} inferredAge={session.inferredAge} />
-                            {session.dates.length > 0 && (
-                              <>
-                                {' '}
-                                <span>{session.dates.join(' / ')}</span>
-                              </>
-                            )}
-                          </div>
                           <h3 id={headingId}>
                             <a
                               href={sessionHref}
@@ -270,28 +254,19 @@ export default function SessionsBrowseClient({
                               <ArrowRight size={view === 'list' ? 17 : 20} aria-hidden="true" />
                             </a>
                           </h3>
+                          <CatalogRecord
+                            variant={view === 'list' ? 'compact' : 'card'}
+                            slug={session.slug}
+                            sourceName={session.sourceName}
+                            ages={session.ages}
+                            inferredAge={session.inferredAge}
+                            dates={session.dates}
+                            origin={session.origin}
+                            audioStatus={view === 'details' ? session.audioStatus : undefined}
+                          />
                           <p className="card-overview">
                             {view === 'list' ? shortOverview(session.overview) : session.overview}
                           </p>
-                          <div className="card-bottom">
-                            <div className="card-origin-group">
-                              <span className={`origin-badge ${session.origin}`}>
-                                {transcriptOriginLabels[session.origin]}
-                              </span>
-                              {session.origin !== 'archived_research' && (
-                                <>
-                                  {' '}
-                                  <span className="small muted">Unreviewed machine draft</span>
-                                </>
-                              )}
-                            </div>
-                            {view === 'details' && (
-                              <span className="audio-count small muted">
-                                <Headphones size={15} aria-hidden="true" />
-                                {audioAvailabilityLabel(session.audioStatus)}
-                              </span>
-                            )}
-                          </div>
                           {view === 'details' && <TopicLabels topics={session.topics} compact />}
                         </div>
                       </article>

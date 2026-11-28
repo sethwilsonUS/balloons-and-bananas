@@ -1,7 +1,7 @@
 {
   "method": "WCAG relative luminance and contrast ratio, sRGB transfer threshold 0.04045; ratios use unrounded values for pass/fail. Tokens extracted from actual globals.css.",
   "systemDarkMatchesExplicitDark": true,
-  "checks": 126,
+  "checks": 138,
   "failures": [],
   "minimumTextRatio": 4.785,
   "minimumControlOrFocusRatio": 3.533,
@@ -1391,6 +1391,138 @@
       "use": "control boundary",
       "minimum": 3,
       "ratio": 6.115,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "primary-bg",
+      "foreground": "#254c38",
+      "backgroundToken": "paper",
+      "background": "#f7f4ed",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 8.812,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "primary-bg",
+      "foreground": "#254c38",
+      "backgroundToken": "paper-light",
+      "background": "#fcfaf5",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 9.279,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "primary-bg",
+      "foreground": "#254c38",
+      "backgroundToken": "subtle-bg",
+      "background": "#efeee5",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 8.311,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "error-line",
+      "foreground": "#99543f",
+      "backgroundToken": "paper",
+      "background": "#f7f4ed",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 5.175,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "error-line",
+      "foreground": "#99543f",
+      "backgroundToken": "paper-light",
+      "background": "#fcfaf5",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 5.449,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "error-line",
+      "foreground": "#99543f",
+      "backgroundToken": "error-bg",
+      "background": "#f5e9df",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 4.765,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "primary-bg",
+      "foreground": "#b5d8b8",
+      "backgroundToken": "paper",
+      "background": "#181f1a",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 10.786,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "primary-bg",
+      "foreground": "#b5d8b8",
+      "backgroundToken": "paper-light",
+      "background": "#222c24",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 9.272,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "primary-bg",
+      "foreground": "#b5d8b8",
+      "backgroundToken": "subtle-bg",
+      "background": "#222c24",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 9.272,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "error-line",
+      "foreground": "#d6a188",
+      "backgroundToken": "paper",
+      "background": "#181f1a",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 7.452,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "error-line",
+      "foreground": "#d6a188",
+      "backgroundToken": "paper-light",
+      "background": "#222c24",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 6.406,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "error-line",
+      "foreground": "#d6a188",
+      "backgroundToken": "error-bg",
+      "background": "#3a2825",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 6.167,
       "pass": true
     }
   ]

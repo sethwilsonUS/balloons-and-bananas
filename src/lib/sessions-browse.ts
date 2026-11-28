@@ -1,6 +1,6 @@
 import { compareSessionsByAge, effectiveSessionAge } from './age';
 import type { SessionView } from './results-view';
-import type { Session, TranscriptOrigin } from './types';
+import type { Recording, Session, TranscriptOrigin } from './types';
 
 // Keep the existing localStorage key so returning readers preserve their saved Details/List preference.
 export const VIEW_STORAGE_KEY = 'balloons-and-bananas:recordings-view';
@@ -59,15 +59,18 @@ export interface SessionBrowseItem {
   audioStatus: SessionAudioStatus;
 }
 
-export function toSessionBrowseItem(session: Session): SessionBrowseItem {
-  const hasMp3 = session.recordings.some(
+export function getSessionAudioStatus(
+  recordings: readonly Pick<Recording, 'available' | 'format'>[],
+): SessionAudioStatus {
+  const hasMp3 = recordings.some(
     recording => recording.available && recording.format.toLowerCase() === 'mp3',
   );
-  const audioStatus: SessionAudioStatus = hasMp3
-    ? 'mp3'
-    : session.recordings.length > 0
-      ? 'no-mp3'
-      : 'none';
+  if (hasMp3) return 'mp3';
+  return recordings.length > 0 ? 'no-mp3' : 'none';
+}
+
+export function toSessionBrowseItem(session: Session): SessionBrowseItem {
+  const audioStatus = getSessionAudioStatus(session.recordings);
   return {
     id: session.id,
     slug: session.slug,
