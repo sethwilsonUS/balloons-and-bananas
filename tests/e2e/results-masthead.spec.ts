@@ -72,14 +72,17 @@ test('archive uses one name, displays the masthead subtitle, and sets descriptiv
   await expect(page.locator('.brand-button')).toHaveText('The Seth Tapes');
   await expect(page.locator('.site-footer')).toContainText('The Seth Tapes');
   await expect(page.locator('body')).not.toContainText('Balloons & Bananas');
-  await expect(page).toHaveTitle('Overview · The Seth Tapes');
+  await expect(page).toHaveTitle('The Seth Tapes');
 
-  // Sessions view (unfiltered)
-  await page.getByRole('button', { name: /Sessions/i }).click();
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  // Dedicated /sessions browse route
+  await page.locator('.section-nav').getByRole('link', { name: /Sessions/i }).click();
+  await expect(page).toHaveURL(/\/sessions$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Sessions' })).toBeVisible();
   await expect(page).toHaveTitle('Sessions · The Seth Tapes');
 
-  // Sessions view (filtered) uses a descriptive title without leaking the raw query
+  // Legacy sessions view (filtered) uses a descriptive title without leaking the raw query
+  await page.goto('/?section=sessions');
+  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
   const archiveSearch = page.getByLabel('Search sessions and transcripts');
   await archiveSearch.fill('wooden track');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
@@ -116,23 +119,27 @@ test('archive uses one name, displays the masthead subtitle, and sets descriptiv
 test('results view removes duplicated theme chip row while preserving overview shortcuts and Theme filter', async ({ page }) => {
   await page.goto('/');
 
-  // Overview keeps its Browse by theme shortcuts
-  const overviewShortcuts = page.locator('.theme-discovery .theme-shortcuts button');
+  // Overview keeps its Browse by theme shortcuts linking to /search?topic=...
+  const overviewShortcuts = page.locator('.theme-discovery .theme-shortcuts a');
   await expect(overviewShortcuts).toHaveCount(8);
+  await expect(overviewShortcuts.filter({ hasText: 'Imagination' })).toHaveAttribute(
+    'href',
+    '/search?topic=Play%20and%20imagination',
+  );
 
-  // Clicking a theme shortcut navigates to Sessions with the Theme filter selected
-  await overviewShortcuts.filter({ hasText: 'Imagination' }).click();
+  // Legacy results view removes the duplicated Browse by theme chip row while preserving the Theme select filter
+  await page.goto('/?section=sessions');
   await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
 
   // Duplicated Browse by theme chip row is gone from results
   await expect(page.locator('.browse-themes')).toHaveCount(0);
   await expect(page.locator('.browse-section .theme-shortcuts')).toHaveCount(0);
 
-  // The Theme select filter remains present and active
+  // The Theme select filter remains present and works cleanly
   const themeSelect = page.getByLabel('Theme', { exact: true });
   await expect(themeSelect).toBeVisible();
-  await expect(themeSelect).toHaveValue('Play and imagination');
+  await themeSelect.selectOption('Play and imagination');
+  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
 
   // Changing the Theme select updates results cleanly
   await themeSelect.selectOption('Vision and access');
@@ -143,8 +150,7 @@ test('results view removes duplicated theme chip row while preserving overview s
 });
 
 test('excerpts do not repeat the card overview or concatenate titles, while moment and transcript excerpts still appear', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: /Sessions/i }).click();
+  await page.goto('/?section=sessions');
   const searchInput = page.getByLabel('Search sessions and transcripts');
   const submit = page.locator('.search-form').getByRole('button', { name: 'Search' });
 
@@ -190,8 +196,7 @@ test('excerpts do not repeat the card overview or concatenate titles, while mome
 });
 
 test('switching Details and List views never leaves a stale "Searching…" status, even with slow paginated responses', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: /Sessions/i }).click();
+  await page.goto('/?section=sessions');
 
   const status = page.locator('.search-status');
   const detailsButton = page.getByRole('button', { name: 'Details', exact: true });
@@ -306,7 +311,7 @@ test('switching Details and List views never leaves a stale "Searching…" statu
 
 test('theme shortcut chips wrap into balanced rows with no single orphan chip across common viewport widths', async ({ page }) => {
   await page.goto('/');
-  const chips = page.locator('.theme-discovery .theme-shortcuts button');
+  const chips = page.locator('.theme-discovery .theme-shortcuts a');
   await expect(chips).toHaveCount(8);
 
   const viewports = [
@@ -320,11 +325,11 @@ test('theme shortcut chips wrap into balanced rows with no single orphan chip ac
   for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const layout = await page.evaluate(() => {
-      const buttons = [...document.querySelectorAll<HTMLButtonElement>('.theme-discovery .theme-shortcuts button')];
+      const links = [...document.querySelectorAll<HTMLAnchorElement>('.theme-discovery .theme-shortcuts a')];
       const rows = new Map<number, number>();
       let minHeight = Infinity;
-      for (const button of buttons) {
-        const rect = button.getBoundingClientRect();
+      for (const link of links) {
+        const rect = link.getBoundingClientRect();
         minHeight = Math.min(minHeight, rect.height);
         const existingKey = [...rows.keys()].find(top => Math.abs(top - rect.top) <= 6);
         const key = existingKey ?? Math.round(rect.top);

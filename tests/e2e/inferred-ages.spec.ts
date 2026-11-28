@@ -57,8 +57,7 @@ async function auditAllThemes(page: Page, label: string) {
 }
 
 test('sessions default to Age, youngest first with labelled inferred ages, support oldest-first and query relevance, and link to the explanation', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: /Sessions/i }).click();
+  await page.goto('/?section=sessions');
 
   const sortSelect = page.getByLabel('Sort by');
   await expect(sortSelect).toHaveValue('age-asc');

@@ -62,8 +62,7 @@ function escapeRegExp(value: string): string {
 }
 
 test('research documents start collapsed, display each title once with category, description, and downloads, and support keyboard disclosure', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Research & context' }).click();
+  await page.goto('/?section=research');
 
   await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
 
@@ -142,8 +141,7 @@ test('research documents start collapsed, display each title once with category,
 });
 
 test('document reader shows page H1 visibly larger than document headings, strips duplicate leading title, and renders 3-column escaped-pipe table cleanly', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Research & context' }).click();
+  await page.goto('/?section=research');
 
   // Clicking the document card title opens the standalone document reader
   await page.getByRole('link', { name: 'Fixture annotation provenance guide' }).click();

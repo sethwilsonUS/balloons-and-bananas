@@ -6,6 +6,7 @@ import type { Catalog, SearchResponse, SearchSort, TranscriptOrigin } from '../l
 import { trackArchiveEvent } from '../lib/analytics';
 import { isLinguisticMarkerId, isLinguisticSpeaker, type LinguisticMarkerId, type LinguisticSpeaker } from '../lib/linguistic-markers';
 import { adaptSearchForView, formatSearchStatus, isSearchSort, pageSizeForView, type SearchBusyKind, type SessionView } from '../lib/results-view';
+import { VIEW_STORAGE_KEY } from '../lib/sessions-browse';
 import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle } from '../lib/site';
 import ArchiveMarkdown from './ArchiveMarkdown';
 import ArchiveAnalytics from './ArchiveAnalytics';
@@ -19,8 +20,6 @@ import { request, transcriptOriginLabels } from './api';
 type Section = 'overview' | 'sessions' | 'research';
 type LoadState = 'loading' | 'ready' | 'error';
 type SearchFilters = { query: string; topic: string; origin: TranscriptOrigin | ''; marker: LinguisticMarkerId | ''; speaker: LinguisticSpeaker; sort: SearchSort; page: number; linguisticsOpen: boolean; view?: SessionView };
-// Keep the existing localStorage key so returning readers preserve their saved Details/List preference.
-const VIEW_STORAGE_KEY = 'balloons-and-bananas:recordings-view';
 
 function analyticsSection(section: Section): 'overview' | 'recordings' | 'research' {
   // Analytics wire values stay unchanged ('recordings') per the telemetry contract.

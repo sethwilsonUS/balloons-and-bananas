@@ -68,7 +68,8 @@ test('overview loads, theme toggle switches light/dark/system themes, and axe is
   await expect(page.locator('.source-key')).toContainText('2 archived research');
   await expect(page.locator('.source-key')).toContainText('1 TalkBank AI draft');
   await expect(page.locator('.source-key')).toContainText('1 local AI draft');
-  await expect(page.getByText('About this invented fixture collection')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Browse by age/i })).toHaveAttribute('href', '/sessions');
+  await expect(page.locator('.source-key').getByRole('link', { name: /About sources, methods, and privacy/i })).toHaveAttribute('href', '/about');
 
   await setTheme(page, 'light');
   const lightBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -100,12 +101,12 @@ test('overview loads, theme toggle switches light/dark/system themes, and axe is
 });
 
 test('search returns results and moves focus to the results heading', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.goto('/?section=sessions');
+  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
 
-  const homeSearch = page.getByRole('searchbox', { name: 'Search the archive' });
-  await homeSearch.fill('locomotive');
-  await page.locator('.home-search-form').getByRole('button', { name: 'Search' }).click();
+  const archiveSearch = page.getByLabel('Search sessions and transcripts');
+  await archiveSearch.fill('locomotive');
+  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
 
   const resultsHeading = page.locator('.results-toolbar h3');
   await expect(resultsHeading).toHaveText('2 sessions');
@@ -115,8 +116,7 @@ test('search returns results and moves focus to the results heading', async ({ p
 
   await auditBothThemes(page, 'search results');
 
-  // Submitting from the sessions search form also updates results and moves focus to results heading
-  const archiveSearch = page.getByLabel('Search sessions and transcripts');
+  // Submitting a second query updates results and moves focus to results heading
   await archiveSearch.fill('submarine');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
 
@@ -138,7 +138,8 @@ test('search returns results and moves focus to the results heading', async ({ p
 
 test('opening a session plays fixture audio without Blob, serves private downloads, and handles no-audio sessions', async ({ page, request }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Sessions/i }).click();
+  await page.locator('.section-nav').getByRole('link', { name: /Sessions/i }).click();
+  await expect(page).toHaveURL(/\/sessions$/);
   await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toBeVisible();
   await page.getByRole('link', { name: /Blue locomotive and wooden bridge/i }).click();
 
@@ -219,8 +220,7 @@ test('passage deep link (?entry=...&passage=3) highlights and focuses passage 3 
 });
 
 test('research section and document reader render markdown tables and downloads with zero serious axe violations', async ({ page, request }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Research & context' }).click();
+  await page.goto('/?section=research');
 
   await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 3, name: 'Fixture annotation provenance guide' })).toBeVisible();

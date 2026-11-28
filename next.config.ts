@@ -40,6 +40,14 @@ const config: NextConfig = {
         ],
       },
       {
+        source: '/',
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: '/sessions',
+        headers: privateNoStoreHeaders,
+      },
+      {
         source: '/sessions/:path*',
         headers: privateNoStoreHeaders,
       },

@@ -224,7 +224,18 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .collection-note p { margin: 0; }
 .collection-note p > span { margin: 0 8px; }
 .collection-note strong { color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
-.collection-note .text-button { font-size: .85rem; color: var(--forest); }
+.collection-note .text-button, .collection-note .text-link { font-size: .85rem; color: var(--forest); }
+.home-masthead { padding: 36px 0 14px; }
+.home-entry-section { padding: 8px 0 30px; }
+.home-entry-section > h2 { font-family: var(--sans); font-size: 1rem; letter-spacing: 0; margin-bottom: 14px; }
+.home-entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; max-width: 860px; }
+.entry-point-card { padding: 20px 22px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper-light); display: flex; flex-direction: column; gap: 8px; }
+.entry-point-card .eyebrow { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 0; }
+.entry-point-card h3 { font-family: var(--serif); font-size: 1.45rem; line-height: 1.25; margin: 0; }
+.entry-point-card h3 a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--ink); text-decoration: none; }
+.entry-point-card h3 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }
+.entry-point-card > p:not(.eyebrow) { margin: 0; font-size: .92rem; line-height: 1.6; color: var(--reading); }
+.provenance-about-link { margin: 16px 0 0; }
 .source-key h2 { font-size: 1.5rem; margin-bottom: 12px; }
 .source-key > p { max-width: 820px; margin-bottom: 18px; font-size: .87rem; color: var(--reading); }
 .badge-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -299,6 +310,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .session-card h3 a:hover, .session-card h4 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }
 .card-overview { font-size: 1rem; line-height: 1.7; color: var(--reading); max-width: 950px; margin: 0 0 17px; }
 .card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+.card-origin-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
 .audio-count { display: flex; align-items: center; gap: 7px; font-size: .72rem; }
 .topic-list { display: flex; flex-wrap: wrap; gap: 7px 17px; list-style: none; padding: 0; margin: 22px 0 0; }
 .topic-list li { color: var(--muted); font-size: .73rem; position: relative; }
@@ -319,7 +331,9 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .session-view-control .button { min-width: 76px; }
 .results-toolbar .search-status { flex-basis: 100%; margin: 0; }
 .results-reading-note { margin: 10px 0 8px; max-width: 900px; }
-.sessions-compact-list { list-style: none; padding: 0; margin: 0; }
+.sessions-compact-list, .sessions-detail-list { list-style: none; padding: 0; margin: 0; }
+.sessions-detail-list > li { content-visibility: auto; contain-intrinsic-size: auto 230px; }
+.sessions-compact-list > li { content-visibility: auto; contain-intrinsic-size: auto 135px; }
 .session-list-row { display: grid; grid-template-columns: 43px minmax(0, 1fr); gap: 18px; padding: 19px 0; border-bottom: 1px solid var(--line); }
 .session-list-row .session-index { font-size: 1.2rem; padding-top: 2px; }
 .session-list-row .session-meta { margin-bottom: 5px; }
@@ -328,6 +342,28 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .session-list-row h3 a svg, .session-list-row h4 a svg { margin-top: 5px; }
 .session-list-row h3 a:hover, .session-list-row h4 a:hover { color: var(--rust); text-decoration: underline; }
 .session-list-row .card-overview { font-size: 1rem; line-height: 1.6; margin-bottom: 10px; }
+
+/* Dedicated /sessions browse route grouped by year of age. */
+.sessions-browse-section { padding-top: 34px; }
+.page-header { margin-bottom: 26px; }
+.page-header h1 { font-size: clamp(2.1rem, 4.4vw, 3.3rem); line-height: 1.15; letter-spacing: -.03em; margin: 0 0 14px; }
+.page-header .section-intro { margin-bottom: 0; }
+.sessions-browse-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px 20px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 6px; background: var(--subtle-bg); margin-bottom: 14px; }
+.sessions-origin-field { flex: 1 1 260px; max-width: 380px; }
+.sessions-origin-field select { font-size: .86rem; }
+.sessions-clear-filter { color: var(--forest); align-self: flex-end; }
+.sessions-browse-status { margin: 0 0 4px; }
+.age-jump-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin: 18px 0 8px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.age-jump-label { font-weight: 550; margin-right: 4px; }
+.age-jump-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0; }
+.age-jump-link { min-height: 44px; padding: 8px 13px; background: var(--paper-light); color: var(--forest); gap: 8px; }
+.age-year-groups { margin-top: 12px; }
+.age-year-group { padding-top: 30px; scroll-margin-top: 24px; }
+.age-year-group:first-child { padding-top: 12px; }
+.age-group-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 18px; padding-bottom: 10px; border-bottom: 2px solid var(--forest); }
+.age-group-header h2 { font-family: var(--serif); font-size: clamp(1.55rem, 3vw, 2.05rem); line-height: 1.2; margin: 0; }
+.age-group-count { margin: 0; font-variant-numeric: tabular-nums; }
+.empty-state-action { margin-top: 18px; }
 .compact-result-matches { margin-top: 7px; }
 .compact-result-matches > summary { min-height: 44px; padding: 10px 0; color: var(--forest); font-size: .9rem; }
 .compact-result-matches .linguistic-evidence { margin: 8px 0 0; }
@@ -481,6 +517,10 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .home-search-section { padding-top: 28px; }
   .home-search-form h2 { font-size: 1.8rem; }
   .home-search-controls .button { padding: 12px 16px; }
+  .home-entry-grid { grid-template-columns: 1fr; }
+  .sessions-browse-section { padding-top: 24px; }
+  .sessions-browse-controls { padding: 18px; }
+  .sessions-origin-field { max-width: none; }
   .overview-context { margin-top: 43px; }
   .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 15px; }
   .browse-heading > p { font-size: .83rem; }
@@ -521,11 +561,13 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .masthead h1 { font-size: clamp(2.1rem, 11vw, 2.8rem); }
   .section-nav { gap: 0 16px; }
   .section-nav button, .section-nav a { font-size: .8rem; gap: 6px; padding: 12px 0 14px; min-height: 48px; white-space: normal; text-align: left; }
-  .nav-count { display: none; }
+  .section-nav .nav-count { display: none; }
   .home-search-controls { gap: 8px; }
   .home-search-controls input { padding: 12px; min-height: 54px; }
   .home-search-controls .button { padding: 12px 14px; }
   .home-search-controls .button svg { display: none; }
+  .entry-point-card { padding: 16px; }
+  .sessions-browse-controls { padding: 15px; }
   .badge-row { gap: 7px; }
   .origin-badge, .ai-badge { font-size: .75rem; }
   .search-form { padding: 15px; }
@@ -597,7 +639,8 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   }
   body { background: white; color: black; font-size: 11pt; }
   .archive-shell { max-width: none; padding: 0; }
-  .theme-control, .top-bar, .section-nav, .site-footer, .back-button, .session-sticky-nav, .session-adjacent-nav, .catalog-cite-row, .cite-dialog, .passage-actions, .passage-manual-copy, .button, .text-button, .search-form, .home-search-section, .theme-discovery, .share-feedback, .manual-share, .transcript-search, .audio-player { display: none !important; }
+  .theme-control, .top-bar, .section-nav, .site-footer, .back-button, .session-sticky-nav, .session-adjacent-nav, .catalog-cite-row, .cite-dialog, .passage-actions, .passage-manual-copy, .button, .text-button, .search-form, .home-search-section, .theme-discovery, .sessions-browse-controls, .age-jump-nav, .share-feedback, .manual-share, .transcript-search, .audio-player { display: none !important; }
+  .sessions-detail-list > li, .sessions-compact-list > li { content-visibility: visible !important; }
   .masthead { padding: 0 0 25px; }
   .masthead h1 { font-size: 30pt; }
   .source-key, .provenance-note, .audio-panel, .catalog-record { background: white; }
@@ -634,6 +677,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .manual-share input,
   .filter-row select,
   .age-filter-row select,
+  .sessions-origin-field select,
   .theme-control select { font-size: 1rem; }
 }
 
