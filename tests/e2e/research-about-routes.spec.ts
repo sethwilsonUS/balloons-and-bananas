@@ -355,6 +355,8 @@ test('/about renders live request-time counts, all required methods sections, #i
   await expect(about).toContainText('Calendar dates are never inferred.');
   await expect(page.locator('#timestamps')).toBeVisible();
   await expect(about).toContainText('approximate navigation aids');
+  await expect(about).toContainText('jumps to the transcript passage nearest that time');
+  await expect(about).toContainText('never starts, moves or loads the recording');
   await expect(page.locator('#access-and-analytics')).toBeVisible();
   await expect(about).toContainText('allowlist');
   await expect(page.locator('#search-privacy')).toBeVisible();

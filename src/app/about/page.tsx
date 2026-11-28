@@ -171,6 +171,9 @@ export default async function AboutPage() {
               Transcript <strong>timestamps</strong> and guide moment time spans are <strong>approximate navigation aids</strong>, not independently verified alignments. Automatic speech recognition can drift, merge utterances, or misplace boundaries, and some archived research passages carry no timestamps at all.
             </p>
             <p>
+              Transcript timestamps are shown as plain text for orientation and citation; they do not control the recording. A link ending in a time, such as <code>#t=12:34</code>, jumps to the transcript passage nearest that time and highlights it. It never starts, moves or loads the recording, which plays only from its own controls.
+            </p>
+            <p>
               Original recordings (MP3 and WAV) are preserved byte-for-byte without transcoding or editing and remain downloadable in their original format. Where a session has only a WAV original, a clearly labelled MP3 listening copy may be provided alongside it for smoother browser playback without replacing the original WAV.
             </p>
           </section>

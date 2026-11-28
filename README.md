@@ -31,8 +31,10 @@ No account provider, remote fonts, or external search service.
 - Ages use readable years, months and days, preserving the source's precision.
   Original CHAT age codes remain under Source identification.
 - Original recordings are stored privately with their source filenames and
-  integrity hashes. Playback and transcript seeking use source timestamps, which
-  may be approximate or unverified, especially in AI drafts.
+  integrity hashes. Transcript timestamps are plain-text orientation aids that
+  may be approximate or unverified, especially in AI drafts. The player and the
+  transcript are independent: `#t=` links only jump to the nearest timestamped
+  passage and never seek or start the recording.
 - All playback uses MP3. Existing archive MP3s are preserved; WAV-only entries
   receive clearly labelled 128 kbps MP3 listening copies. Original WAVs remain
   available as downloads, and are never replaced by lossy copies.

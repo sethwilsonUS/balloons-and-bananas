@@ -149,7 +149,8 @@ test('opening a session plays fixture audio without Blob, serves private downloa
   await expect(page.getByRole('heading', { level: 2, name: 'Moments' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 3, name: 'Crossing the cardboard bridge' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 3, name: 'Counting station lanterns' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Listen from 0:02: Crossing the cardboard bridge/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Read in the transcript: Crossing the cardboard bridge/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Listen from/i })).toHaveCount(0);
 
   // Simpler reading view hides CHAT notation by default; toggling shows it
   const passage3 = page.locator('#p3');
