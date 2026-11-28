@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = (await archive()).sessions.find(item => item.id === id);
+    const session = (await archive()).sessions.find(item => item.id === id || item.legacyId === id);
     return session ? json(session) : json({ error: 'Session not found.' }, 404);
   } catch { return unavailable(); }
 }

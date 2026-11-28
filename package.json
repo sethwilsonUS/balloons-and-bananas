@@ -8,7 +8,8 @@
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:e2e": "npm run build && playwright test"
+    "check:build-output": "node scripts/check-build-output.mjs",
+    "test:e2e": "ARCHIVE_LOCAL_DATA=tests/fixtures/archive.json ARCHIVE_LOCAL_ASSETS_DIR=tests/fixtures/files VERCEL='' npm run build && node scripts/check-build-output.mjs && playwright test"
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",

@@ -100,5 +100,69 @@ class InferredAgeImporterTests(unittest.TestCase):
         self.assertIn('Audio files are provided without transcoding or editing.', ctx)
 
 
+class SessionSlugImporterTests(unittest.TestCase):
+    def test_slug_uses_lowercase_filename_stem(self) -> None:
+        self.assertEqual(IMPORTER.session_slug('transcripts/010626.cha'), '010626')
+        self.assertEqual(IMPORTER.session_slug('transcripts-ai/0extra/83/020319B.json'), '020319b')
+        self.assertEqual(IMPORTER.session_slug('010815.cha'), '010815')
+
+    def test_approved_011119d_collision_resolution(self) -> None:
+        units = [
+            {'unit_id': 'local/0wav/011119d', 'canonical_source': 'transcripts-ai/0wav/011119d.json'},
+            {'unit_id': 'local/0extra/82-supp/011119d', 'canonical_source': 'transcripts-ai/0extra/82-supp/011119d.json'},
+            {'unit_id': 'archive/010626', 'canonical_source': 'transcripts/010626.cha'},
+        ]
+        resolved = IMPORTER.resolve_session_slugs(units)
+        self.assertEqual(resolved['local/0wav/011119d'], '011119d')
+        self.assertEqual(resolved['local/0extra/82-supp/011119d'], '011119d-82-supp')
+        self.assertEqual(resolved['archive/010626'], '010626')
+
+    def test_any_other_slug_collision_fails_hard(self) -> None:
+        with self.assertRaises(SystemExit) as ctx:
+            IMPORTER.resolve_session_slugs([
+                {'unit_id': 'archive/010626', 'canonical_source': 'transcripts/010626.cha'},
+                {'unit_id': 'local/0wav/010626', 'canonical_source': 'transcripts-ai/0wav/010626.json'},
+            ])
+        self.assertIn('Session slug collision', str(ctx.exception))
+
+        # Case-insensitive stem collision fails hard.
+        with self.assertRaises(SystemExit) as ctx_case:
+            IMPORTER.resolve_session_slugs([
+                {'unit_id': 'local/a', 'canonical_source': 'transcripts-ai/0wav/020319a.json'},
+                {'unit_id': 'local/b', 'canonical_source': 'transcripts-ai/0extra/83/020319A.json'},
+            ])
+        self.assertIn('Session slug collision', str(ctx_case.exception))
+
+        # A third 011119d outside the two approved folders also fails hard.
+        with self.assertRaises(SystemExit) as ctx_third:
+            IMPORTER.resolve_session_slugs([
+                {'unit_id': 'local/0wav/011119d', 'canonical_source': 'transcripts-ai/0wav/011119d.json'},
+                {'unit_id': 'local/0extra/82-supp/011119d', 'canonical_source': 'transcripts-ai/0extra/82-supp/011119d.json'},
+                {'unit_id': 'local/0extra/83/011119d', 'canonical_source': 'transcripts-ai/0extra/83/011119d.json'},
+            ])
+        self.assertIn('Session slug collision', str(ctx_third.exception))
+
+    def test_invalid_slug_stem_fails_hard(self) -> None:
+        for bad in ['', 'transcripts/bad stem.cha', 'transcripts/foo_bar.cha', 'transcripts/---.cha']:
+            with self.subTest(source=bad):
+                with self.assertRaises(SystemExit):
+                    IMPORTER.session_slug(bad)
+
+    def test_preserved_entry_content_ignores_slug_and_legacy_id(self) -> None:
+        old_entry = {
+            'id': 'archive-010626',
+            'sourceName': 'transcripts/010626.cha',
+            'audio': [{'id': 'a1', 'available': True}],
+            'limits': [],
+        }
+        new_entry = {
+            **old_entry,
+            'slug': '010626',
+            'legacyId': 'archive-010626',
+            'inferredAge': None,
+        }
+        self.assertEqual(IMPORTER.preserved_entry_content(old_entry), IMPORTER.preserved_entry_content(new_entry))
+
+
 if __name__ == '__main__':
     unittest.main()

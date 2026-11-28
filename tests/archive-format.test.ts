@@ -39,6 +39,8 @@ test('parseStoredArchiveData maps unchanged stored archive.json v1 keys into glo
 
   const submarine = data.sessions.find(session => session.id === 'fixture-020110-submarine');
   assert.ok(submarine);
+  assert.equal(submarine.slug, '020110-tb');
+  assert.equal(submarine.legacyId, 'fixture-020110-submarine');
   assert.equal(submarine.recordings.length, 2);
   assert.equal(submarine.preferredRecordingId, 'fixture-audio-submarine-mp3');
   assert.deepEqual(submarine.ages, ['2;01.10']);
@@ -48,11 +50,15 @@ test('parseStoredArchiveData maps unchanged stored archive.json v1 keys into glo
 
   const lighthouse = data.sessions.find(session => session.id === 'fixture-020604-lighthouse');
   assert.ok(lighthouse);
+  assert.equal(lighthouse.slug, '020604-local');
+  assert.equal(lighthouse.legacyId, 'fixture-020604-lighthouse');
   assert.deepEqual(lighthouse.ages, []);
   assert.equal(lighthouse.inferredAge, '2;06.04');
 
   const observatory = data.sessions.find(session => session.id === 'fixture-011103-observatory');
   assert.ok(observatory);
+  assert.equal(observatory.slug, '011103');
+  assert.equal(observatory.legacyId, 'fixture-011103-observatory');
   assert.deepEqual(observatory.ages, []);
   assert.equal(observatory.inferredAge, null);
 
@@ -82,11 +88,51 @@ test('parseStoredArchiveData stays backward compatible with v1 blobs lacking inf
   });
 
   assert.equal(parsed.sessions[0].inferredAge, null);
+  assert.equal(parsed.sessions[0].slug, '010815');
+  assert.equal(parsed.sessions[0].legacyId, 'fixture-valid');
   assert.equal(parsed.sessions[1].inferredAge, '2;03.19');
   assert.deepEqual(parsed.sessions[1].ages, []);
+  assert.equal(parsed.sessions[1].legacyId, 'fixture-inferred');
+  // Fallback slugs disambiguate deterministically when older v1 blobs omit `slug`.
+  assert.equal(new Set(parsed.sessions.map(session => session.slug)).size, 3);
   // Source age and inferred age never populate together on a loaded session.
   assert.deepEqual(parsed.sessions[2].ages, ['1;08.15']);
   assert.equal(parsed.sessions[2].inferredAge, null);
+});
+
+test('parseStoredArchiveData derives approved fallback slugs for v1 blobs lacking slug/legacyId', () => {
+  const wavCollision = validStoredSession({
+    id: 'local-0wav-011119d',
+    sourceName: 'transcripts-ai/0wav/011119d.json',
+    ages: [],
+    inferredAge: '1;11.19',
+  });
+  const suppCollision = validStoredSession({
+    id: 'local-0extra-82-supp-011119d',
+    sourceName: 'transcripts-ai/0extra/82-supp/011119d.json',
+    ages: [],
+    inferredAge: '1;11.19',
+  });
+  const ordinary = validStoredSession({
+    id: 'archive-010626',
+    sourceName: 'transcripts/010626.cha',
+    ages: ['1;06.26'],
+  });
+
+  const parsed = parseStoredArchiveData({
+    version: 1,
+    generatedAt: '2026-01-01T00:00:00.000Z',
+    entries: [wavCollision, suppCollision, ordinary],
+    documents: [],
+    assets: {},
+  });
+
+  assert.equal(parsed.sessions[0].slug, '011119d');
+  assert.equal(parsed.sessions[0].legacyId, 'local-0wav-011119d');
+  assert.equal(parsed.sessions[1].slug, '011119d-82-supp');
+  assert.equal(parsed.sessions[1].legacyId, 'local-0extra-82-supp-011119d');
+  assert.equal(parsed.sessions[2].slug, '010626');
+  assert.equal(parsed.sessions[2].legacyId, 'archive-010626');
 });
 
 test('parseStoredArchiveData rejects malformed stored payloads and incomplete session entries', () => {
@@ -109,6 +155,13 @@ test('parseStoredArchiveData rejects malformed stored payloads and incomplete se
     wrap([validStoredSession({ inferredAge: '' })]),
     wrap([validStoredSession({ inferredAge: '   ' })]),
     wrap([validStoredSession({ inferredAge: ['2;03.19'] })]),
+    wrap([validStoredSession({ slug: '' })]),
+    wrap([validStoredSession({ slug: 'UPPER' })]),
+    wrap([validStoredSession({ slug: 'bad slug' })]),
+    wrap([validStoredSession({ slug: 123 })]),
+    wrap([validStoredSession({ legacyId: '' })]),
+    wrap([validStoredSession({ legacyId: '   ' })]),
+    wrap([validStoredSession({ id: 'a', slug: '010815' }), validStoredSession({ id: 'b', slug: '010815' })]),
     wrap([validStoredSession({ sources: null })]),
     wrap([validStoredSession({ sourceSha256: undefined })]),
     { version: 1, generatedAt: '', entries: [], documents: [], assets: null },
