@@ -236,6 +236,7 @@ test('switching Details and List views never leaves a stale "Searching…" statu
       topics: ['Play and imagination'],
       dates: ['1983-01-15'],
       ages: ['1;08.15'],
+      inferredAge: null,
       recordings: [],
       preferredRecordingId: null,
     },

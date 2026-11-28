@@ -15,6 +15,7 @@ export interface Recording {
 export interface SourceFile { id: string; name: string; format: string; label: string }
 export interface Moment { title: string; description: string; start: number | null; end: number | null; locator: string }
 export interface Passage { text: string; start?: number | null; end?: number | null; speaker?: string }
+export type SearchSort = 'age-asc' | 'age-desc' | 'relevance';
 export interface Session {
   id: string;
   sourceName: string;
@@ -24,6 +25,7 @@ export interface Session {
   topics: string[];
   dates: string[];
   ages: string[];
+  inferredAge: string | null;
   recordings: Recording[];
   preferredRecordingId: string | null;
   sources: SourceFile[];
@@ -70,7 +72,7 @@ export interface SearchRequest {
   origin?: TranscriptOrigin | '';
   page?: number;
   pageSize?: SearchPageSize;
-  sort?: 'relevance' | 'oldest' | 'newest';
+  sort?: SearchSort;
   marker?: LinguisticMarkerId | '';
   speaker?: LinguisticSpeaker;
 }

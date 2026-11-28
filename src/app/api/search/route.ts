@@ -1,7 +1,7 @@
 import { requestOriginIsAllowed } from '@/lib/access';
 import { archive } from '@/lib/archive';
 import { checkBasicBot } from '@/lib/bot-protection';
-import { isSearchPageSize, makeSearch } from '@/lib/search';
+import { isSearchPageSize, isSearchSort, makeSearch } from '@/lib/search';
 import { isLinguisticMarkerId, isLinguisticSpeaker } from '@/lib/linguistic-markers';
 import { json, unavailable } from '@/lib/responses';
 import type { SearchRequest } from '@/lib/types';
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     if (input.page !== undefined && (typeof input.page !== 'number' || !Number.isFinite(input.page))) return json({ error: 'Invalid page.' }, 400);
     if (input.pageSize !== undefined && !isSearchPageSize(input.pageSize)) return json({ error: 'Invalid page size.' }, 400);
     if (input.origin && !['archived_research', 'talkbank_ai_draft', 'local_ai_draft'].includes(input.origin as string)) return json({ error: 'Invalid transcript origin filter.' }, 400);
-    if (input.sort && !['relevance', 'oldest', 'newest'].includes(input.sort as string)) return json({ error: 'Invalid sort.' }, 400);
+    if (input.sort && !isSearchSort(input.sort)) return json({ error: 'Invalid sort.' }, 400);
     if (input.marker !== undefined && input.marker !== '' && !isLinguisticMarkerId(input.marker)) return json({ error: 'Invalid linguistic marker.' }, 400);
     if (input.speaker !== undefined && !isLinguisticSpeaker(input.speaker)) return json({ error: 'Invalid speaker scope.' }, 400);
     const blocked = await checkBasicBot();

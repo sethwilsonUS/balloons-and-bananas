@@ -4,10 +4,10 @@ import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowDown, Download, Pause, Play, Search } from 'lucide-react';
 import type { Session, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
-import { formatAge } from '../lib/age';
 import { getNotationLinks, readingText } from '../lib/transcript-display';
 import { linguisticMarkers, type LinguisticMarkerId } from '../lib/linguistic-markers';
 import { ApiError, request, timeLabel, transcriptOriginLabels } from './api';
+import SessionAge from './SessionAge';
 import { TopicLabels } from './TopicThemes';
 import RecordingAudio, { type RecordingAudioHandle } from './RecordingAudio';
 
@@ -218,11 +218,12 @@ function Transcript({ session, jump, message, linkedIndex, activeIndex, playing,
   </section>;
 }
 
-export default function SessionDetail({ id, passage = null, onBack, onMarker, onSessionState }: {
+export default function SessionDetail({ id, passage = null, onBack, onMarker, onDocument, onSessionState }: {
   id: string;
   passage?: number | null;
   onBack: () => void;
   onMarker: (marker: LinguisticMarkerId, sourcePassage: number) => void;
+  onDocument: (id: string) => void;
   onSessionState?: (state: { id: string; title: string | null; notFound: boolean }) => void;
 }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -263,7 +264,7 @@ export default function SessionDetail({ id, passage = null, onBack, onMarker, on
     <button type="button" className="text-button back-button" onClick={onBack}><ArrowLeft size={17} aria-hidden="true" />Back to sessions</button>
     {error ? <div className="error-panel" role="alert"><p>{error}</p><button className="button secondary" type="button" onClick={() => setRetry(value => value + 1)}>Try again</button></div> : !session ? <p className="loading-message" role="status">Opening the session…</p> : <>
       <header className="detail-header">
-        <div className="session-meta"><span className="eyebrow">Session</span><span>{session.sourceName}</span>{session.ages.length > 0 && <span>Age {session.ages.map(formatAge).join(' / ')}</span>}{session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}</div>
+        <div className="session-meta"><span className="eyebrow">Session</span><span>{session.sourceName}</span><SessionAge ages={session.ages} inferredAge={session.inferredAge} onDocument={onDocument} />{session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}</div>
         <h2 ref={heading} tabIndex={-1}>{session.title}</h2>
         <div className="badge-row"><span className="ai-badge">AI-written guide</span><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
         <p className="detail-overview">{session.overview}</p>
@@ -279,7 +280,7 @@ export default function SessionDetail({ id, passage = null, onBack, onMarker, on
           const category = format === 'cha' ? 'chat' : ['txt', 'json', 'vtt'].includes(format) ? 'transcript' : ['md', 'html'].includes(format) ? 'guide' : 'other';
           trackArchiveEvent('source_download', { recordingId: session.id, origin: session.origin, format, category });
         }}><Download size={18} aria-hidden="true" /><span><strong>{source.label}</strong><span className="small muted">{source.name} · {source.format.toUpperCase()}</span></span></a>)}</div>
-        <details className="technical-notes"><summary>Source identification</summary><p>{session.association}</p>{session.ages.length > 0 && <p><strong>Stored age notation (CHAT): </strong>{session.ages.join(' / ')}</p>}<p className="small">Source SHA-256</p><code>{session.sourceSha256}</code></details>
+        <details className="technical-notes"><summary>Source identification</summary><p>{session.association}</p>{session.ages.length > 0 && <p><strong>Stored age notation (CHAT): </strong>{session.ages.join(' / ')}</p>}{session.ages.length === 0 && session.inferredAge && <p><strong>Inferred age notation (from filename): </strong>{session.inferredAge}</p>}<p className="small">Source SHA-256</p><code>{session.sourceSha256}</code></details>
       </section>
     </>}
   </article>;

@@ -14,6 +14,7 @@ function mockCard(id: string): SessionCard {
     topics: [],
     dates: [],
     ages: [],
+    inferredAge: null,
     recordings: [],
     preferredRecordingId: null,
   };

@@ -98,7 +98,8 @@
         }
       ],
       "sourceSha256": "c03aed2c771e6c137def2ac3d021ac016820a72df023dad156a3f20288a50835",
-      "association": "Invented archived research fixture paired with a synthetic MP3 recording."
+      "association": "Invented archived research fixture paired with a synthetic MP3 recording.",
+      "inferredAge": null
     },
     {
       "id": "fixture-020110-submarine",
@@ -181,7 +182,8 @@
         }
       ],
       "sourceSha256": "ad78675019c5d29b2087c755a91d41dfb1ca28248a098ac1e91958565b35065b",
-      "association": "Invented TalkBank AI draft fixture with synthetic WAV original and MP3 listening copy."
+      "association": "Invented TalkBank AI draft fixture with synthetic WAV original and MP3 listening copy.",
+      "inferredAge": null
     },
     {
       "id": "fixture-020604-lighthouse",
@@ -233,7 +235,8 @@
         }
       ],
       "limits": [
-        "Invented local AI draft fixture; speaker labels are omitted and wording is unverified."
+        "Invented local AI draft fixture; speaker labels are omitted and wording is unverified.",
+        "Invented local AI draft fixture; displayed age is inferred from the filename stem and calendar dates are never inferred."
       ],
       "transcript": [
         {
@@ -253,7 +256,8 @@
         }
       ],
       "sourceSha256": "8ab500008d0c1829c0309b8d0bd4e34972bfb8ac31197561802c44df313650a4",
-      "association": "Invented local AI draft fixture paired with a synthetic MP3 recording."
+      "association": "Invented local AI draft fixture paired with a synthetic MP3 recording.",
+      "inferredAge": "2;06.04"
     },
     {
       "id": "fixture-011103-observatory",
@@ -312,7 +316,8 @@
         }
       ],
       "sourceSha256": "180d8b496ba8643ed19acc65f84e51029f3bd8902f9313c200ab6e73f956b1a5",
-      "association": "Invented archived research fixture with transcript only and no associated audio."
+      "association": "Invented archived research fixture with transcript only and no associated audio.",
+      "inferredAge": null
     }
   ],
   "documents": [
@@ -358,6 +363,21 @@
           "name": "fixture-research-notes.md",
           "format": "md",
           "label": "Download research notes (MD)"
+        }
+      ]
+    },
+    {
+      "id": "methods-and-audit",
+      "title": "Sources and methods",
+      "description": "Explains transcript origins, source ages, filename-inferred ages, and fixture limits.",
+      "category": "guide",
+      "markdown": "# Sources and methods\n\nThis invented fixture document explains how transcript origins, source ages, and filename-inferred ages are kept distinct in the automated test collection.\n\n## Ages and dates\n\n- **Source ages:** Archived research transcripts may record the child's age directly in their CHAT metadata (`years;months.days`).\n- **Inferred ages:** When a session has no source age, the collection may display an inferred age parsed from a six-digit filename stem, always visibly labelled *(inferred from filename)* and stored separately from source ages.\n- **Dates are never inferred:** Calendar dates appear only where established by source metadata and are never derived from filenames.\n",
+      "assets": [
+        {
+          "id": "fixture-doc-methods-md",
+          "name": "fixture-methods-and-audit.md",
+          "format": "md",
+          "label": "Download methods note (MD)"
         }
       ]
     }
@@ -446,6 +466,13 @@
       "contentType": "text/markdown; charset=utf-8",
       "bytes": 532,
       "sha256": "6e0e549b34c4e71dc445383a1a181aecdf9e3493fb6f4a49ff5c6f2c7df91fa6"
+    },
+    "fixture-doc-methods-md": {
+      "pathname": "archive/v1/files/fixture-methods-and-audit.md",
+      "name": "fixture-methods-and-audit.md",
+      "contentType": "text/markdown; charset=utf-8",
+      "bytes": 692,
+      "sha256": "47026a7f5ccda12ac991698a743eeda973dde35ea5a47c899ff962b67e59b011"
     }
   }
 }

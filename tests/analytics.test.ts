@@ -42,6 +42,15 @@ test('event allowlist rejects arbitrary text in known fields and oversized/nonfi
     assert.equal(sanitizeArchiveEvent('search_completed', { results: 2, queryLength }), null);
   }
   assert.equal(sanitizeArchiveEvent('filter_changed', { filter: 'theme', value: 'private-words' }), null);
+  for (const sortValue of ['age-asc', 'age-desc', 'relevance']) {
+    assert.deepEqual(
+      sanitizeArchiveEvent('filter_changed', { filter: 'sort', value: sortValue }),
+      { name: 'filter_changed', properties: { filter: 'sort', value: sortValue } },
+    );
+  }
+  for (const invalidSort of ['oldest', 'newest', 'private-sort']) {
+    assert.equal(sanitizeArchiveEvent('filter_changed', { filter: 'sort', value: invalidSort }), null);
+  }
   assert.equal(sanitizeArchiveEvent('source_download', { recordingId: RECORDING, format: 'private-filename.txt' }), null);
   assert.equal(sanitizeArchiveEvent('audio_error', { recordingId: RECORDING, errorCode: 'private error message' }), null);
   assert.equal(sanitizeArchiveEvent('audio_start', { origin: 'archived_research' }), null);

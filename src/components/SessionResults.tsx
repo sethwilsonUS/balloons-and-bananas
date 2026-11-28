@@ -1,10 +1,10 @@
 import { ArrowRight, Headphones } from 'lucide-react';
 import { trackArchiveEvent } from '../lib/analytics';
-import { formatAge } from '../lib/age';
 import { linguisticMarkers, type LinguisticSpeaker } from '../lib/linguistic-markers';
 import { shortOverview, visibleExcerpt, type SessionView } from '../lib/results-view';
 import type { SearchResult } from '../lib/types';
 import { timeLabel, transcriptOriginLabels } from './api';
+import SessionAge from './SessionAge';
 import { TopicLabels } from './TopicThemes';
 
 export type { SessionView };
@@ -29,13 +29,14 @@ function MatchingPassages({ result, speaker, view, onPassage }: { result: Search
   </div>;
 }
 
-export default function SessionResults({ results, view, firstIndex, speaker, onSession, onPassage }: {
+export default function SessionResults({ results, view, firstIndex, speaker, onSession, onPassage, onDocument }: {
   results: SearchResult[];
   view: SessionView;
   firstIndex: number;
   speaker: LinguisticSpeaker;
   onSession: (id: string) => void;
   onPassage: (id: string, passage: number) => void;
+  onDocument: (id: string) => void;
 }) {
   const rows = results.map((result, index) => {
     const { session, matchedIn, linguisticEvidence } = result;
@@ -46,7 +47,7 @@ export default function SessionResults({ results, view, firstIndex, speaker, onS
     const content = <article className={view === 'list' ? 'session-list-row' : 'session-card'} aria-labelledby={headingId}>
       <div className="session-index" aria-hidden="true">{String(firstIndex + index).padStart(2, '0')}</div>
       <div className="session-card-body">
-        <div className="session-meta"><span>{session.sourceName}</span>{session.ages.length > 0 && <span>Age {session.ages.map(formatAge).join(' / ')}</span>}{session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}</div>
+        <div className="session-meta"><span>{session.sourceName}</span><SessionAge ages={session.ages} inferredAge={session.inferredAge} onDocument={onDocument} />{session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}</div>
         <h4 id={headingId}><a href={`?entry=${encodeURIComponent(session.id)}`} onClick={event => { trackArchiveEvent('recording_open', { recordingId: session.id, origin: session.origin, view, action: 'guide' }); if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return; event.preventDefault(); onSession(session.id); }} onAuxClick={event => { if (event.button === 1) trackArchiveEvent('recording_open', { recordingId: session.id, origin: session.origin, view, action: 'guide' }); }}>{session.title}<ArrowRight size={view === 'list' ? 17 : 20} aria-hidden="true" /></a></h4>
         <p className="card-overview">{view === 'list' ? shortOverview(session.overview) : session.overview}</p>
         {view === 'details' && <><SearchExcerpt result={result} excerpt={excerpt} /><MatchingPassages result={result} speaker={speaker} view={view} onPassage={onPassage} /></>}

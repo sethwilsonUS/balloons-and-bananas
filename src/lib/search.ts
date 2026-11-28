@@ -1,7 +1,10 @@
 import MiniSearch, { type SearchResult as MiniSearchResult } from 'minisearch';
+import { compareSessionsByAge } from './age';
 import { makeLinguisticSearch } from './linguistic-search';
-import { shortOverview } from './results-view';
-import type { ArchiveData, SearchPageSize, SearchRequest, SearchResponse, Session, SessionCard } from './types';
+import { isSearchSort, SEARCH_SORTS, shortOverview } from './results-view';
+import type { ArchiveData, SearchPageSize, SearchRequest, SearchResponse, SearchSort, Session, SessionCard } from './types';
+
+export { isSearchSort, SEARCH_SORTS };
 
 const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
 const collapseWhitespace = (s: string) => s.replace(/\s+/g, ' ').trim();
@@ -136,14 +139,11 @@ export function makeSearch(data: ArchiveData) {
     if (request.topic) sessions = sessions.filter(session => session.topics.includes(request.topic!));
     const linguisticMatches = request.marker ? linguisticSearch(request.marker, request.speaker ?? 'child') : undefined;
     if (linguisticMatches) sessions = sessions.filter(session => linguisticMatches.has(session.id));
-    const sort = request.sort ?? (query ? 'relevance' : 'oldest');
-    if (sort !== 'relevance' || !query) sessions.sort((a, b) => {
-      const ad = a.dates[0], bd = b.dates[0];
-      if (!ad && !bd) return a.sourceName.localeCompare(b.sourceName);
-      if (!ad) return 1;
-      if (!bd) return -1;
-      return (ad.localeCompare(bd) || a.sourceName.localeCompare(b.sourceName)) * (sort === 'newest' ? -1 : 1);
-    });
+    const sort: SearchSort = request.sort ?? (query ? 'relevance' : 'age-asc');
+    if (sort !== 'relevance' || !query) {
+      const direction = sort === 'age-desc' ? 'desc' : 'asc';
+      sessions.sort((a, b) => compareSessionsByAge(a, b, direction));
+    }
     const pages = Math.max(1, Math.ceil(sessions.length / pageSize));
     const page = Math.min(pages, Math.max(1, Math.floor(Number.isFinite(request.page) ? request.page! : 1)));
     return { total: sessions.length, page, pages, pageSize, results: sessions.slice((page - 1) * pageSize, page * pageSize).map(session => {

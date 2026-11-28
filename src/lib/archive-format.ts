@@ -26,6 +26,7 @@ export interface StoredSession {
   topics: string[];
   dates: string[];
   ages: string[];
+  inferredAge?: string | null;
   audio: Recording[];
   preferredAudioId: string | null;
   sources: SourceFile[];
@@ -72,6 +73,7 @@ function mapStoredSession(raw: unknown): Session {
     || !isStringArray(stored.topics)
     || !isStringArray(stored.dates)
     || !isStringArray(stored.ages)
+    || (stored.inferredAge !== undefined && stored.inferredAge !== null && (typeof stored.inferredAge !== 'string' || !stored.inferredAge.trim()))
     || !Array.isArray(stored.audio)
     || (stored.preferredAudioId !== null && stored.preferredAudioId !== undefined && typeof stored.preferredAudioId !== 'string')
     || !Array.isArray(stored.sources)
@@ -83,9 +85,12 @@ function mapStoredSession(raw: unknown): Session {
   ) {
     throw new Error('Archive format mismatch');
   }
-  const { audio, preferredAudioId, ...rest } = stored as StoredSession;
+  const { audio, preferredAudioId, inferredAge, ...rest } = stored as StoredSession;
   return {
     ...rest,
+    // Keep source ages (`ages`) and filename-inferred ages strictly separate;
+    // older v1 blobs without `inferredAge` default cleanly to `null`.
+    inferredAge: rest.ages.length > 0 ? null : (inferredAge?.trim() ?? null),
     recordings: audio,
     preferredRecordingId: preferredAudioId ?? null,
   };

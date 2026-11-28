@@ -68,7 +68,7 @@ test('research documents start collapsed, display each title once with category,
   await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
 
   const cards = page.locator('.research-document');
-  await expect(cards).toHaveCount(2);
+  await expect(cards).toHaveCount(3);
 
   const expectedCards = [
     {
@@ -82,6 +82,12 @@ test('research documents start collapsed, display each title once with category,
       title: 'Fixture research reading list',
       description: 'Invented corpus inventory table and research background for browser verification.',
       downloadLabel: 'Download research notes (MD)',
+    },
+    {
+      category: 'Archive guide',
+      title: 'Sources and methods',
+      description: 'Explains transcript origins, source ages, filename-inferred ages, and fixture limits.',
+      downloadLabel: 'Download methods note (MD)',
     },
   ];
 

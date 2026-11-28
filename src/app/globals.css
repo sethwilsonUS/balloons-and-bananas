@@ -279,6 +279,8 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .session-meta { display: flex; gap: 6px 17px; flex-wrap: wrap; color: var(--muted); font-size: .75rem; letter-spacing: .025em; margin-bottom: 9px; overflow-wrap: anywhere; }
 .session-meta > span + span { position: relative; }
 .session-meta > span + span::before { content: '·'; position: absolute; left: -11px; }
+.inferred-age-link { color: var(--forest); text-decoration: underline; text-underline-offset: .2em; text-decoration-thickness: 1px; border-radius: 2px; }
+.inferred-age-link:hover { color: var(--rust); }
 .session-card h4 { font-family: var(--serif); font-size: clamp(1.35rem, 2.6vw, 1.72rem); line-height: 1.28; margin: 0 0 14px; }
 .session-card h4 a { display: flex; align-items: center; justify-content: space-between; gap: 25px; color: var(--ink); text-decoration: none; }
 .session-card h4 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }

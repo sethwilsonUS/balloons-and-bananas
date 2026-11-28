@@ -27,6 +27,12 @@ PROJECT = SCRIPT.parent.parent
 TIME_RE = re.compile(r"\[time (\d+:\d+:\d+(?:\.\d+)?) to (\d+:\d+:\d+(?:\.\d+)?)\]")
 SPEAKER_RE = re.compile(r"^([^\n]+? \([A-Za-z0-9_]+(?:, [^)]*)?\)):\s*(.*)$", re.S)
 LINK_RE = re.compile(r"(?<!!)\[([^\]\n]+)\]\((<[^>]+>|[^)\n]+)\)")
+AGE_STEM_RE = re.compile(r"\A([0-9]{2})([0-9]{2})([0-9]{2})[A-Za-z]?\Z")
+CHAT_AGE_YMD_RE = re.compile(r"\A(\d+);(\d{1,2})\.(\d{1,2})\Z")
+LEGACY_LOCAL_AGE_LIMIT = 'Recording date and age are not independently verified from this local AI source; filename ages are not calendar dates.'
+INFERRED_LOCAL_AGE_LIMIT = 'Recording date is not established in this local AI source, and calendar dates are never inferred. The displayed age is inferred from the filename stem rather than recorded in source metadata (all 78 archived research transcripts with a source age match their filename stem).'
+INFERRED_GENERAL_AGE_LIMIT = 'The displayed age is inferred from the filename stem rather than recorded in source transcript metadata (all 78 archived research transcripts with a source age match their filename stem). Calendar dates are never inferred.'
+UNESTABLISHED_LOCAL_AGE_LIMIT = 'Recording date and age are not established in this local AI source; calendar dates are never inferred from filenames.'
 CONTENT_TYPES = {'.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.cha': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.vtt': 'text/vtt; charset=utf-8', '.json': 'application/json', '.pdf': 'application/pdf', '.html': 'text/html; charset=utf-8'}
 OFFICIAL_LINK_HOSTS = {'doi.org', 'hdl.handle.net', 'talkbank.org', 'childes.talkbank.org', 'media.talkbank.org', 'scholarspace.manoa.hawaii.edu', 'pubmed.ncbi.nlm.nih.gov', 'www.cambridge.org', 'journals.sagepub.com', 'benjamins.com', 'www.degruyterbrill.com', 'www.jstor.org'}
 
@@ -76,7 +82,13 @@ WEB_READING_CONTEXT = '''# Sources and methods
 
 This web collection contains **391 transcript sources and their recording guides**, associated with **477 original audio files: 262 MP3s and 215 WAV files**. The file counts include alternate audio formats and sources without a confirmed match; they are not counts of distinct recording sessions. The collection also offers 1,082 transcript source and companion files, including CHAT files, readable text, local speech-recognition JSON and WebVTT captions.
 
-Associated audio is available for playback and download in its original file format. MP3 is the preferred playback format where the entry has one; distinct source associations remain separate even when filenames resemble one another. One archived source has no confirmed audio association. The entry for each source records its own association evidence, dates and limitations; dates and ages are shown only where established by source metadata.
+Associated audio is available for playback and download in its original file format. MP3 is the preferred playback format where the entry has one; distinct source associations remain separate even when filenames resemble one another. One archived source has no confirmed audio association. Each session records its own association evidence, dates, ages and limitations. Calendar dates are shown only where established by source metadata and are never inferred.
+
+## Ages and dates
+
+- **Source ages:** 78 archived research transcripts record the child's age directly in their CHAT metadata (years;months.days, e.g., `1;06.26`).
+- **Inferred ages:** In all 78 archived research transcripts that record the child's age, the six-digit filename stem matches that recorded source age exactly (for example, `010626` corresponds to `1;06.26`, and letter suffixes distinguish sessions from the same age). On that basis, the remaining 313 sessions without a source age (13 TalkBank AI drafts and 300 local AI drafts) display an **inferred age** parsed from their six-digit filename stem, always visibly labelled *(inferred from filename)* and stored separately from source ages.
+- **Dates are never inferred:** Calendar dates appear only where recorded in source metadata. Filename stems are never converted into calendar dates.
 
 Transcript timestamps are navigation aids, not independently verified alignments. Automatic speech recognition can mishear words or produce inaccurate timing, and some archived passages lack timestamps. Listening to a linked passage can help check the text; the presence of a playback link does not establish that a transcript covers the full file or that alternate formats are identical recordings.
 
@@ -161,14 +173,78 @@ def atomic_json(path: Path, data) -> None:
     temporary.replace(path)
 
 
+def infer_age_from_stem(stem: str) -> str | None:
+    """Parse a 6-digit filename stem (YYMMDD + optional ASCII letter) into CHAT age form.
+
+    Returns canonical CHAT notation such as ``2;03.19`` when months <= 11 and
+    days <= 31 (allowing explicit ``00`` days, which appear in archived CHAT ages).
+    Dates are never inferred.
+    """
+    match = AGE_STEM_RE.match(stem)
+    if not match:
+        return None
+    years = int(match.group(1))
+    months = int(match.group(2))
+    days = int(match.group(3))
+    if months > 11 or days > 31:
+        return None
+    return f'{years};{months:02d}.{days:02d}'
+
+
+def normalize_chat_age(age: str) -> str:
+    cleaned = age.strip()
+    match = CHAT_AGE_YMD_RE.match(cleaned)
+    if not match:
+        return cleaned
+    return f'{int(match.group(1))};{int(match.group(2)):02d}.{int(match.group(3)):02d}'
+
+
+def resolve_session_ages(source_name: str, source_ages: list[str], unit_id: str = '') -> tuple[list[str], str | None, bool]:
+    """Keep source ages and filename-inferred ages strictly separate.
+
+    Fails hard with SystemExit if any session with a source age has a filename
+    stem whose derived age differs from its recorded source age.
+    """
+    cleaned_source_ages = [age.strip() for age in source_ages if isinstance(age, str) and age.strip()]
+    derived = infer_age_from_stem(Path(source_name).stem)
+    if cleaned_source_ages:
+        if derived is not None:
+            for age in cleaned_source_ages:
+                if normalize_chat_age(age) != derived:
+                    raise SystemExit(
+                        f'Source age mismatch for {unit_id or source_name}: '
+                        f'source age {age!r} differs from filename-derived age {derived!r}'
+                    )
+        return cleaned_source_ages, None, derived is not None
+    return [], derived, False
+
+
+def build_age_limits(origin: str, source_dates: list[str], inferred_age: str | None) -> list[str]:
+    if inferred_age is not None:
+        if origin == 'local_ai_draft' and not source_dates:
+            return [INFERRED_LOCAL_AGE_LIMIT]
+        return [INFERRED_GENERAL_AGE_LIMIT]
+    if origin == 'local_ai_draft' and not source_dates:
+        return [UNESTABLISHED_LOCAL_AGE_LIMIT]
+    return []
+
+
 def preserved_entry_content(entry: dict) -> dict:
-    """Ignore only hosting availability when checking source/guide preservation."""
-    hosting_notes = {
+    """Ignore only hosting availability and importer-derived age notes when checking source/guide preservation."""
+    derived_notes = {
         'Audio is not hosted in this version. Recording names and transcript timestamps are retained as references to the original collection.',
         'Original audio is available for playback. Transcript timestamps are navigation aids; audio associations, speech recognition and alignment have not been independently verified by listening.',
         'No audio file has a confirmed association with this source.',
+        LEGACY_LOCAL_AGE_LIMIT,
+        INFERRED_LOCAL_AGE_LIMIT,
+        INFERRED_GENERAL_AGE_LIMIT,
+        UNESTABLISHED_LOCAL_AGE_LIMIT,
     }
-    return {**entry, 'audio': [{key: value for key, value in audio.items() if key != 'available'} for audio in entry['audio']], 'limits': [limit for limit in entry['limits'] if limit not in hosting_notes]}
+    return {
+        **{key: value for key, value in entry.items() if key != 'inferredAge'},
+        'audio': [{key: value for key, value in audio.items() if key != 'available'} for audio in entry['audio']],
+        'limits': [limit for limit in entry['limits'] if limit not in derived_notes],
+    }
 
 
 def archive_segments(path: Path) -> list[dict]:
@@ -430,6 +506,10 @@ def main() -> None:
         hash_futures = executor.map(hash_asset, list(pending.items()))
         entries = []
         transcript_coverage_checks = []
+        source_age_sessions = 0
+        source_age_stem_matches = 0
+        inferred_age_sessions = 0
+        sessions_without_age = 0
         audio_inventory = {x['recording_path']: x for x in inventory['audio']}
         for unit in inventory['source_units']:
             authored = load(library / unit['authored_summary_path'])
@@ -474,12 +554,25 @@ def main() -> None:
             if generic_limit not in limits:
                 limits.insert(0, generic_limit)
             limits.insert(0, 'Original audio is available for playback. Transcript timestamps are navigation aids; audio associations, speech recognition and alignment have not been independently verified by listening.' if audio else 'No audio file has a confirmed association with this source.')
-            if origin == 'local_ai_draft' and not unit['recording_dates_iso_from_source']:
-                limits.append('Recording date and age are not independently verified from this local AI source; filename ages are not calendar dates.')
+            source_dates = unit['recording_dates_iso_from_source'] or []
+            source_ages, inferred_age, stem_matched_source = resolve_session_ages(
+                unit['canonical_source'],
+                unit['child_ages_chat_from_source'] or [],
+                unit['unit_id'],
+            )
+            if source_ages:
+                source_age_sessions += 1
+                if stem_matched_source:
+                    source_age_stem_matches += 1
+            elif inferred_age is not None:
+                inferred_age_sessions += 1
+            else:
+                sessions_without_age += 1
+            limits.extend(build_age_limits(origin, source_dates, inferred_age))
             entry = {
                 'id': entry_id(unit['unit_id']), 'sourceName': unit['canonical_source'],
                 'title': authored['title'], 'overview': authored['overview'], 'origin': origin,
-                'topics': authored['topics'], 'dates': unit['recording_dates_iso_from_source'] or [], 'ages': unit['child_ages_chat_from_source'] or [],
+                'topics': authored['topics'], 'dates': source_dates, 'ages': source_ages, 'inferredAge': inferred_age,
                 'audio': audio, 'preferredAudioId': audio_reference_ids[preferred] if preferred else None,
                 'sources': sources,
                 'moments': [{'title': m['title'], 'description': m['description'], 'start': finite(m.get('start_seconds')), 'end': finite(m.get('end_seconds')), 'locator': locator_text(m['source_locators'])} for m in authored['moments']],
@@ -502,6 +595,13 @@ def main() -> None:
     ids = {entry['id'] for entry in entries}
     if len(ids) != len(entries) or len(entries) != 391:
         raise ValueError('Source-unit count or ID collision')
+    if any(entry['ages'] and entry['inferredAge'] is not None for entry in entries):
+        raise SystemExit('Source age and inferredAge must never both be populated on the same session')
+    if source_age_sessions != 78 or source_age_stem_matches != source_age_sessions:
+        raise SystemExit(
+            f'Expected all 78 source-age sessions to match their filename stem '
+            f'(got {source_age_stem_matches}/{source_age_sessions})'
+        )
     audio_ids = {item['id'] for entry in entries for item in entry['audio']}
     source_ids = {item['id'] for entry in entries for item in entry['sources']}
     if len(audio_ids) != 477 or len(source_ids) != 1082:
@@ -616,11 +716,16 @@ def main() -> None:
         'removedGeneratedPersonalDocumentCopies': removed_generated_copies, 'personalDocumentRemovalManifest': removed_assets_path.name,
         'retainedDocumentAssetPathnamesToReplace': [asset['pathname'] for asset in changed_documents.values()],
         'linkRewrites': dict(rewritten_link_counts), 'unshippedLocalAuditLinksRenderedAsText': dropped_local_links,
-        'onlySourceKnownDatesAndAges': True, 'originalSourcesModified': False, 'uploadsPerformed': False,
-        'limitations': ['Original audio is hosted without transcoding; transcript timestamps remain navigation aids rather than independently verified alignments.', 'Audio content, speech recognition and timing were not independently reviewed by listening.', 'Unknown-author archive notes and local AI editorial comments remain visibly distinguished in the existing readable transcript text.', 'All original audio hashes were freshly verified against the saved download baseline in this build.'],
+        'onlySourceKnownDates': True, 'datesNeverInferred': True, 'sourceAgeAndInferredAgeStoredSeparately': True,
+        'sourceAgeSessions': source_age_sessions, 'sourceAgesMatchedFilenameStem': source_age_stem_matches,
+        'allSourceAgesMatchFilenameStem': source_age_stem_matches == source_age_sessions,
+        'inferredAgeSessions': inferred_age_sessions, 'sessionsWithoutAnyAge': sessions_without_age,
+        'sessionsWithAgeTotal': source_age_sessions + inferred_age_sessions,
+        'originalSourcesModified': False, 'uploadsPerformed': False,
+        'limitations': ['Original audio is hosted without transcoding; transcript timestamps remain navigation aids rather than independently verified alignments.', 'Audio content, speech recognition and timing were not independently reviewed by listening.', 'Unknown-author archive notes and local AI editorial comments remain visibly distinguished in the existing readable transcript text.', 'Sessions without a CHAT source age carry a separately stored inferred age parsed from their six-digit filename stem (validated against all 78 archived research transcripts with source ages); calendar dates are never inferred.', 'All original audio hashes were freshly verified against the saved download baseline in this build.'],
     }
     atomic_json(output / 'import-report.json', report)
-    print(json.dumps({key: report[key] for key in ['sourceUnits', 'audioReferences', 'hostedAudioAssets', 'audioBytes', 'canonicalTranscriptAssets', 'documents', 'totalAssetCount', 'moments', 'transcriptSegments', 'catalogBytes', 'checksumsComparedWithPriorBaseline', 'allCanonicalAudioAndTranscriptHashesMatch', 'sourceGuideAndAssociationContentUnchangedExceptHostingAvailability', 'missingAssets']}, indent=2))
+    print(json.dumps({key: report[key] for key in ['sourceUnits', 'audioReferences', 'hostedAudioAssets', 'audioBytes', 'canonicalTranscriptAssets', 'documents', 'totalAssetCount', 'moments', 'transcriptSegments', 'catalogBytes', 'sourceAgeSessions', 'sourceAgesMatchedFilenameStem', 'allSourceAgesMatchFilenameStem', 'inferredAgeSessions', 'sessionsWithoutAnyAge', 'sessionsWithAgeTotal', 'checksumsComparedWithPriorBaseline', 'allCanonicalAudioAndTranscriptHashesMatch', 'sourceGuideAndAssociationContentUnchangedExceptHostingAvailability', 'missingAssets']}, indent=2))
 
 
 if __name__ == '__main__':
