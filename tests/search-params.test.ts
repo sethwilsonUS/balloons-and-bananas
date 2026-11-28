@@ -3,12 +3,15 @@ import test from 'node:test';
 import {
   buildSearchHref,
   buildSessionHrefFromSearch,
+  concordanceRequestFromUrlState,
   defaultSortForQuery,
+  defaultSpeakerForSearch,
   hasActiveSearchFilters,
   hasExplicitSortParam,
   isSafeSearchReturnPath,
   MAX_SEARCH_PAGE,
   MAX_SEARCH_QUERY_LENGTH,
+  parseConcordanceResponse,
   parseSearchResponse,
   parseSearchUrlParams,
   resolveSortForQueryChange,
@@ -305,5 +308,124 @@ test('parseSearchResponse validates the /api/search response boundary and reject
     { ...validPayload, results: [{ ...validPayload.results[0], linguisticEvidence: { marker: 'bogus', count: 1, examples: [] } }] },
   ]) {
     assert.equal(parseSearchResponse(malformed), null, `Expected malformed payload to be rejected: ${JSON.stringify(malformed)}`);
+  }
+});
+
+test('view=concordance URL state parses, serializes, omits sort, preserves speaker scope, and maps cleanly to /api/concordance', () => {
+  // Open concordance defaults speaker to 'any' and always orders by age-asc.
+  const open = parseSearchUrlParams(new URLSearchParams('q=locomotive&view=concordance&sort=age-desc'));
+  assert.equal(open.view, 'concordance');
+  assert.equal(open.speaker, 'any');
+  assert.equal(open.sort, 'age-asc');
+  assert.equal(hasExplicitSortParam(new URLSearchParams('q=locomotive&view=concordance&sort=age-desc')), false);
+  assert.equal(buildSearchHref(open), '/search?q=locomotive&view=concordance');
+  assert.equal(defaultSpeakerForSearch('', 'concordance'), 'any');
+  assert.equal(defaultSpeakerForSearch('repetition', 'concordance'), 'child');
+  assert.equal(defaultSpeakerForSearch('', 'details'), 'child');
+
+  // Explicit speaker=child without a marker is preserved in concordance URLs and marks filters active.
+  const childOnly = parseSearchUrlParams(new URLSearchParams('q=locomotive&speaker=child&view=concordance'));
+  assert.equal(childOnly.speaker, 'child');
+  assert.equal(buildSearchHref(childOnly), '/search?q=locomotive&speaker=child&view=concordance');
+  assert.deepEqual(parseSearchUrlParams(serializeSearchUrlParams(childOnly)), childOnly);
+  assert.equal(
+    hasActiveSearchFilters(parseSearchUrlParams(new URLSearchParams('speaker=child&view=concordance'))),
+    true,
+  );
+  assert.equal(
+    hasActiveSearchFilters(parseSearchUrlParams(new URLSearchParams('view=concordance'))),
+    false,
+  );
+
+  // Linguistic marker in concordance defaults speaker to 'child' and serializes speaker=any explicitly.
+  const markerChild = parseSearchUrlParams(new URLSearchParams('q=locomotive&marker=repetition&view=concordance'));
+  assert.equal(markerChild.speaker, 'child');
+  assert.equal(buildSearchHref(markerChild), '/search?q=locomotive&marker=repetition&view=concordance');
+
+  const markerAny = parseSearchUrlParams(new URLSearchParams('q=locomotive&marker=repetition&speaker=any&view=concordance&ageMin=18&ageMax=36&page=2'));
+  assert.equal(markerAny.speaker, 'any');
+  assert.equal(buildSearchHref(markerAny), '/search?q=locomotive&marker=repetition&speaker=any&ageMin=18&ageMax=36&view=concordance&page=2');
+  assert.deepEqual(concordanceRequestFromUrlState(markerAny), {
+    query: 'locomotive',
+    topic: '',
+    origin: '',
+    marker: 'repetition',
+    speaker: 'any',
+    ageMin: 18,
+    ageMax: 36,
+    page: 2,
+    pageSize: 50,
+  });
+});
+
+test('parseConcordanceResponse validates /api/concordance payloads at runtime and rejects malformed inputs', () => {
+  const validPayload = {
+    total: 2,
+    sessionCount: 2,
+    page: 1,
+    pages: 1,
+    pageSize: 50,
+    rows: [
+      {
+        sessionId: 'fixture-010815-locomotive',
+        sessionSlug: '010815',
+        sessionTitle: 'Blue locomotive and wooden bridge',
+        sourceName: '010815.cha',
+        origin: 'archived_research',
+        ages: ['1;08.15'],
+        inferredAge: null,
+        passageNumber: 1,
+        speaker: 'Child (CHI, target child)',
+        start: 0,
+        leftContext: 'blue [/] blue',
+        match: 'locomotive',
+        rightContext: '!',
+      },
+      {
+        sessionId: 'fixture-020604-lighthouse',
+        sessionSlug: '020604-local',
+        sessionTitle: 'Paper lighthouse and harbor bells',
+        sourceName: '020604-local.json',
+        origin: 'local_ai_draft',
+        ages: [],
+        inferredAge: '2;06.04',
+        passageNumber: 3,
+        speaker: null,
+        start: 10,
+        leftContext: 'Can the blue',
+        match: 'locomotive',
+        rightContext: 'meet the ferry at the pier?',
+      },
+    ],
+  };
+
+  const parsed = parseConcordanceResponse(validPayload);
+  assert.ok(parsed);
+  assert.equal(parsed.total, 2);
+  assert.equal(parsed.sessionCount, 2);
+  assert.equal(parsed.rows.length, 2);
+  assert.equal(parsed.rows[1].speaker, null);
+
+  for (const malformed of [
+    null,
+    [],
+    {},
+    { ...validPayload, total: -1 },
+    { ...validPayload, sessionCount: 3 },
+    { ...validPayload, page: 0 },
+    { ...validPayload, pages: 0 },
+    { ...validPayload, page: 2, pages: 1 },
+    { ...validPayload, total: 0, sessionCount: 0 },
+    { ...validPayload, pageSize: 18 },
+    { ...validPayload, rows: [{}] },
+    { ...validPayload, rows: [{ ...validPayload.rows[0], sessionId: '' }] },
+    { ...validPayload, rows: [{ ...validPayload.rows[0], sessionSlug: '' }] },
+    { ...validPayload, rows: [{ ...validPayload.rows[0], origin: 'bogus' }] },
+    { ...validPayload, rows: [{ ...validPayload.rows[0], passageNumber: 0 }] },
+    { ...validPayload, rows: [{ ...validPayload.rows[0], start: -1 }] },
+    { ...validPayload, rows: [{ ...validPayload.rows[0], match: '' }] },
+    { ...validPayload, rows: [{ ...validPayload.rows[0], ages: '1;08.15' }] },
+  ]) {
+    assert.equal(parseConcordanceResponse(malformed), null, `Expected malformed concordance payload to be rejected: ${JSON.stringify(malformed)}`);
   }
 });

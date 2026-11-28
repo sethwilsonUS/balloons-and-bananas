@@ -68,6 +68,7 @@ export interface Catalog {
   documents: ArchiveDocument[];
 }
 export type SearchPageSize = 18 | 36;
+export type ConcordancePageSize = 50;
 export interface SearchRequest {
   query?: string;
   topic?: string;
@@ -79,6 +80,41 @@ export interface SearchRequest {
   sort?: SearchSort;
   marker?: LinguisticMarkerId | '';
   speaker?: LinguisticSpeaker;
+}
+export interface ConcordanceRequest {
+  query?: string;
+  topic?: string;
+  origin?: TranscriptOrigin | '';
+  ageMin?: number;
+  ageMax?: number;
+  page?: number;
+  pageSize?: ConcordancePageSize;
+  marker?: LinguisticMarkerId | '';
+  speaker?: LinguisticSpeaker;
+}
+export interface ConcordanceRow {
+  sessionId: string;
+  sessionSlug: string;
+  sessionTitle: string;
+  sourceName: string;
+  origin: TranscriptOrigin;
+  ages: string[];
+  inferredAge: string | null;
+  /** 1-based transcript passage number (`#p<N>`). */
+  passageNumber: number;
+  speaker: string | null;
+  start: number | null;
+  leftContext: string;
+  match: string;
+  rightContext: string;
+}
+export interface ConcordanceResponse {
+  rows: ConcordanceRow[];
+  total: number;
+  sessionCount: number;
+  page: number;
+  pages: number;
+  pageSize: ConcordancePageSize;
 }
 export interface LinguisticEvidence {
   marker: LinguisticMarkerId;

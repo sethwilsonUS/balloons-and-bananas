@@ -1,3 +1,5 @@
+import type { SearchView } from './results-view';
+
 export const ARCHIVE_NAME = 'The Seth Tapes';
 export const ARCHIVE_SUBTITLE = 'A childhood-language archive from the Peters/Wilson corpus';
 
@@ -32,7 +34,7 @@ export type DocumentTitleState =
   | { kind: 'error' }
   | { kind: 'overview' }
   | { kind: 'sessions'; hasFilters: boolean }
-  | { kind: 'search'; hasFilters: boolean }
+  | { kind: 'search'; hasFilters: boolean; view?: SearchView }
   | { kind: 'session'; title?: string | null; notFound?: boolean }
   | { kind: 'research' }
   | { kind: 'document'; title?: string | null }
@@ -49,6 +51,7 @@ export function formatDocumentTitle(state: DocumentTitleState): string {
     case 'sessions':
       return `${state.hasFilters ? 'Search results' : 'Sessions'} · ${ARCHIVE_NAME}`;
     case 'search':
+      if (state.view === 'concordance') return `Concordance · ${ARCHIVE_NAME}`;
       return `${state.hasFilters ? 'Search results' : 'Search'} · ${ARCHIVE_NAME}`;
     case 'session': {
       const trimmed = state.title?.trim();

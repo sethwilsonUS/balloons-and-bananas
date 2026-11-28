@@ -13,7 +13,7 @@ const boolean: Validator = value => typeof value === 'boolean';
 const recordingId: Validator = value => typeof value === 'string' && /^(archive-[0-9]{6}[a-z]?|local-(?:0extra-[0-9]{2}-(?:supp-)?[0-9]{6}[a-f]?|0wav-[0-9]{6}[a-f]?))$/.test(value);
 const assetId: Validator = value => typeof value === 'string' && /^[a-f0-9]{32}$/.test(value);
 const origin = oneOf('archived_research', 'talkbank_ai_draft', 'local_ai_draft');
-const view = oneOf('details', 'list');
+const view = oneOf('details', 'list', 'concordance');
 const themes = oneOf('Learning and questions', 'Humor and sound play', 'Play and imagination', 'Affection and comfort', 'Help and independence', 'Music and stories', 'Outings and nature', 'Vision and access');
 const documentId = oneOf('research', 'methods-and-audit', 'transcript-coverage-explanation', 'research-sources', 'research-source-quality', 'annotation-provenance', 'transcript-associations');
 const optional = (validate: Validator): Validator => value => value === '' || validate(value);

@@ -1,7 +1,11 @@
 import { isValidAgeMonths, parseAgeMonthsParam } from './age';
+import { CONCORDANCE_PAGE_SIZE, isConcordancePageSize } from './concordance';
 import { isLinguisticMarkerId, isLinguisticSpeaker, type LinguisticMarkerId, type LinguisticSpeaker } from './linguistic-markers';
-import { isSearchSort, isSessionView, isTranscriptOrigin, pageSizeForView, type SessionView } from './results-view';
+import { isSearchSort, isSearchView, isTranscriptOrigin, pageSizeForView, type SearchView } from './results-view';
 import type {
+  ConcordanceRequest,
+  ConcordanceResponse,
+  ConcordanceRow,
   LinguisticEvidence,
   Recording,
   SearchPageSize,
@@ -26,7 +30,7 @@ export interface SearchUrlState {
   ageMin: number | undefined;
   ageMax: number | undefined;
   sort: SearchSort;
-  view: SessionView;
+  view: SearchView;
   page: number;
 }
 
@@ -64,10 +68,26 @@ export function defaultSortForQuery(query: string): SearchSort {
   return query.trim() ? 'relevance' : 'age-asc';
 }
 
-/** Return true when the URL explicitly supplies a valid `sort` query parameter. */
+/** Return true when the URL explicitly supplies a valid `sort` query parameter (not applicable in concordance view). */
 export function hasExplicitSortParam(params: RawSearchParams): boolean {
+  const rawView = readParam(params, 'view')?.trim() ?? '';
+  if (rawView === 'concordance') return false;
   const rawSort = readParam(params, 'sort')?.trim() ?? '';
   return isSearchSort(rawSort);
+}
+
+/**
+ * Default speaker scope for the active search view and marker:
+ * - Active linguistic markers default to explicit CHI (`child`).
+ * - Open concordance queries without a marker default to `any` speaker.
+ * - Details/List views without a marker keep `child` as the inert default.
+ */
+export function defaultSpeakerForSearch(
+  marker: LinguisticMarkerId | '',
+  view: SearchView,
+): LinguisticSpeaker {
+  if (marker) return 'child';
+  return view === 'concordance' ? 'any' : 'child';
 }
 
 /**
@@ -122,11 +142,16 @@ export function parseSearchUrlParams(
   const rawOrigin = readParam(params, 'origin')?.trim() ?? '';
   const origin: TranscriptOrigin | '' = isTranscriptOrigin(rawOrigin) ? rawOrigin : '';
 
+  const rawView = readParam(params, 'view')?.trim() ?? '';
+  const view: SearchView = isSearchView(rawView) ? rawView : 'details';
+
   const rawMarker = readParam(params, 'marker')?.trim() ?? '';
   const marker: LinguisticMarkerId | '' = isLinguisticMarkerId(rawMarker) ? rawMarker : '';
 
   const rawSpeaker = readParam(params, 'speaker')?.trim() ?? '';
-  const speaker: LinguisticSpeaker = marker && isLinguisticSpeaker(rawSpeaker) ? rawSpeaker : 'child';
+  const speaker: LinguisticSpeaker = (marker || view === 'concordance') && isLinguisticSpeaker(rawSpeaker)
+    ? rawSpeaker
+    : defaultSpeakerForSearch(marker, view);
 
   let ageMin = parseAgeMonthsParam(readParam(params, 'ageMin'));
   let ageMax = parseAgeMonthsParam(readParam(params, 'ageMax'));
@@ -136,10 +161,9 @@ export function parseSearchUrlParams(
   }
 
   const rawSort = readParam(params, 'sort')?.trim() ?? '';
-  const sort: SearchSort = isSearchSort(rawSort) ? rawSort : defaultSortForQuery(query);
-
-  const rawView = readParam(params, 'view')?.trim() ?? '';
-  const view: SessionView = isSessionView(rawView) ? rawView : 'details';
+  const sort: SearchSort = view === 'concordance'
+    ? 'age-asc'
+    : (isSearchSort(rawSort) ? rawSort : defaultSortForQuery(query));
 
   const page = parsePageParam(readParam(params, 'page'));
 
@@ -179,12 +203,15 @@ export function serializeSearchUrlParams(
 
   if (isTranscriptOrigin(state.origin)) params.set('origin', state.origin);
 
+  const view: SearchView = isSearchView(state.view) ? state.view : 'details';
   const marker = isLinguisticMarkerId(state.marker) ? state.marker : '';
   if (marker) {
     params.set('marker', marker);
     if (isLinguisticSpeaker(state.speaker) && state.speaker !== 'child') {
       params.set('speaker', state.speaker);
     }
+  } else if (view === 'concordance' && state.speaker === 'child') {
+    params.set('speaker', 'child');
   }
 
   const validMin = isValidAgeMonths(state.ageMin) ? state.ageMin : undefined;
@@ -194,13 +221,15 @@ export function serializeSearchUrlParams(
     if (validMax !== undefined) params.set('ageMax', String(validMax));
   }
 
-  const defaultSort = defaultSortForQuery(query);
-  if (isSearchSort(state.sort) && (options.explicitSort || state.sort !== defaultSort)) {
-    params.set('sort', state.sort);
+  if (view !== 'concordance') {
+    const defaultSort = defaultSortForQuery(query);
+    if (isSearchSort(state.sort) && (options.explicitSort || state.sort !== defaultSort)) {
+      params.set('sort', state.sort);
+    }
   }
 
-  if (isSessionView(state.view) && state.view !== 'details') {
-    params.set('view', state.view);
+  if (view !== 'details') {
+    params.set('view', view);
   }
 
   if (Number.isSafeInteger(state.page) && state.page > 1) {
@@ -219,19 +248,22 @@ export function buildSearchHref(
 }
 
 export function hasActiveSearchFilters(
-  state: Pick<SearchUrlState, 'query' | 'topic' | 'origin' | 'marker' | 'ageMin' | 'ageMax'>,
+  state: Pick<SearchUrlState, 'query' | 'topic' | 'origin' | 'marker' | 'ageMin' | 'ageMax'>
+    & Partial<Pick<SearchUrlState, 'view' | 'speaker'>>,
 ): boolean {
   return Boolean(
     state.query.trim()
     || state.topic
     || state.origin
     || state.marker
+    || (state.view === 'concordance' && state.speaker === 'child')
     || state.ageMin !== undefined
     || state.ageMax !== undefined,
   );
 }
 
 export function searchRequestFromUrlState(state: SearchUrlState): SearchRequest {
+  const sessionView = state.view === 'list' ? 'list' : 'details';
   const request: SearchRequest = {
     query: state.query,
     topic: state.topic,
@@ -240,7 +272,22 @@ export function searchRequestFromUrlState(state: SearchUrlState): SearchRequest 
     speaker: state.speaker,
     sort: state.sort,
     page: state.page,
-    pageSize: pageSizeForView(state.view),
+    pageSize: pageSizeForView(sessionView),
+  };
+  if (isValidAgeMonths(state.ageMin)) request.ageMin = state.ageMin;
+  if (isValidAgeMonths(state.ageMax)) request.ageMax = state.ageMax;
+  return request;
+}
+
+export function concordanceRequestFromUrlState(state: SearchUrlState): ConcordanceRequest {
+  const request: ConcordanceRequest = {
+    query: state.query,
+    topic: state.topic,
+    origin: state.origin,
+    marker: state.marker,
+    speaker: state.speaker,
+    page: state.page,
+    pageSize: CONCORDANCE_PAGE_SIZE,
   };
   if (isValidAgeMonths(state.ageMin)) request.ageMin = state.ageMin;
   if (isValidAgeMonths(state.ageMax)) request.ageMax = state.ageMax;
@@ -442,5 +489,76 @@ export function parseSearchResponse(raw: unknown): SearchResponse | null {
     pages: raw.pages,
     pageSize,
     results,
+  };
+}
+
+function parseConcordanceRow(raw: unknown): ConcordanceRow | null {
+  if (!isRecord(raw)) return null;
+  if (
+    typeof raw.sessionId !== 'string' || !raw.sessionId
+    || typeof raw.sessionSlug !== 'string' || !raw.sessionSlug
+    || typeof raw.sessionTitle !== 'string'
+    || typeof raw.sourceName !== 'string'
+    || !isTranscriptOrigin(raw.origin)
+    || !isStringArray(raw.ages)
+    || (raw.inferredAge !== null && typeof raw.inferredAge !== 'string')
+    || typeof raw.passageNumber !== 'number' || !Number.isSafeInteger(raw.passageNumber) || raw.passageNumber < 1
+    || (raw.speaker !== null && typeof raw.speaker !== 'string')
+    || (raw.start !== null && (typeof raw.start !== 'number' || !Number.isFinite(raw.start) || raw.start < 0))
+    || typeof raw.leftContext !== 'string'
+    || typeof raw.match !== 'string' || !raw.match
+    || typeof raw.rightContext !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    sessionId: raw.sessionId,
+    sessionSlug: raw.sessionSlug,
+    sessionTitle: raw.sessionTitle,
+    sourceName: raw.sourceName,
+    origin: raw.origin,
+    ages: raw.ages,
+    inferredAge: raw.inferredAge,
+    passageNumber: raw.passageNumber,
+    speaker: raw.speaker,
+    start: raw.start,
+    leftContext: raw.leftContext,
+    match: raw.match,
+    rightContext: raw.rightContext,
+  };
+}
+
+/**
+ * Runtime boundary validator for `/api/concordance` JSON responses.
+ * Rejects malformed payloads before they can reach `ConcordanceTable`.
+ */
+export function parseConcordanceResponse(raw: unknown): ConcordanceResponse | null {
+  if (!isRecord(raw)) return null;
+  if (
+    typeof raw.total !== 'number' || !Number.isSafeInteger(raw.total) || raw.total < 0
+    || typeof raw.sessionCount !== 'number' || !Number.isSafeInteger(raw.sessionCount) || raw.sessionCount < 0
+    || raw.sessionCount > raw.total
+    || typeof raw.page !== 'number' || !Number.isSafeInteger(raw.page) || raw.page < 1
+    || typeof raw.pages !== 'number' || !Number.isSafeInteger(raw.pages) || raw.pages < 1
+    || raw.page > raw.pages
+    || !isConcordancePageSize(raw.pageSize)
+    || !Array.isArray(raw.rows)
+    || (raw.total === 0 && raw.rows.length > 0)
+  ) {
+    return null;
+  }
+  const rows: ConcordanceRow[] = [];
+  for (const item of raw.rows) {
+    const parsed = parseConcordanceRow(item);
+    if (!parsed) return null;
+    rows.push(parsed);
+  }
+  return {
+    rows,
+    total: raw.total,
+    sessionCount: raw.sessionCount,
+    page: raw.page,
+    pages: raw.pages,
+    pageSize: raw.pageSize,
   };
 }

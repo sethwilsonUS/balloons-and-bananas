@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adaptSearchForView, balancedColumnCount, compactGridSpans, formatSearchStatus, shortOverview, visibleExcerpt } from '../src/lib/results-view';
+import { adaptSearchForView, balancedColumnCount, compactGridSpans, formatConcordanceStatus, formatSearchStatus, isSearchView, shortOverview, visibleExcerpt } from '../src/lib/results-view';
 import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle, formatSessionPageTitle } from '../src/lib/site';
-import type { SearchResponse, SearchResult, SessionCard } from '../src/lib/types';
+import type { ConcordanceResponse, SearchResponse, SearchResult, SessionCard } from '../src/lib/types';
 
 function mockCard(id: string): SessionCard {
   return {
@@ -47,6 +47,8 @@ test('site branding uses one name and descriptive per-view document titles', () 
   assert.equal(formatDocumentTitle({ kind: 'sessions', hasFilters: true }), 'Search results · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'search', hasFilters: false }), 'Search · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'search', hasFilters: true }), 'Search results · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'search', hasFilters: false, view: 'concordance' }), 'Concordance · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'search', hasFilters: true, view: 'concordance' }), 'Concordance · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'session' }), 'Session · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'session', title: 'Blue locomotive and wooden bridge' }), 'Blue locomotive and wooden bridge · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'session', notFound: true }), 'Session not found · The Seth Tapes');
@@ -117,6 +119,27 @@ test('formatSearchStatus distinguishes searching, view updates, and settled resu
   assert.equal(formatSearchStatus(mockResponse(1, 1, 1, 18), null), '1–1 of 1 session');
   assert.equal(formatSearchStatus(mockResponse(0, 0, 1, 18), null), '0 results');
   assert.equal(formatSearchStatus(null, null), '');
+
+  const concordancePage: ConcordanceResponse = {
+    rows: [],
+    total: 65,
+    sessionCount: 4,
+    page: 2,
+    pages: 2,
+    pageSize: 50,
+  };
+  assert.equal(formatConcordanceStatus(null, null, false), 'Enter a search query to view a concordance.');
+  assert.equal(formatConcordanceStatus(concordancePage, 'search', true), 'Searching…');
+  assert.equal(formatConcordanceStatus(concordancePage, 'view', true), 'Updating view…');
+  assert.equal(formatConcordanceStatus(concordancePage, null, true), '51–65 of 65 matching passages · page 2 of 2');
+  assert.equal(formatConcordanceStatus({ ...concordancePage, total: 1, page: 1, pages: 1 }, null, true), '1–1 of 1 matching passage');
+  assert.equal(formatConcordanceStatus({ ...concordancePage, total: 0, page: 1, pages: 1 }, null, true), '0 matching passages');
+  assert.equal(formatConcordanceStatus(null, null, true), '');
+
+  assert.equal(isSearchView('details'), true);
+  assert.equal(isSearchView('list'), true);
+  assert.equal(isSearchView('concordance'), true);
+  assert.equal(isSearchView('kwic'), false);
 });
 
 test('balancedColumnCount and compactGridSpans avoid single-orphan rows across wide and compact counts', () => {
