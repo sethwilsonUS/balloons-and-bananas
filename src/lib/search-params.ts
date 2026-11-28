@@ -157,11 +157,19 @@ export function parseSearchUrlParams(
   };
 }
 
+export interface SerializeSearchUrlOptions {
+  /** Keep `sort` in the serialized URL even when it matches the default for the current query. */
+  explicitSort?: boolean;
+}
+
 /**
  * Serialize a `SearchUrlState` into canonical `URLSearchParams`, omitting default
  * values so shared URLs stay clean, stable, and round-trip identically.
  */
-export function serializeSearchUrlParams(state: SearchUrlState): URLSearchParams {
+export function serializeSearchUrlParams(
+  state: SearchUrlState,
+  options: SerializeSearchUrlOptions = {},
+): URLSearchParams {
   const params = new URLSearchParams();
   const query = state.query.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
   if (query) params.set('q', query);
@@ -187,7 +195,7 @@ export function serializeSearchUrlParams(state: SearchUrlState): URLSearchParams
   }
 
   const defaultSort = defaultSortForQuery(query);
-  if (isSearchSort(state.sort) && state.sort !== defaultSort) {
+  if (isSearchSort(state.sort) && (options.explicitSort || state.sort !== defaultSort)) {
     params.set('sort', state.sort);
   }
 
@@ -202,8 +210,11 @@ export function serializeSearchUrlParams(state: SearchUrlState): URLSearchParams
   return params;
 }
 
-export function buildSearchHref(state: SearchUrlState): string {
-  const query = serializeSearchUrlParams(state).toString();
+export function buildSearchHref(
+  state: SearchUrlState,
+  options: SerializeSearchUrlOptions = {},
+): string {
+  const query = serializeSearchUrlParams(state, options).toString();
   return query ? `/search?${query}` : '/search';
 }
 

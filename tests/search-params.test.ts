@@ -218,6 +218,20 @@ test('explicit sort detection and query-transition sort resolution preserve expl
   assert.equal(resolveSortForQueryChange('age-desc', false, true, true), 'age-desc');
   assert.equal(resolveSortForQueryChange('age-asc', false, true, true), 'age-asc');
   assert.equal(resolveSortForQueryChange('age-desc', true, false, true), 'age-desc');
+
+  // Serializing with explicitSort keeps sort=age-asc even on empty-query URLs (e.g. view switches),
+  // while leaving bare /search clean when sort was inferred.
+  const emptyList = parseSearchUrlParams(new URLSearchParams('sort=age-asc&view=list'));
+  assert.equal(buildSearchHref(emptyList), '/search?view=list');
+  assert.equal(buildSearchHref(emptyList, { explicitSort: true }), '/search?sort=age-asc&view=list');
+  assert.equal(
+    hasExplicitSortParam(serializeSearchUrlParams(emptyList, { explicitSort: true })),
+    true,
+  );
+  assert.equal(
+    hasExplicitSortParam(serializeSearchUrlParams(emptyList, { explicitSort: false })),
+    false,
+  );
 });
 
 test('selectableTopicSet aligns URL topic validation strictly with curated dropdown themes', () => {

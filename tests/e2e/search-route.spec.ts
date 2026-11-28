@@ -262,6 +262,29 @@ test('filter changes update the URL cleanly, empty query acts as filtered browsi
     'Paper lighthouse and harbor bells',
     'Blue locomotive and wooden bridge',
   ]);
+
+  // Explicit sort=age-asc survives a view switch on an empty query and stays preserved when typing a query
+  await page.goto('/search?sort=age-asc');
+  await expect(page.getByLabel('Sort by')).toHaveValue('age-asc');
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?sort=age-asc&view=list$/);
+  await searchInput.fill('locomotive');
+  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/\/search\?q=locomotive&sort=age-asc&view=list$/);
+  await expect(page.getByLabel('Sort by')).toHaveValue('age-asc');
+  await expect(page.locator('.session-list-row h3 a')).toHaveText([
+    'Blue locomotive and wooden bridge',
+    'Paper lighthouse and harbor bells',
+  ]);
+
+  // Bare /search keeps inferred default sort after a view switch and switches to relevance on query
+  await page.goto('/search');
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?view=list$/);
+  await searchInput.fill('locomotive');
+  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/\/search\?q=locomotive&view=list$/);
+  await expect(page.getByLabel('Sort by')).toHaveValue('relevance');
 });
 
 test('age-range filter uses source-or-inferred age, excludes unaged sessions, composes with query/filters, and /api/search rejects invalid ages', async ({ page, request, baseURL }) => {

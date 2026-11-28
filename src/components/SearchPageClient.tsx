@@ -71,7 +71,10 @@ export default function SearchPageClient({
     () => hasExplicitSortParam(new URLSearchParams(searchParamsKey)),
     [searchParamsKey],
   );
-  const canonicalHref = useMemo(() => buildSearchHref(urlState), [urlState]);
+  const canonicalHref = useMemo(
+    () => buildSearchHref(urlState, { explicitSort: hasExplicitSort }),
+    [hasExplicitSort, urlState],
+  );
   const hasFilters = hasActiveSearchFilters(urlState);
 
   const [draftQuery, setDraftQuery] = useState(urlState.query);
@@ -204,22 +207,30 @@ export default function SearchPageClient({
     document.title = formatDocumentTitle({ kind: 'search', hasFilters });
   }, [hasFilters]);
 
-  const commitState = useCallback((next: SearchUrlState, mode: 'push' | 'replace' = 'push') => {
-    const nextHref = buildSearchHref(next);
-    const currentLocation = `${window.location.pathname}${window.location.search}`;
-    if (nextHref === currentLocation) return false;
-    const nextKey = serializeSearchUrlParams(next).toString();
-    selfCommittedKeysRef.current.push(nextKey);
-    if (selfCommittedKeysRef.current.length > 8) {
-      selfCommittedKeysRef.current.splice(0, selfCommittedKeysRef.current.length - 8);
-    }
-    if (mode === 'push') {
-      window.history.pushState(null, '', nextHref);
-    } else {
-      window.history.replaceState(null, '', nextHref);
-    }
-    return true;
-  }, []);
+  const commitState = useCallback(
+    (
+      next: SearchUrlState,
+      mode: 'push' | 'replace' = 'push',
+      options?: { explicitSort?: boolean },
+    ) => {
+      const explicitSort = options?.explicitSort ?? hasExplicitSort;
+      const nextHref = buildSearchHref(next, { explicitSort });
+      const currentLocation = `${window.location.pathname}${window.location.search}`;
+      if (nextHref === currentLocation) return false;
+      const nextKey = serializeSearchUrlParams(next, { explicitSort }).toString();
+      selfCommittedKeysRef.current.push(nextKey);
+      if (selfCommittedKeysRef.current.length > 8) {
+        selfCommittedKeysRef.current.splice(0, selfCommittedKeysRef.current.length - 8);
+      }
+      if (mode === 'push') {
+        window.history.pushState(null, '', nextHref);
+      } else {
+        window.history.replaceState(null, '', nextHref);
+      }
+      return true;
+    },
+    [hasExplicitSort],
+  );
 
   const currentBaseState = useCallback((): SearchUrlState => {
     const trimmedDraft = draftQueryRef.current.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
@@ -472,9 +483,10 @@ export default function SearchPageClient({
     focusResultsOnLoad.current = false;
     submittedDraftRef.current = false;
     const base = currentBaseState();
-    const nextSort: SearchSort = isSearchSort(value) ? value : defaultSortForQuery(base.query);
+    const isExplicit = isSearchSort(value);
+    const nextSort: SearchSort = isExplicit ? value : defaultSortForQuery(base.query);
     trackArchiveEvent('filter_changed', { filter: 'sort', value: nextSort });
-    commitState({ ...base, sort: nextSort, page: 1 }, 'push');
+    commitState({ ...base, sort: nextSort, page: 1 }, 'push', { explicitSort: isExplicit });
   };
 
   const handleMarkerChange = (nextMarker: LinguisticMarkerId | '') => {
@@ -528,7 +540,7 @@ export default function SearchPageClient({
       sort: 'age-asc',
       view: urlState.view,
       page: 1,
-    }, 'push');
+    }, 'push', { explicitSort: false });
   };
 
   const handlePageChange = (nextPage: number) => {
