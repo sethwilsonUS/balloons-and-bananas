@@ -46,16 +46,18 @@ test('single-row header on every route: logo + brand, 5 nav links, compact Appea
     await expect(header.locator('.share-button')).toHaveCount(0);
     await expect(page.locator('.collection-mark')).toHaveCount(0);
 
-    // Footer keeps the unlisted-access note and uses the new SVG cassette-reel logo
+    // Footer keeps the unlisted-access note and uses the upgraded 1980s cassette SVG logo
     const footer = page.locator('footer.site-footer');
     await expect(footer).toContainText('An unlisted public archive. Anyone with the link can visit.');
     await expect(footer.locator('svg.cassette-reel-logo')).toHaveAttribute('aria-hidden', 'true');
+    await expect(footer.locator('svg.cassette-reel-logo')).toHaveAttribute('viewBox', '0 0 64 40');
 
-    // Header logo is decorative inline SVG beside visible "The Seth Tapes" brand text
+    // Header logo is decorative inline 1980s cassette SVG beside visible "The Seth Tapes" brand text
     const brand = header.locator('a.brand-button');
     await expect(brand).toHaveAttribute('href', '/');
     await expect(brand).toHaveText('The Seth Tapes');
     await expect(brand.locator('svg.cassette-reel-logo')).toHaveAttribute('aria-hidden', 'true');
+    await expect(brand.locator('svg.cassette-reel-logo')).toHaveAttribute('viewBox', '0 0 64 40');
 
     // Five nav links with identical labels and active current-page state
     const navLinks = header.locator('.section-nav a');
@@ -306,8 +308,10 @@ test('favicon and Apple touch icon are linked in document head and served cleanl
   expect(faviconRes.headers()['x-robots-tag']).toMatch(/\bnoindex\b/i);
   expect(faviconRes.headers()['referrer-policy']).toBe('no-referrer');
   const svgBody = await faviconRes.text();
-  expect(svgBody).toContain('<circle cx="9.5"');
-  expect(svgBody).toContain('<circle cx="22.5"');
+  expect(svgBody).toContain('<rect x="3" y="6.5" width="26" height="19"');
+  expect(svgBody).toContain('<circle cx="11.2" cy="16.2"');
+  expect(svgBody).toContain('<circle cx="20.8" cy="16.2"');
+  expect(svgBody).toContain('M8.8 25.5 L10.8 21.8 H21.2 L23.2 25.5 Z');
   expect(svgBody).toContain('#254c38');
 
   const appleRes = await request.get(iconLinks.appleIcon!);
@@ -316,9 +320,11 @@ test('favicon and Apple touch icon are linked in document head and served cleanl
   expect(appleRes.headers()['x-robots-tag']).toMatch(/\bnoindex\b/i);
   expect(appleRes.headers()['referrer-policy']).toBe('no-referrer');
   const pngBytes = await appleRes.body();
-  // Verify PNG magic signature
+  // Verify PNG magic signature and 180x180 IHDR dimensions
   expect(pngBytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true);
-  expect(pngBytes.length).toBeGreaterThan(200);
+  expect(pngBytes.readUInt32BE(16)).toBe(180);
+  expect(pngBytes.readUInt32BE(20)).toBe(180);
+  expect(pngBytes.length).toBeGreaterThan(500);
 
   expect(consoleErrors).toEqual([]);
 });
