@@ -42,7 +42,7 @@ async function expectNoSeriousAxeViolations(page: Page, label: string) {
   expect(severe, `Unexpected serious/critical axe violations on ${label}:\n${summary}`).toEqual([]);
 }
 
-async function tabUntilFocused(page: Page, target: Locator, maxTabs = 25) {
+async function tabUntilFocused(page: Page, target: Locator, maxTabs = 45) {
   for (let i = 0; i < maxTabs; i += 1) {
     const isFocused = await target.evaluate(el => el === document.activeElement);
     if (isFocused) return;
@@ -53,7 +53,8 @@ async function tabUntilFocused(page: Page, target: Locator, maxTabs = 25) {
 
 test('audio player operates entirely by keyboard with spoken aria-valuetext, no visible native controls, and clean axe in light/dark/system themes', async ({ page }) => {
   await page.goto('/?entry=fixture-010815-locomotive');
-  await expect(page.getByRole('heading', { level: 2, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
+  await expect(page).toHaveURL(/\/sessions\/010815$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
 
   const audioPanel = page.locator('.audio-panel');
   const audioEl = audioPanel.locator('audio');
@@ -299,7 +300,8 @@ test('audio player preserves load/media error status, signed-URL recovery, keybo
     await route.fulfill({ status: 500, contentType: 'text/plain', body: 'error' });
   });
   await page.goto('/?entry=fixture-020604-lighthouse');
-  await expect(page.getByRole('heading', { level: 2, name: 'Paper lighthouse and harbor bells' })).toBeVisible();
+  await expect(page).toHaveURL(/\/sessions\/020604-local$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Paper lighthouse and harbor bells' })).toBeVisible();
   await tabUntilFocused(page, audioPanel.getByRole('button', { name: 'Play recording' }));
   await page.keyboard.press('Enter');
   await expect(status).toContainText('This recording could not be played. Retry from your current position, or choose another recording.');
@@ -308,7 +310,8 @@ test('audio player preserves load/media error status, signed-URL recovery, keybo
 
   // Listening-copy session with original WAV download renders cleanly with no native controls and clean axe.
   await page.goto('/?entry=fixture-020110-submarine');
-  await expect(page.getByRole('heading', { level: 2, name: 'Yellow submarine in the courtyard' })).toBeVisible();
+  await expect(page).toHaveURL(/\/sessions\/020110-tb$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Yellow submarine in the courtyard' })).toBeVisible();
   await expect(audioPanel.locator('audio')).not.toBeVisible();
   await expect(audioPanel).toContainText('MP3 listening copy.');
   await expect(audioPanel.getByRole('link', { name: 'Download MP3 listening copy' })).toBeVisible();

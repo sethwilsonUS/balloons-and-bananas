@@ -156,10 +156,12 @@ test('sessions default to Age, youngest first with labelled inferred ages, suppo
 
 test('session detail displays inferred age separately from source age, links to /about#inferred-ages, and passes axe in all themes', async ({ page }) => {
   await page.goto('/?entry=fixture-020604-lighthouse');
+  await expect(page).toHaveURL(/\/sessions\/020604-local$/);
 
-  await expect(page.getByRole('heading', { level: 2, name: 'Paper lighthouse and harbor bells' })).toBeVisible();
-  const detailMeta = page.locator('.detail-header .session-meta');
-  await expect(detailMeta).toContainText('Age 2 years, 6 months, 4 days (inferred from filename)');
+  await expect(page.getByRole('heading', { level: 1, name: 'Paper lighthouse and harbor bells' })).toBeVisible();
+  const detailMeta = page.locator('dl.catalog-record');
+  await expect(detailMeta).toContainText('2 years, 6 months, 4 days');
+  await expect(detailMeta).toContainText('(2;06.04)');
   const detailLink = detailMeta.getByRole('link', { name: /\(inferred from filename\)/i });
   await expect(detailLink).toHaveAttribute('href', '/about#inferred-ages');
   await expect(detailLink.locator('em')).toHaveText('(inferred from filename)');

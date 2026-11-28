@@ -200,21 +200,23 @@ test('opening a session plays fixture audio without Blob, serves private downloa
 
   // Session with no audio renders clearly and passes axe
   await page.goto('/?entry=fixture-011103-observatory');
-  await expect(page.getByRole('heading', { level: 2, name: 'Cardboard observatory without audio' })).toBeVisible();
+  await expect(page).toHaveURL(/\/sessions\/011103$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Cardboard observatory without audio' })).toBeVisible();
   await expect(page.getByText('The archive has a transcript for this session, but no corresponding recording.')).toBeVisible();
   await auditBothThemes(page, 'session detail without audio');
 });
 
-test('passage deep link (?entry=...&passage=3) highlights and focuses passage 3 with notation visible', async ({ page }) => {
+test('passage deep link (?entry=...&passage=3) redirects to /sessions/<slug>#p3, highlights and focuses passage 3, and supports notation toggle', async ({ page }) => {
   await page.goto('/?entry=fixture-010815-locomotive&passage=3');
+  await expect(page).toHaveURL(/\/sessions\/010815#p3$/);
 
   const passage3 = page.locator('#p3');
   await expect(passage3).toBeVisible();
   await expect(passage3).toHaveClass(/\bis-linked\b/);
   await expect(passage3).toBeFocused();
-  await expect(page.getByLabel('Show linguistic notation')).toBeChecked();
-  await expect(passage3).toContainText('where [//] where is the bridge (.) papa ?');
   await expect(page.getByText('Showing transcript passage 3, with surrounding passages for context.')).toBeVisible();
+  await page.getByLabel('Show linguistic notation').check();
+  await expect(passage3).toContainText('where [//] where is the bridge (.) papa ?');
 
   await auditBothThemes(page, 'passage deep link');
 });

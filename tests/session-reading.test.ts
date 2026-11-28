@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { SessionBody } from '../src/components/SessionDetail';
 import {
   DEFAULT_BACK_TO_RESULTS_HREF,
   findNearestPassageIndex,
@@ -11,7 +14,7 @@ import {
   parseSessionHash,
   resolveBackToResultsUrl,
 } from '../src/lib/session-reading';
-import type { Passage } from '../src/lib/types';
+import type { Passage, Session } from '../src/lib/types';
 
 test('parseSessionHash parses #pN passage anchors and rejects invalid passage hashes', () => {
   assert.deepEqual(parseSessionHash('#p1'), { kind: 'passage', passage: 1 });
@@ -171,13 +174,21 @@ test('resolveBackToResultsUrl and getBackToResultsHref accept safe same-origin s
     resolveBackToResultsUrl('/?marker=repetition&speaker=child', origin),
     '/?marker=repetition&speaker=child',
   );
+  assert.equal(
+    resolveBackToResultsUrl('/?entry=&marker=repetition', origin),
+    '/?entry=&marker=repetition',
+  );
 
-  // Reject unsafe, cross-origin, or non-results URLs
+  // Reject unsafe, cross-origin, or non-results URLs (including root URLs whose entry/document selector takes precedence)
   for (const rejected of [
     '',
     '/',
     '/sessions/010815',
     '/research/methods',
+    '/?entry=fixture-010815-locomotive&marker=repetition',
+    '/?document=fixture-provenance-guide&section=sessions',
+    '/?entry=fixture-010815-locomotive&section=sessions',
+    '/?marker=not-a-marker',
     'https://evil.example/search?q=test',
     '//evil.example/search',
     'javascript:alert(1)',
@@ -205,4 +216,51 @@ test('formatCanonicalPassageUrl builds clean canonical /sessions/<slug>#p<N> URL
     formatCanonicalPassageUrl('011119d-82-supp', 3, 'http://127.0.0.1:3103'),
     'http://127.0.0.1:3103/sessions/011119d-82-supp#p3',
   );
+});
+
+test('SessionBody renders all 135 passages without a 100-passage cap or Show more button', () => {
+  const longSession: Session = {
+    id: 'fixture-long-reading',
+    slug: '010901-long',
+    legacyId: 'fixture-long-reading',
+    sourceName: '010901-long.cha',
+    title: 'Synthetic long reading session',
+    overview: 'Synthetic 135-passage session verifying removal of the 100-passage cap.',
+    origin: 'archived_research',
+    topics: ['Play and imagination'],
+    dates: [],
+    ages: ['1;09.01'],
+    inferredAge: null,
+    recordings: [],
+    preferredRecordingId: null,
+    sources: [],
+    moments: [],
+    limits: [],
+    transcript: Array.from({ length: 135 }, (_, idx) => ({
+      speaker: idx % 2 === 0 ? 'Child (CHI, target child)' : 'Parent (FAT, father)',
+      text: idx === 134
+        ? 'synthetic final utterance with windmill lantern token'
+        : `synthetic utterance number ${idx + 1} for scroll responsiveness check`,
+      start: idx * 6,
+      end: idx * 6 + 5,
+    })),
+    sourceSha256: '0'.repeat(64),
+    association: 'Synthetic fixture',
+  };
+
+  const html = renderToStaticMarkup(
+    React.createElement(SessionBody, {
+      session: longSession,
+      headingLevel: 2,
+      momentsBeforePlayer: true,
+      enableHashNavigation: true,
+    }),
+  );
+
+  const lineMatches = html.match(/class="transcript-line"/g) ?? [];
+  assert.equal(lineMatches.length, 135);
+  assert.match(html, /id="p1"/);
+  assert.match(html, /id="p135"/);
+  assert.match(html, /windmill lantern token/);
+  assert.doesNotMatch(html, /Show \d+ more passages/i);
 });

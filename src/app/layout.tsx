@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import AccessHashBootstrap from '@/components/AccessHashBootstrap';
+import AccessHashGuard from '@/components/AccessHashGuard';
 import ThemeBootstrap from '@/components/ThemeBootstrap';
 import { ARCHIVE_NAME, ARCHIVE_SUBTITLE } from '@/lib/site';
 import './globals.css';
@@ -11,5 +13,16 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en" suppressHydrationWarning><head><ThemeBootstrap /></head><body>{children}</body></html>;
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <ThemeBootstrap />
+        <AccessHashBootstrap />
+      </head>
+      <body>
+        <AccessHashGuard />
+        {children}
+      </body>
+    </html>
+  );
 }

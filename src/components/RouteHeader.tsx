@@ -6,15 +6,6 @@ import { trackArchiveEvent } from '../lib/analytics';
 import { ARCHIVE_NAME } from '../lib/site';
 import ThemeControl from './ThemeControl';
 
-function stripObsoleteAccessHash() {
-  if (typeof window === 'undefined') return;
-  const hash = window.location.hash;
-  if (!hash || !/^#access=/i.test(hash)) return;
-  const clean = new URL(window.location.href);
-  clean.hash = '';
-  window.history.replaceState(window.history.state, '', clean.pathname + clean.search);
-}
-
 export default function RouteHeader({
   activeSection,
   sessionCount,
@@ -33,13 +24,8 @@ export default function RouteHeader({
   const shareInput = useRef<HTMLInputElement>(null);
   const shareRequestIdRef = useRef(0);
 
-  useEffect(() => {
-    stripObsoleteAccessHash();
-    window.addEventListener('hashchange', stripObsoleteAccessHash);
-    return () => {
-      shareRequestIdRef.current += 1;
-      window.removeEventListener('hashchange', stripObsoleteAccessHash);
-    };
+  useEffect(() => () => {
+    shareRequestIdRef.current += 1;
   }, []);
 
   useEffect(() => {
