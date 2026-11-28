@@ -95,9 +95,96 @@ class InferredAgeImporterTests(unittest.TestCase):
         self.assertIn('78 archived research transcripts', ctx)
         self.assertIn('(inferred from filename)', ctx)
         self.assertIn('Dates are never inferred', ctx)
+        self.assertNotIn('/?document=', ctx)
+        self.assertIn('](/research/annotation-provenance)', ctx)
+        self.assertIn('](/research/transcript-associations)', ctx)
+        self.assertIn('](/research/transcript-coverage-explanation)', ctx)
+        self.assertIn('](/research/research)', ctx)
         # Preserve exact anchor phrases expected by scripts/add-listening-copies.mjs.
         self.assertIn('Associated audio is available for playback and download in its original file format. MP3 is the preferred playback format where the entry has one;', ctx)
         self.assertIn('Audio files are provided without transcoding or editing.', ctx)
+
+
+class ResearchDocumentLinkImporterTests(unittest.TestCase):
+    def test_rewrite_document_markdown_emits_research_routes_for_internal_documents(self) -> None:
+        library = Path('/tmp/fake-library')
+        workspace = Path('/tmp/fake-workspace')
+        source = library / 'research' / 'SOURCES.md'
+        quality = (library / 'research' / 'SOURCE-QUALITY.md').resolve()
+        methods = (workspace / 'outputs' / 'methods.md').resolve()
+
+        markdown = (
+            'See [quality notes](SOURCE-QUALITY.md), '
+            '[quality details](SOURCE-QUALITY.md#notes), '
+            'and [methods](../../fake-workspace/outputs/methods.md).'
+        )
+        counts = IMPORTER.Counter()
+        rewritten = IMPORTER.rewrite_document_markdown(
+            markdown,
+            source,
+            library=library,
+            workspace=workspace,
+            paths_to_external={},
+            paths_to_entries={},
+            paths_to_assets={},
+            paths_to_documents={
+                str(quality): 'research-source-quality',
+                str(methods): 'methods-and-audit',
+            },
+            rewritten_link_counts=counts,
+        )
+        self.assertIn('[quality notes](/research/research-source-quality)', rewritten)
+        self.assertIn('[quality details](/research/research-source-quality#notes)', rewritten)
+        self.assertIn('[methods](/research/methods-and-audit)', rewritten)
+        self.assertNotIn('/?document=', rewritten)
+        self.assertEqual(counts['document'], 3)
+
+    def test_validate_reader_document_href_accepts_research_routes_and_rejects_legacy_document_links(self) -> None:
+        entry_ids = {'archive-010626'}
+        document_ids = {'research', 'annotation-provenance', 'research-source-quality'}
+        asset_ids = {'a' * 32}
+
+        for valid_href in [
+            '/research',
+            '/research/research',
+            '/research/annotation-provenance',
+            '/research/research-source-quality#section-1',
+            '/about',
+            '/about#inferred-ages',
+            '/?entry=archive-010626',
+            f'/api/assets/{"a" * 32}',
+            '#local-anchor',
+            'https://doi.org/10.21415/T5NS4D',
+        ]:
+            with self.subTest(valid_href=valid_href):
+                self.assertTrue(
+                    IMPORTER.validate_reader_document_href(
+                        valid_href,
+                        entry_ids=entry_ids,
+                        document_ids=document_ids,
+                        asset_ids=asset_ids,
+                    )
+                )
+
+        for invalid_href in [
+            '/?document=research',
+            '/?document=annotation-provenance',
+            '/research/',
+            '/research/unknown-doc',
+            '/research/research/extra',
+            '/research/research?foo=bar',
+            '/?entry=unknown-entry',
+            'https://untrusted.example.invalid/doc',
+        ]:
+            with self.subTest(invalid_href=invalid_href):
+                self.assertFalse(
+                    IMPORTER.validate_reader_document_href(
+                        invalid_href,
+                        entry_ids=entry_ids,
+                        document_ids=document_ids,
+                        asset_ids=asset_ids,
+                    )
+                )
 
 
 class SessionSlugImporterTests(unittest.TestCase):

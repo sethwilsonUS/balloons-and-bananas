@@ -43,20 +43,41 @@ async function main() {
 
   const appPathsManifestPath = path.join(nextDir, 'server', 'app-paths-manifest.json');
   const appPathsManifest = JSON.parse(await readFile(appPathsManifestPath, 'utf8'));
-  if (!Object.hasOwn(appPathsManifest, '/sessions/[id]/page')) {
-    throw new Error('Expected /sessions/[id]/page in .next/server/app-paths-manifest.json');
+  const requiredDynamicRoutes = [
+    '/sessions/[id]/page',
+    '/research/page',
+    '/research/[doc]/page',
+    '/about/page',
+  ];
+  for (const routeKey of requiredDynamicRoutes) {
+    if (!Object.hasOwn(appPathsManifest, routeKey)) {
+      throw new Error(`Expected ${routeKey} in .next/server/app-paths-manifest.json`);
+    }
   }
 
-  const sessionsServerDir = path.join(nextDir, 'server', 'app', 'sessions');
-  const prerenderedSessionHtmlFiles = (await exists(sessionsServerDir))
-    ? (await collectFiles(sessionsServerDir))
-      .filter(filePath => filePath.toLowerCase().endsWith('.html'))
-      .map(filePath => path.relative(process.cwd(), filePath))
-    : [];
-  const prerenderedSessionHtmlPresent = prerenderedSessionHtmlFiles.length > 0;
-  if (prerenderedSessionHtmlPresent) {
+  const appServerRoot = path.join(nextDir, 'server', 'app');
+  const prerenderedDynamicHtmlFiles = [];
+  for (const segment of ['sessions', 'research', 'about']) {
+    const htmlFile = path.join(appServerRoot, `${segment}.html`);
+    if (await exists(htmlFile)) {
+      prerenderedDynamicHtmlFiles.push(path.relative(process.cwd(), htmlFile));
+    }
+    const segmentDir = path.join(appServerRoot, segment);
+    if (await exists(segmentDir)) {
+      for (const filePath of await collectFiles(segmentDir)) {
+        if (filePath.toLowerCase().endsWith('.html')) {
+          prerenderedDynamicHtmlFiles.push(path.relative(process.cwd(), filePath));
+        }
+      }
+    }
+  }
+  const prerenderedSessionHtmlPresent = prerenderedDynamicHtmlFiles.some(
+    filePath => filePath.includes(`${path.sep}sessions`) || filePath.endsWith('sessions.html'),
+  );
+  const prerenderedDynamicHtmlPresent = prerenderedDynamicHtmlFiles.length > 0;
+  if (prerenderedDynamicHtmlPresent) {
     throw new Error(
-      `Dynamic /sessions/[id] route must never be prerendered to static HTML (found: ${prerenderedSessionHtmlFiles.join(', ')}).`,
+      `Dynamic archive routes must never be prerendered to static HTML (found: ${prerenderedDynamicHtmlFiles.join(', ')}).`,
     );
   }
 
@@ -76,6 +97,13 @@ async function main() {
   }
   for (const doc of fixture.documents || []) {
     if (doc.title && doc.title !== 'Sources and methods') phrases.add(doc.title);
+    if (doc.description && doc.description.length >= 16) phrases.add(doc.description);
+    for (const line of String(doc.markdown || '').split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.length >= 32 && !trimmed.startsWith('#') && !trimmed.startsWith('|')) {
+        phrases.add(trimmed);
+      }
+    }
   }
 
   const needles = [...phrases].map(raw => ({ raw, lower: raw.toLowerCase() }));
@@ -105,7 +133,9 @@ async function main() {
   console.log(JSON.stringify({
     ok: true,
     routeBuilt: '/sessions/[id]/page',
+    routesBuilt: requiredDynamicRoutes,
     prerenderedSessionHtmlPresent,
+    prerenderedDynamicHtmlPresent,
     filesScanned: files.length,
     phrasesChecked: needles.length,
     leaks: [],

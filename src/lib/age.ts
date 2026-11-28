@@ -1,4 +1,7 @@
-/** Document explaining source ages and filename-inferred ages (migrates to /about in ticket 11). */
+/** Section anchor on `/about` explaining source ages and filename-inferred ages. */
+export const INFERRED_AGE_EXPLANATION_HREF = '/about#inferred-ages';
+
+/** Legacy research document ID retained for compatibility references. */
 export const INFERRED_AGE_EXPLANATION_DOC_ID = 'methods-and-audit';
 
 export interface ParsedChatAge {

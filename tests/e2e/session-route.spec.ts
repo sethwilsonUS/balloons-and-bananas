@@ -163,7 +163,7 @@ test('/sessions/[id] handles inferred ages, multiple recordings, unaged no-audio
   await expect(localRecord).toContainText('2 years, 6 months, 4 days');
   await expect(localRecord).toContainText('(2;06.04)');
   const inferredLink = localRecord.getByRole('link', { name: /\(inferred from filename\)/i });
-  await expect(inferredLink).toHaveAttribute('href', '/?document=methods-and-audit');
+  await expect(inferredLink).toHaveAttribute('href', '/about#inferred-ages');
   await expect(localRecord.locator('dt', { hasText: /^Date$/ })).toHaveCount(0);
   await auditAllThemes(page, '/sessions/020604-local');
 
