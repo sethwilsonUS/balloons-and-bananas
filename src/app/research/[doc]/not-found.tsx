@@ -8,7 +8,7 @@ export default function ResearchDocumentNotFound() {
     <div className="archive-shell">
       <RouteHeader activeSection="research" />
       <main id="main" tabIndex={-1} className="reading-layout">
-        <section className="session-not-found reading-column" aria-labelledby="not-found-heading">
+        <section className="not-found-page reading-column" aria-labelledby="not-found-heading">
           <p className="eyebrow">404 · Document not found</p>
           <h1 id="not-found-heading">This research document could not be found</h1>
           <p className="section-intro">

@@ -8,11 +8,11 @@ export default function SessionNotFound() {
     <div className="archive-shell">
       <RouteHeader activeSection="sessions" />
       <main id="main" tabIndex={-1} className="reading-layout">
-        <section className="session-not-found reading-column" aria-labelledby="not-found-heading">
+        <section className="not-found-page reading-column" aria-labelledby="not-found-heading">
           <p className="eyebrow">404 · Session not found</p>
           <h1 id="not-found-heading">This session could not be found</h1>
           <p className="section-intro">
-            No session in {ARCHIVE_NAME} matches this URL. Check the session ID, or search the collection to find the session you need.
+            No session in {ARCHIVE_NAME} matches this URL; check the session ID or search the collection.
           </p>
           <div className="not-found-actions">
             <a className="button primary" href="/search">

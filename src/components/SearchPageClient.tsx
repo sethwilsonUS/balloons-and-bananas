@@ -717,7 +717,7 @@ export default function SearchPageClient({
       <RouteHeader activeSection="search" />
       <main id="main" tabIndex={-1} className="browsing-layout">
         <section className="browse-section search-route" aria-labelledby="search-heading">
-          <header className="route-page-header">
+          <header className="page-header">
             <p className="eyebrow">Collection search</p>
             <h1 id="search-heading">Search the archive</h1>
             <p className="section-intro">
@@ -736,7 +736,7 @@ export default function SearchPageClient({
           ) : (
             <>
               <form className="search-form" onSubmit={handleSubmit} role="search" aria-label="Search the collection">
-                <div className="field main-search">
+                <div className="field">
                   <label htmlFor="archive-search">Search sessions and transcripts</label>
                   <div className="search-input">
                     <Search size={21} aria-hidden="true" />

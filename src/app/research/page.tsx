@@ -1,7 +1,6 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import { connection } from 'next/server';
-import { BookOpen } from 'lucide-react';
 import { archive } from '@/lib/archive';
 import { extractReferencedSessionSlugs, getResearchDocuments } from '@/lib/research';
 import { ARCHIVE_NAME, formatDocumentTitle } from '@/lib/site';
@@ -36,12 +35,9 @@ export default async function ResearchPage() {
       <RouteHeader activeSection="research" />
       <main id="main" tabIndex={-1} className="browsing-layout">
         <section className="research-section research-page" aria-labelledby="research-heading">
-          <header className="detail-header page-header">
+          <header className="page-header">
             <p className="eyebrow">Background &amp; provenance</p>
-            <div className="page-title-row">
-              <h1 id="research-heading">Research &amp; context</h1>
-              <BookOpen size={30} strokeWidth={1.3} aria-hidden="true" />
-            </div>
+            <h1 id="research-heading">Research &amp; context</h1>
             <p className="section-intro">
               Archival notes, provenance guides, and background scholarship for this collection; see <a href="/about">About &amp; methods</a> for transcript origins, inferred ages, and site methods.
             </p>

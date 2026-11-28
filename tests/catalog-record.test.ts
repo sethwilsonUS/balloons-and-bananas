@@ -111,3 +111,42 @@ test('globals.css defines modular type scale tokens, zero remote fonts, and neve
     );
   }
 });
+
+test('globals.css keeps canonical non-landmark layout classes and omits deleted Phase 4 legacy selectors', async () => {
+  const css = await readFile(path.resolve('src/app/globals.css'), 'utf8');
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  for (const canonical of [
+    '.reading-layout',
+    '.reading-column',
+    '.reading-sidebar',
+    '.browsing-layout',
+    '.page-header',
+    '.not-found-page',
+  ]) {
+    assert.ok(stripped.includes(canonical), `Expected canonical selector ${canonical} in globals.css`);
+  }
+
+  for (const legacy of [
+    '.layout-reading',
+    '.layout-browsing',
+    '.layout-main',
+    '.layout-sidebar',
+    '.collection-mark',
+    '.cue-button',
+    '.transcript-playback-tools',
+    '.inline-status',
+    '.section-label',
+    '.route-page-header',
+    '.page-title-row',
+    '.session-not-found',
+    '.audio-panel--empty',
+    '--rust-soft',
+  ]) {
+    assert.equal(
+      stripped.includes(legacy),
+      false,
+      `Legacy or unused token/selector ${legacy} should remain deleted from globals.css`,
+    );
+  }
+});
