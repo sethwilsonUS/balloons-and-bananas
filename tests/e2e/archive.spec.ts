@@ -63,8 +63,8 @@ test('overview loads, theme toggle switches light/dark/system themes, and axe is
   await page.goto('/');
 
   await expect(page.getByRole('heading', { level: 1, name: /the seth tapes/i })).toBeVisible();
-  await expect(page.locator('.collection-note')).toContainText('4 sessions');
-  await expect(page.locator('.collection-note')).toContainText('3 original recordings');
+  await expect(page.locator('.source-key')).toContainText('4 sessions');
+  await expect(page.locator('.source-key')).toContainText('3 original recordings');
   await expect(page.locator('.source-key')).toContainText('2 archived research');
   await expect(page.locator('.source-key')).toContainText('1 TalkBank AI draft');
   await expect(page.locator('.source-key')).toContainText('1 local AI draft');

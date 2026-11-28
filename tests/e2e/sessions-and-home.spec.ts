@@ -102,10 +102,10 @@ test('functional homepage / renders per request with private headers, search for
   await expect(page.locator('.masthead > p')).toHaveText('A childhood-language archive from the Peters/Wilson corpus');
   await expectContinuousHeadingHierarchy(page, '/');
 
-  // Entry points: Browse by age -> /sessions, Research & context -> /research, Themes -> /search?topic=...
+  // Entry points: Browse by age -> /sessions, Themes -> /search?topic=..., Research & methods -> /research + /about
   const browseByAge = page.getByRole('link', { name: /Browse by age/i });
   await expect(browseByAge).toHaveAttribute('href', '/sessions');
-  const researchEntry = page.locator('.home-entry-grid').getByRole('link', { name: /Research & context/i });
+  const researchEntry = page.locator('.home-entry-grid').getByRole('link', { name: /Research & methods/i });
   await expect(researchEntry).toHaveAttribute('href', '/research');
 
   const themeLinks = page.locator('.theme-discovery .theme-shortcuts a');
@@ -119,9 +119,9 @@ test('functional homepage / renders per request with private headers, search for
     '/search?topic=Learning%20and%20questions',
   );
 
-  // Live collection counts and provenance summary linking to /about
-  await expect(page.locator('.collection-note')).toContainText('4 sessions');
-  await expect(page.locator('.collection-note')).toContainText('3 original recordings');
+  // Live collection counts and one-paragraph provenance summary linking to /about
+  await expect(page.locator('.source-key')).toContainText('4 sessions');
+  await expect(page.locator('.source-key')).toContainText('3 original recordings');
   await expect(page.locator('.source-key')).toContainText('2 archived research');
   await expect(page.locator('.source-key')).toContainText('1 TalkBank AI draft');
   await expect(page.locator('.source-key')).toContainText('1 local AI draft');
