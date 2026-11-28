@@ -1,24 +1,60 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { connection } from 'next/server';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { archive } from '@/lib/archive';
+import { formatAge } from '@/lib/age';
+import {
+  type AdjacentSession,
+  formatAdjacentAgeSummary,
+  getAdjacentSessions,
+  resolveBackToResultsUrl,
+} from '@/lib/session-reading';
 import { findSessionBySlug } from '@/lib/sessions';
 import { ARCHIVE_NAME, formatDocumentTitle, formatSessionPageTitle } from '@/lib/site';
 import RouteHeader from '@/components/RouteHeader';
 import SessionCatalogRecord from '@/components/SessionCatalogRecord';
 import SessionPageClient from '@/components/SessionPageClient';
+import SessionStickyNav from '@/components/SessionStickyNav';
 import { TopicLabels } from '@/components/TopicThemes';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const loadSession = cache(async (rawId: string) => {
+const loadSessionContext = cache(async (rawId: string) => {
   await connection();
   const data = await archive();
-  return findSessionBySlug(data.sessions, rawId);
+  const lookup = findSessionBySlug(data.sessions, rawId);
+  if (!lookup) return null;
+  const adjacent = getAdjacentSessions(data.sessions, lookup.session.slug);
+  return { lookup, adjacent };
 });
+
+function resolveRequestOrigin(headerList: Headers): string {
+  const forwardedHost = headerList.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const host = forwardedHost || headerList.get('host')?.trim() || 'localhost';
+  const forwardedProto = headerList.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const proto = forwardedProto === 'https' || forwardedProto === 'http' ? forwardedProto : 'http';
+  try {
+    return new URL(`${proto}://${host}`).origin;
+  } catch {
+    return 'http://localhost';
+  }
+}
+
+function AdjacentAgeText({ session }: { session: AdjacentSession }) {
+  const summary = formatAdjacentAgeSummary(session);
+  if (summary.inferred && session.inferredAge) {
+    return (
+      <>
+        {formatAge(session.inferredAge)} ({session.inferredAge}, <em>inferred from filename</em>)
+      </>
+    );
+  }
+  return <>{summary.text}</>;
+}
 
 export async function generateMetadata({
   params,
@@ -26,49 +62,99 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const lookup = await loadSession(id);
-  if (!lookup) {
+  const result = await loadSessionContext(id);
+  if (!result) {
     return {
       title: formatDocumentTitle({ kind: 'session', notFound: true }),
       description: `Session not found in ${ARCHIVE_NAME}.`,
     };
   }
   return {
-    title: formatSessionPageTitle(lookup.session),
-    description: `Session ${lookup.session.slug} in ${ARCHIVE_NAME}.`,
+    title: formatSessionPageTitle(result.lookup.session),
+    description: `Session ${result.lookup.session.slug} in ${ARCHIVE_NAME}.`,
   };
 }
 
 export default async function SessionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { id } = await params;
-  const lookup = await loadSession(id);
-  if (!lookup) {
+  const [{ id }, resolvedSearchParams, headerList] = await Promise.all([
+    params,
+    searchParams,
+    headers(),
+  ]);
+  const result = await loadSessionContext(id);
+  if (!result) {
     notFound();
   }
+  const { lookup, adjacent } = result;
+  const rawFrom = Array.isArray(resolvedSearchParams.from)
+    ? resolvedSearchParams.from[0]
+    : resolvedSearchParams.from;
+  const requestOrigin = resolveRequestOrigin(headerList);
+  const explicitFrom = resolveBackToResultsUrl(rawFrom, requestOrigin);
   if (!lookup.canonical) {
-    redirect(`/sessions/${encodeURIComponent(lookup.session.slug)}`);
+    const canonicalPath = `/sessions/${encodeURIComponent(lookup.session.slug)}`;
+    redirect(explicitFrom ? `${canonicalPath}?from=${encodeURIComponent(explicitFrom)}` : canonicalPath);
   }
   const { session } = lookup;
+
+  const resolvedBackHref = explicitFrom ?? resolveBackToResultsUrl(headerList.get('referer'), requestOrigin);
 
   return (
     <div className="archive-shell">
       <RouteHeader activeSection="sessions" showShare sharePath={`/sessions/${encodeURIComponent(session.slug)}`} />
       <main id="main" tabIndex={-1}>
         <article className="session-detail session-page">
-          <a className="text-link back-button" href="/?section=sessions">
-            <ArrowLeft size={17} aria-hidden="true" />
-            Browse &amp; search sessions
-          </a>
           <header className="detail-header">
             <p className="eyebrow">Session {session.slug}</p>
             <h1>{session.title}</h1>
             <SessionCatalogRecord session={session} />
+            {(adjacent.previous || adjacent.next) && (
+              <nav className="session-adjacent-nav" aria-label="Adjacent sessions in age order">
+                {adjacent.previous && (
+                  <a
+                    className="session-step-link session-step-prev"
+                    href={`/sessions/${encodeURIComponent(adjacent.previous.slug)}`}
+                  >
+                    <span className="session-step-direction">
+                      <ArrowLeft size={16} aria-hidden="true" />
+                      Previous session
+                    </span>
+                    <span className="session-step-target">
+                      <code className="session-step-slug">{adjacent.previous.slug}</code>
+                      <span className="session-step-age">
+                        <AdjacentAgeText session={adjacent.previous} />
+                      </span>
+                    </span>
+                  </a>
+                )}
+                {adjacent.next && (
+                  <a
+                    className="session-step-link session-step-next"
+                    href={`/sessions/${encodeURIComponent(adjacent.next.slug)}`}
+                  >
+                    <span className="session-step-direction">
+                      Next session
+                      <ArrowRight size={16} aria-hidden="true" />
+                    </span>
+                    <span className="session-step-target">
+                      <code className="session-step-slug">{adjacent.next.slug}</code>
+                      <span className="session-step-age">
+                        <AdjacentAgeText session={adjacent.next} />
+                      </span>
+                    </span>
+                  </a>
+                )}
+              </nav>
+            )}
           </header>
-          <section className="guide-overview-section" aria-labelledby="guide-overview-heading">
+          <SessionStickyNav initialBackHref={resolvedBackHref} />
+          <section id="guide" className="guide-overview-section" aria-labelledby="guide-overview-heading">
             <div className="section-heading">
               <div>
                 <p className="eyebrow">AI-written companion</p>
