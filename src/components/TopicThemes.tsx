@@ -15,7 +15,7 @@ export function ThemeShortcutLinks({ topics }: {
     '--theme-cols': String(columns),
   } as CSSProperties;
   return <nav className="theme-shortcuts" aria-label="Browse by theme" style={gridStyle}>
-    {available.map((theme, index) => <a key={theme.topic} href={`/search?topic=${encodeURIComponent(theme.topic)}`} className="button secondary theme-shortcut"
+    {available.map((theme, index) => <a key={theme.topic} href={`/search?topic=${encodeURIComponent(theme.topic)}`} className="theme-chip"
       style={{ '--compact-span': String(compactSpans[index]) } as CSSProperties}>
       {theme.label}
     </a>)}

@@ -38,7 +38,7 @@ export default async function SessionsPage({
             <p className="eyebrow">Browse by age</p>
             <h1 id="sessions-page-heading">Sessions</h1>
             <p className="section-intro">
-              Every session in {ARCHIVE_NAME}, organized from youngest to oldest in six-month age bands by source or filename-inferred age. For full-text, theme, or linguistic search, open <a href="/search">Search</a>.
+              Every session in {ARCHIVE_NAME}, ordered youngest to oldest in six-month age bands, or open <a href="/search">Search</a> for full-text, theme, and linguistic filters.
             </p>
           </header>
           <SessionsBrowseClient sessions={items} initialOrigin={initialOrigin} />
