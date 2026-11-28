@@ -365,6 +365,19 @@ test('sticky In this session nav keeps targets uncovered, resolves safe Back to 
   expect(refRes.status()).toBe(200);
   expect(await refRes.text()).toContain('href="/search?q=bridge"');
 
+  // Canonical casing redirect preserves a validated ?from= return destination and drops invalid ones
+  const canonicalFromRes = await request.get('/sessions/020110-TB?from=%2Fsearch%3Fq%3Dbridge', {
+    maxRedirects: 0,
+  });
+  expect([307, 308]).toContain(canonicalFromRes.status());
+  expect(canonicalFromRes.headers()['location']).toMatch(/\/sessions\/020110-tb\?from=%2Fsearch%3Fq%3Dbridge$/);
+
+  const canonicalBadFromRes = await request.get('/sessions/020110-TB?from=https%3A%2F%2Fevil.example%2Fsearch', {
+    maxRedirects: 0,
+  });
+  expect([307, 308]).toContain(canonicalBadFromRes.status());
+  expect(canonicalBadFromRes.headers()['location']).toMatch(/\/sessions\/020110-tb$/);
+
   // No query or archive text stored in localStorage / sessionStorage
   const storageDump = await page.evaluate(() => ({
     local: Object.entries(window.localStorage),

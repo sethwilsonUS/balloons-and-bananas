@@ -10,7 +10,7 @@ import {
   type AdjacentSession,
   formatAdjacentAgeSummary,
   getAdjacentSessions,
-  getBackToResultsHref,
+  resolveBackToResultsUrl,
 } from '@/lib/session-reading';
 import { findSessionBySlug } from '@/lib/sessions';
 import { ARCHIVE_NAME, formatDocumentTitle, formatSessionPageTitle } from '@/lib/site';
@@ -92,19 +92,18 @@ export default async function SessionPage({
     notFound();
   }
   const { lookup, adjacent } = result;
-  if (!lookup.canonical) {
-    redirect(`/sessions/${encodeURIComponent(lookup.session.slug)}`);
-  }
-  const { session } = lookup;
-
   const rawFrom = Array.isArray(resolvedSearchParams.from)
     ? resolvedSearchParams.from[0]
     : resolvedSearchParams.from;
   const requestOrigin = resolveRequestOrigin(headerList);
-  const backToResultsHref = getBackToResultsHref(
-    [rawFrom, headerList.get('referer')],
-    requestOrigin,
-  );
+  const explicitFrom = resolveBackToResultsUrl(rawFrom, requestOrigin);
+  if (!lookup.canonical) {
+    const canonicalPath = `/sessions/${encodeURIComponent(lookup.session.slug)}`;
+    redirect(explicitFrom ? `${canonicalPath}?from=${encodeURIComponent(explicitFrom)}` : canonicalPath);
+  }
+  const { session } = lookup;
+
+  const resolvedBackHref = explicitFrom ?? resolveBackToResultsUrl(headerList.get('referer'), requestOrigin);
 
   return (
     <div className="archive-shell">
@@ -154,7 +153,7 @@ export default async function SessionPage({
               </nav>
             )}
           </header>
-          <SessionStickyNav initialBackHref={backToResultsHref} />
+          <SessionStickyNav initialBackHref={resolvedBackHref} />
           <section id="guide" className="guide-overview-section" aria-labelledby="guide-overview-heading">
             <div className="section-heading">
               <div>

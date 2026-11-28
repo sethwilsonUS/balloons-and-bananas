@@ -8,21 +8,26 @@ import {
 } from '../lib/session-reading';
 
 export default function SessionStickyNav({
-  initialBackHref = DEFAULT_BACK_TO_RESULTS_HREF,
+  initialBackHref = null,
 }: {
-  initialBackHref?: string;
+  initialBackHref?: string | null;
 }) {
   const navRef = useRef<HTMLElement>(null);
-  const [backHref, setBackHref] = useState(initialBackHref);
+  const [backHref, setBackHref] = useState(initialBackHref ?? DEFAULT_BACK_TO_RESULTS_HREF);
 
   useEffect(() => {
-    setBackHref(initialBackHref);
-    if (initialBackHref !== DEFAULT_BACK_TO_RESULTS_HREF) return;
-    if (typeof document === 'undefined' || !document.referrer) return;
-    const fromReferrer = resolveBackToResultsUrl(document.referrer, window.location.origin);
-    if (fromReferrer) {
-      setBackHref(fromReferrer);
+    if (initialBackHref) {
+      setBackHref(initialBackHref);
+      return;
     }
+    if (typeof document !== 'undefined' && document.referrer) {
+      const fromReferrer = resolveBackToResultsUrl(document.referrer, window.location.origin);
+      if (fromReferrer) {
+        setBackHref(fromReferrer);
+        return;
+      }
+    }
+    setBackHref(DEFAULT_BACK_TO_RESULTS_HREF);
   }, [initialBackHref]);
 
   useEffect(() => {

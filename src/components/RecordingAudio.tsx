@@ -451,10 +451,17 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       return { status: 'out-of-range', duration: maxKnownDuration };
     }
 
+    const effectiveRecordingDuration = (item: Recording) =>
+      isLoadedSelected && item.id === selected?.id && loadedDuration !== null
+        ? loadedDuration
+        : item.duration;
     const selectedDuration = loadedDuration ?? (selected?.duration || 0);
     let recording = selected;
     if (!recording?.available || (selectedDuration > 0 && seconds >= selectedDuration)) {
-      recording = available.find(item => item.duration <= 0 || seconds < item.duration);
+      recording = available.find(item => {
+        const itemDuration = effectiveRecordingDuration(item);
+        return itemDuration <= 0 || seconds < itemDuration;
+      });
     }
     if (!recording) {
       return { status: 'out-of-range', duration: maxKnownDuration };
@@ -529,6 +536,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   useEffect(() => {
     if (!source || !playing || !selected?.available) return;
     const timeout = window.setTimeout(() => {
+      if (audio.current?.paused) return;
       void load(selected, lastPosition.current, true);
     }, Math.max(0, source.expiresAt - Date.now() - 30_000));
     return () => window.clearTimeout(timeout);

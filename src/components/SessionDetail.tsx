@@ -75,7 +75,7 @@ export function SessionBody({
   const SectionHeading = headingLevel === 2 ? 'h2' : 'h3';
   const MomentHeading = headingLevel === 2 ? 'h3' : 'h4';
   const [jump, setJump] = useState<{ index: number; serial: number } | null>(null);
-  const [hashPassage, setHashPassage] = useState<number | null>(null);
+  const [selectedPassage, setSelectedPassage] = useState<number | null>(targetPassage);
   const [message, setMessage] = useState('');
   const [currentTime, setCurrentTime] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -87,14 +87,17 @@ export function SessionBody({
   const activeIndex = useMemo(() => currentTime === null ? null : session.transcript.findIndex(passage =>
     typeof passage.start === 'number' && typeof passage.end === 'number'
     && passage.start <= currentTime && passage.end > currentTime), [currentTime, session.transcript]);
-  const effectivePassage = targetPassage ?? hashPassage;
-  const linkedIndex = effectivePassage !== null && Number.isSafeInteger(effectivePassage) && effectivePassage > 0 && effectivePassage <= session.transcript.length
-    ? effectivePassage - 1
+  const linkedIndex = selectedPassage !== null && Number.isSafeInteger(selectedPassage) && selectedPassage > 0 && selectedPassage <= session.transcript.length
+    ? selectedPassage - 1
     : null;
   const targetPassageValid = targetPassage !== null && Number.isSafeInteger(targetPassage) && targetPassage > 0 && targetPassage <= session.transcript.length;
 
   useEffect(() => {
-    if (targetPassage === null) return;
+    if (targetPassage === null) {
+      if (!enableHashNavigation) setSelectedPassage(null);
+      return;
+    }
+    setSelectedPassage(targetPassage);
     if (!targetPassageValid) {
       setMessage(`Passage ${targetPassage} is outside this transcript. The available transcript is shown below.`);
       setJump(null);
@@ -102,10 +105,10 @@ export function SessionBody({
     }
     setMessage(`Showing transcript passage ${targetPassage}, with surrounding passages for context.`);
     setJump(value => ({ index: targetPassage - 1, serial: (value?.serial || 0) + 1 }));
-  }, [targetPassage, targetPassageValid]);
+  }, [enableHashNavigation, targetPassage, targetPassageValid]);
 
   const jumpToPassage = useCallback((passageNumber: number) => {
-    setHashPassage(passageNumber);
+    setSelectedPassage(passageNumber);
     if (!Number.isSafeInteger(passageNumber) || passageNumber < 1 || passageNumber > session.transcript.length) {
       setMessage(`Passage ${passageNumber} is outside this transcript. The available transcript is shown below.`);
       setJump(null);
@@ -118,14 +121,14 @@ export function SessionBody({
   const applySessionHash = useCallback((rawHash: string) => {
     const parsed = parseSessionHash(rawHash);
     if (!parsed) {
-      setHashPassage(null);
+      setSelectedPassage(null);
       return;
     }
     if (parsed.kind === 'passage') {
       jumpToPassage(parsed.passage);
       return;
     }
-    setHashPassage(null);
+    setSelectedPassage(null);
     const prepared = player.current?.prepareAt(parsed.seconds) ?? { status: 'no-audio' as const };
     const nearest = findNearestPassageIndex(session.transcript, parsed.seconds);
     setMessage(formatTimeReadyAnnouncement(parsed.seconds, prepared.status, {
