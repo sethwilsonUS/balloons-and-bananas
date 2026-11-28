@@ -1,13 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ageFilterBucket,
+  buildAgeSelectOptions,
   compareParsedAges,
   compareSessionsByAge,
+  computeArchiveAgeBounds,
   effectiveSessionAge,
   filenameStem,
   formatAge,
+  formatAgeMonths,
+  formatAgeMonthsChat,
   inferAgeFromStem,
+  isValidAgeMonths,
+  MAX_AGE_MONTHS,
+  parseAgeMonthsParam,
   parseChatAge,
+  parsedAgeMonthBounds,
+  sessionMatchesAgeRange,
 } from '../src/lib/age';
 
 test('CHAT ages become readable units with correct singular, plural and explicit zero fields', () => {
@@ -128,4 +138,81 @@ test('compareSessionsByAge sorts by source-or-inferred age, breaks ties by filen
     'no-age-a',
     'no-age-b',
   ]);
+});
+
+test('age-range helpers validate month bounds, format readable CHAT labels, and filter source-or-inferred ages inclusively', () => {
+  assert.equal(isValidAgeMonths(0), true);
+  assert.equal(isValidAgeMonths(24), true);
+  assert.equal(isValidAgeMonths(MAX_AGE_MONTHS), true);
+  for (const invalid of [-1, MAX_AGE_MONTHS + 1, 1.5, NaN, Infinity, '24', null, undefined, {}]) {
+    assert.equal(isValidAgeMonths(invalid), false);
+  }
+
+  assert.equal(parseAgeMonthsParam('0'), 0);
+  assert.equal(parseAgeMonthsParam(' 24 '), 24);
+  assert.equal(parseAgeMonthsParam(String(MAX_AGE_MONTHS)), MAX_AGE_MONTHS);
+  for (const invalid of ['', '   ', '-1', '+24', '24.5', '24mo', '1e2', '241', 'abc', null, undefined]) {
+    assert.equal(parseAgeMonthsParam(invalid), undefined);
+  }
+
+  assert.equal(formatAgeMonthsChat(0), '0;00');
+  assert.equal(formatAgeMonthsChat(20), '1;08');
+  assert.equal(formatAgeMonthsChat(24), '2;00');
+  assert.equal(formatAgeMonths(20), '1 year, 8 months (1;08)');
+  assert.equal(formatAgeMonths(25), '2 years, 1 month (2;01)');
+
+  assert.deepEqual(parsedAgeMonthBounds(parseChatAge('2;06.04')!), { min: 30, max: 30 });
+  assert.deepEqual(parsedAgeMonthBounds(parseChatAge('2;')!), { min: 24, max: 35 });
+
+  const sourceYoung = { ages: ['1;08.15'], inferredAge: null };
+  const sourceMid = { ages: ['2;01.10'], inferredAge: null };
+  const inferredOlder = { ages: [], inferredAge: '2;06.04' };
+  const unaged = { ages: [], inferredAge: null };
+  const yearOnly = { ages: ['2;'], inferredAge: null };
+  const newborn = { ages: ['0;00.05'], inferredAge: null };
+
+  // Unfiltered includes every session including unaged.
+  assert.equal(sessionMatchesAgeRange(unaged), true);
+
+  // Six-month age band 2;00-2;05 (24..29) includes 2;01.10 and excludes 1;08.15, 2;06.04, unaged.
+  assert.equal(sessionMatchesAgeRange(sourceYoung, 24, 29), false);
+  assert.equal(sessionMatchesAgeRange(sourceMid, 24, 29), true);
+  assert.equal(sessionMatchesAgeRange(inferredOlder, 24, 29), false);
+  assert.equal(sessionMatchesAgeRange(unaged, 24, 29), false);
+
+  // Month boundary inclusivity: 2;06.04 falls inside month 30 (2;06).
+  assert.equal(sessionMatchesAgeRange(inferredOlder, 24, 30), true);
+  assert.equal(sessionMatchesAgeRange(inferredOlder, 30, 30), true);
+  assert.equal(sessionMatchesAgeRange(inferredOlder, 31, undefined), false);
+
+  // Zero-month lower/upper bound is never treated as unset.
+  assert.equal(sessionMatchesAgeRange(newborn, 0, 0), true);
+  assert.equal(sessionMatchesAgeRange(sourceYoung, 0, 0), false);
+  assert.equal(sessionMatchesAgeRange(unaged, 0, undefined), false);
+
+  // Year-only precision does not invent months: matches 24..35 and ageMin=24, not ageMin=25 or ageMax=30.
+  assert.equal(sessionMatchesAgeRange(yearOnly, 24, 35), true);
+  assert.equal(sessionMatchesAgeRange(yearOnly, 24, undefined), true);
+  assert.equal(sessionMatchesAgeRange(yearOnly, 25, undefined), false);
+  assert.equal(sessionMatchesAgeRange(yearOnly, undefined, 30), false);
+  assert.equal(sessionMatchesAgeRange(yearOnly, undefined, 35), true);
+
+  // Inverted range rejects all sessions.
+  assert.equal(sessionMatchesAgeRange(sourceMid, 30, 20), false);
+
+  // Archive bounds and six-month band aligned options + extra URL values.
+  const bounds = computeArchiveAgeBounds([sourceYoung, sourceMid, inferredOlder, unaged]);
+  assert.deepEqual(bounds, { minMonths: 20, maxMonths: 30 });
+  assert.equal(computeArchiveAgeBounds([unaged]), null);
+  const options = buildAgeSelectOptions(bounds, [12, 42, undefined, -1]);
+  assert.equal(options[0], 12);
+  assert.equal(options[1], 18);
+  assert.equal(options[options.length - 2], 35);
+  assert.equal(options[options.length - 1], 42);
+
+  assert.equal(ageFilterBucket(undefined, undefined), '');
+  assert.equal(ageFilterBucket(0, undefined), 'min');
+  assert.equal(ageFilterBucket(undefined, 30), 'max');
+  assert.equal(ageFilterBucket(18, 30), 'range');
+  assert.equal(ageFilterBucket(-1, 999), '');
 });

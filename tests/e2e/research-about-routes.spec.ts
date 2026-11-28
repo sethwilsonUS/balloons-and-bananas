@@ -396,12 +396,12 @@ test('build-output check proves /research, /research/[doc], and /about are dynam
     leaks: unknown[];
   };
   expect(parsed.ok).toBe(true);
-  expect(parsed.routesBuilt).toEqual([
+  expect(parsed.routesBuilt).toEqual(expect.arrayContaining([
     '/sessions/[id]/page',
     '/research/page',
     '/research/[doc]/page',
     '/about/page',
-  ]);
+  ]));
   expect(parsed.prerenderedDynamicHtmlPresent).toBe(false);
   expect(parsed.filesScanned).toBeGreaterThan(0);
   expect(parsed.phrasesChecked).toBeGreaterThanOrEqual(15);

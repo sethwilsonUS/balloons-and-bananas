@@ -3,9 +3,10 @@
  * Verify that `npm run build` never embeds archive text anywhere in `.next/`.
  *
  * Extracts distinctive synthetic phrases from `tests/fixtures/archive.json`,
- * confirms `.next/` contains the built dynamic `/sessions/[id]` route without
- * prerendered HTML, and scans every file under `.next/` to prove none of those
- * phrases appear in server output, static assets, manifests, or source maps.
+ * confirms `.next/` contains the built dynamic routes (`/sessions/[id]`,
+ * `/search`, `/research`, `/research/[doc]`, `/about`) without prerendered HTML,
+ * and scans every file under `.next/` to prove none of those phrases appear in
+ * server output, static assets, manifests, or source maps.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -36,6 +37,23 @@ async function collectFiles(dir) {
   return files;
 }
 
+async function findPrerenderedHtmlForRoute(routeName) {
+  const appServerDir = path.join(nextDir, 'server', 'app');
+  const found = [];
+  const directHtml = path.join(appServerDir, `${routeName}.html`);
+  if (await exists(directHtml)) {
+    found.push(path.relative(process.cwd(), directHtml));
+  }
+  const routeDir = path.join(appServerDir, routeName);
+  if (await exists(routeDir)) {
+    const nested = (await collectFiles(routeDir))
+      .filter(filePath => filePath.toLowerCase().endsWith('.html'))
+      .map(filePath => path.relative(process.cwd(), filePath));
+    found.push(...nested);
+  }
+  return found;
+}
+
 async function main() {
   if (!(await exists(path.join(nextDir, 'BUILD_ID')))) {
     throw new Error('Missing .next/BUILD_ID — run `npm run build` before checking build output.');
@@ -45,6 +63,7 @@ async function main() {
   const appPathsManifest = JSON.parse(await readFile(appPathsManifestPath, 'utf8'));
   const requiredDynamicRoutes = [
     '/sessions/[id]/page',
+    '/search/page',
     '/research/page',
     '/research/[doc]/page',
     '/about/page',
@@ -55,25 +74,18 @@ async function main() {
     }
   }
 
-  const appServerRoot = path.join(nextDir, 'server', 'app');
-  const prerenderedDynamicHtmlFiles = [];
-  for (const segment of ['sessions', 'research', 'about']) {
-    const htmlFile = path.join(appServerRoot, `${segment}.html`);
-    if (await exists(htmlFile)) {
-      prerenderedDynamicHtmlFiles.push(path.relative(process.cwd(), htmlFile));
-    }
-    const segmentDir = path.join(appServerRoot, segment);
-    if (await exists(segmentDir)) {
-      for (const filePath of await collectFiles(segmentDir)) {
-        if (filePath.toLowerCase().endsWith('.html')) {
-          prerenderedDynamicHtmlFiles.push(path.relative(process.cwd(), filePath));
-        }
-      }
-    }
-  }
-  const prerenderedSessionHtmlPresent = prerenderedDynamicHtmlFiles.some(
-    filePath => filePath.includes(`${path.sep}sessions`) || filePath.endsWith('sessions.html'),
-  );
+  const prerenderedSessionHtmlFiles = await findPrerenderedHtmlForRoute('sessions');
+  const prerenderedSearchHtmlFiles = await findPrerenderedHtmlForRoute('search');
+  const prerenderedResearchHtmlFiles = await findPrerenderedHtmlForRoute('research');
+  const prerenderedAboutHtmlFiles = await findPrerenderedHtmlForRoute('about');
+  const prerenderedDynamicHtmlFiles = [
+    ...prerenderedSessionHtmlFiles,
+    ...prerenderedSearchHtmlFiles,
+    ...prerenderedResearchHtmlFiles,
+    ...prerenderedAboutHtmlFiles,
+  ];
+  const prerenderedSessionHtmlPresent = prerenderedSessionHtmlFiles.length > 0;
+  const prerenderedSearchHtmlPresent = prerenderedSearchHtmlFiles.length > 0;
   const prerenderedDynamicHtmlPresent = prerenderedDynamicHtmlFiles.length > 0;
   if (prerenderedDynamicHtmlPresent) {
     throw new Error(
@@ -135,6 +147,7 @@ async function main() {
     routeBuilt: '/sessions/[id]/page',
     routesBuilt: requiredDynamicRoutes,
     prerenderedSessionHtmlPresent,
+    prerenderedSearchHtmlPresent,
     prerenderedDynamicHtmlPresent,
     filesScanned: files.length,
     phrasesChecked: needles.length,

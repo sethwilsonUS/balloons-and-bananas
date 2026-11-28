@@ -237,6 +237,21 @@ async function main() {
   );
   counts.researchAndAboutRoutesVerified = 4;
 
+  // Verify per-request `/search` SSR page, private headers, privacy-safe titles, and zero leaked archive text.
+  const searchPageResponse = await call('/search', 'search_page');
+  await expectStatus(searchPageResponse, 200, 'search_page');
+  const searchPageHtml = await searchPageResponse.text();
+  check(/<title>\s*Search · The Seth Tapes\s*<\/title>/.test(searchPageHtml), 'search_page:title');
+  check((searchPageResponse.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'search_page:frame_protection');
+  check(markers.every(marker => !searchPageHtml.includes(marker)), 'search_page:no_static_archive');
+
+  const filteredSearchPageResponse = await call('/search?q=releasechecktoken&ageMin=18&ageMax=36', 'search_page_filtered');
+  await expectStatus(filteredSearchPageResponse, 200, 'search_page_filtered');
+  const filteredSearchPageHtml = await filteredSearchPageResponse.text();
+  check(/<title>\s*Search results · The Seth Tapes\s*<\/title>/.test(filteredSearchPageHtml), 'search_page_filtered:title');
+  check(!/<title>[^<]*releasechecktoken/i.test(filteredSearchPageHtml), 'search_page_filtered:no_query_in_title');
+  counts.searchRoutesVerified = 2;
+
   // Production BotID deliberately rejects this non-browser search client.
   // Exercise search semantics locally; verify real browser search separately.
   if (!local) {
@@ -262,6 +277,15 @@ async function main() {
     check(transcriptResult.results.some(result => result.session.id === entry.id && result.matchedIn === 'transcript'), `transcript_search_${index}:found`);
     const filtered = await runSearch({ query: entry.sourceName, origin, topic: entry.topics[0] }, `filtered_search_${index}`);
     check(filtered.total > 0 && filtered.results.every(result => result.session.origin === origin && result.session.topics.includes(entry.topics[0])), `filtered_search_${index}:filters_hold`);
+  }
+  if (local) {
+    const agedFilterRes = await call('/api/search', 'age_range_search', { method: 'POST', cookie, origin: base.origin, body: { ageMin: 18, ageMax: 36 } });
+    await expectStatus(agedFilterRes, 200, 'age_range_search');
+    const agedFilterBody = await bodyJson(agedFilterRes, 'age_range_search');
+    check(agedFilterBody.total > 0, 'age_range_search:matches_found');
+    const invalidAgeRes = await call('/api/search', 'invalid_age_range', { method: 'POST', cookie, origin: base.origin, body: { ageMin: 36, ageMax: 18 } });
+    await expectStatus(invalidAgeRes, 400, 'invalid_age_range');
+    await invalidAgeRes.body?.cancel();
   }
   counts.guideSearchExamples = origins.length;
   counts.transcriptSearchExamples = origins.length;

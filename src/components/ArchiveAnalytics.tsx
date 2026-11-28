@@ -6,7 +6,7 @@ import type { AnalyticsPath } from '../lib/analytics-policy';
 
 export default function ArchiveAnalytics({ ready, section, sessionId, documentId }: {
   ready: boolean;
-  section: 'overview' | 'sessions' | 'research' | 'about';
+  section: 'overview' | 'sessions' | 'search' | 'research' | 'about';
   sessionId: string | null;
   documentId: string | null;
 }) {
@@ -17,7 +17,7 @@ export default function ArchiveAnalytics({ ready, section, sessionId, documentId
 
   useEffect(() => {
     if (!ready) return;
-    // Analytics virtual paths stay unchanged ('/recordings', '/recording') per the telemetry contract.
+    // Analytics virtual paths keep '/recordings' and '/recording' unchanged per the telemetry contract.
     const sectionPath: AnalyticsPath = section === 'sessions' ? '/recordings' : `/${section}`;
     const path: AnalyticsPath = sessionId ? '/recording' : documentId ? '/document' : sectionPath;
     // The key only deduplicates in memory; session/document IDs are not URLs.

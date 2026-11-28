@@ -21,7 +21,7 @@ export default function RouteHeader({
   sharePath,
   shareTargetLabel = 'session',
 }: {
-  activeSection?: 'overview' | 'sessions' | 'research' | 'about';
+  activeSection?: 'overview' | 'sessions' | 'search' | 'research' | 'about';
   showShare?: boolean;
   sharePath?: string;
   shareTargetLabel?: string;
@@ -37,6 +37,11 @@ export default function RouteHeader({
   }, []);
 
   useEffect(() => {
+    setShareState('idle');
+    setShareUrl('');
+  }, [sharePath]);
+
+  useEffect(() => {
     if (shareState === 'manual') {
       shareInput.current?.focus();
       shareInput.current?.select();
@@ -46,7 +51,7 @@ export default function RouteHeader({
   const copyShareLink = async () => {
     setShareState('busy');
     try {
-      const targetPath = sharePath || window.location.pathname;
+      const targetPath = sharePath || (window.location.pathname + window.location.search);
       const text = new URL(targetPath, window.location.origin).toString();
       setShareUrl(text);
       try {
@@ -114,6 +119,7 @@ export default function RouteHeader({
         <nav className="section-nav" aria-label="Collection sections">
           <a href="/" aria-current={activeSection === 'overview' ? 'page' : undefined}>Overview</a>
           <a href="/?section=sessions" aria-current={activeSection === 'sessions' ? 'page' : undefined}>Sessions</a>
+          <a href="/search" aria-current={activeSection === 'search' ? 'page' : undefined}>Search</a>
           <a href="/research" aria-current={activeSection === 'research' ? 'page' : undefined}>Research &amp; context</a>
           <a href="/about" aria-current={activeSection === 'about' ? 'page' : undefined}>About &amp; methods</a>
         </nav>

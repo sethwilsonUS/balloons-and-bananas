@@ -32,6 +32,7 @@ export type DocumentTitleState =
   | { kind: 'error' }
   | { kind: 'overview' }
   | { kind: 'sessions'; hasFilters: boolean }
+  | { kind: 'search'; hasFilters: boolean }
   | { kind: 'session'; title?: string | null; notFound?: boolean }
   | { kind: 'research' }
   | { kind: 'document'; title?: string | null }
@@ -47,6 +48,8 @@ export function formatDocumentTitle(state: DocumentTitleState): string {
       return `Overview · ${ARCHIVE_NAME}`;
     case 'sessions':
       return `${state.hasFilters ? 'Search results' : 'Sessions'} · ${ARCHIVE_NAME}`;
+    case 'search':
+      return `${state.hasFilters ? 'Search results' : 'Search'} · ${ARCHIVE_NAME}`;
     case 'session': {
       const trimmed = state.title?.trim();
       if (trimmed) return `${trimmed} · ${ARCHIVE_NAME}`;

@@ -72,6 +72,8 @@ export interface SearchRequest {
   query?: string;
   topic?: string;
   origin?: TranscriptOrigin | '';
+  ageMin?: number;
+  ageMax?: number;
   page?: number;
   pageSize?: SearchPageSize;
   sort?: SearchSort;
@@ -87,6 +89,8 @@ export interface SearchResult {
   session: SessionCard;
   excerpt: string;
   matchedIn: 'transcript' | 'guide' | 'browse';
+  /** 1-based transcript passage number when `matchedIn === 'transcript'`. */
+  matchedPassage?: number;
   linguisticEvidence?: LinguisticEvidence;
 }
 export interface SearchResponse { results: SearchResult[]; total: number; page: number; pages: number; pageSize: SearchPageSize }
