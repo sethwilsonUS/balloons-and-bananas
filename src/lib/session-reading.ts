@@ -142,27 +142,23 @@ export function findNearestPassageIndex(
   return { index: 0, timed: false };
 }
 
-export type TimePrepareStatus = 'ready' | 'no-audio' | 'out-of-range';
-
-/** Format the polite live-region announcement for `#t=` deep links. */
-export function formatTimeReadyAnnouncement(
+/**
+ * Format the polite live-region announcement for `#t=` deep links. Timestamp
+ * links are transcript-only orientation aids: they jump to the nearest
+ * timestamped passage and never prepare or play the recording.
+ */
+export function formatTimeLinkAnnouncement(
   seconds: number,
-  status: TimePrepareStatus,
-  options: { duration?: number; hasTimedPassage?: boolean } = {},
+  nearest: { passage: number; timed: boolean } | null,
 ): string {
   const spoken = formatDurationWords(seconds);
-  if (status === 'ready') {
-    return `Ready at ${spoken}. Press play to listen.`;
+  if (!nearest) {
+    return 'This session has no transcript passages to show.';
   }
-  if (status === 'no-audio') {
-    return options.hasTimedPassage
-      ? `No playable recording is available for this session. Showing the transcript near ${spoken}.`
-      : 'No playable recording is available for this session. Showing the transcript below.';
+  if (!nearest.timed) {
+    return `This transcript has no timestamps, so ${spoken} cannot be matched to a passage. Showing the transcript from the beginning.`;
   }
-  if (options.duration && Number.isFinite(options.duration) && options.duration > 0) {
-    return `${spoken} is beyond this recording’s duration (${formatDurationWords(options.duration)}). Showing the nearest transcript passage.`;
-  }
-  return `${spoken} is beyond the available recording. Showing the nearest transcript passage.`;
+  return `Showing passage ${nearest.passage}, the transcript passage nearest ${spoken}. Timestamps are approximate.`;
 }
 
 function toAdjacentSession(session: Pick<Session, 'slug' | 'ages' | 'inferredAge'>): AdjacentSession {

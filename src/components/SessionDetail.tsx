@@ -1,8 +1,8 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { ArrowDown, Check, Download, Link2, Pause, Play, Search, X } from 'lucide-react';
+import { ArrowDown, Check, Download, Link2, Search, X } from 'lucide-react';
 import type { Session, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
 import { getNotationLinks, readingText } from '../lib/transcript-display';
@@ -10,12 +10,12 @@ import { linguisticMarkers } from '../lib/linguistic-markers';
 import {
   findNearestPassageIndex,
   formatCanonicalPassageUrl,
-  formatTimeReadyAnnouncement,
+  formatTimeLinkAnnouncement,
   parseSessionHash,
 } from '../lib/session-reading';
 import { timeLabel, transcriptOriginLabels } from './api';
 import { CitePassageButton } from './CiteControl';
-import RecordingAudio, { type RecordingAudioHandle } from './RecordingAudio';
+import RecordingAudio from './RecordingAudio';
 
 function Highlight({ text, query, start = 0, end = text.length }: { text: string; query: string; start?: number; end?: number }) {
   if (!query.trim()) return <>{text.slice(start, end)}</>;
@@ -67,16 +67,6 @@ export function SessionBody({
   const [jump, setJump] = useState<{ index: number; serial: number } | null>(null);
   const [selectedPassage, setSelectedPassage] = useState<number | null>(null);
   const [message, setMessage] = useState('');
-  const [currentTime, setCurrentTime] = useState<number | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const player = useRef<RecordingAudioHandle>(null);
-  const playableRecordings = session.recordings.filter(recording => recording.format.toLowerCase() === 'mp3' && recording.available);
-  const hasAudio = playableRecordings.length > 0;
-  const canPlayAt = (at: number | null | undefined) => typeof at === 'number' && Number.isFinite(at) && at >= 0
-    && playableRecordings.some(recording => recording.duration <= 0 || at < recording.duration);
-  const activeIndex = useMemo(() => currentTime === null ? null : session.transcript.findIndex(passage =>
-    typeof passage.start === 'number' && typeof passage.end === 'number'
-    && passage.start <= currentTime && passage.end > currentTime), [currentTime, session.transcript]);
   const linkedIndex = selectedPassage !== null && Number.isSafeInteger(selectedPassage) && selectedPassage > 0 && selectedPassage <= session.transcript.length
     ? selectedPassage - 1
     : null;
@@ -102,13 +92,11 @@ export function SessionBody({
       jumpToPassage(parsed.passage);
       return;
     }
-    setSelectedPassage(null);
-    const prepared = player.current?.prepareAt(parsed.seconds) ?? { status: 'no-audio' as const };
+    // `#t=` links are transcript-only: they scroll to and highlight the nearest
+    // timestamped passage and never touch the recording player.
     const nearest = findNearestPassageIndex(session.transcript, parsed.seconds);
-    setMessage(formatTimeReadyAnnouncement(parsed.seconds, prepared.status, {
-      duration: prepared.status === 'out-of-range' ? prepared.duration : undefined,
-      hasTimedPassage: nearest?.timed ?? false,
-    }));
+    setSelectedPassage(nearest?.timed ? nearest.index + 1 : null);
+    setMessage(formatTimeLinkAnnouncement(parsed.seconds, nearest ? { passage: nearest.index + 1, timed: nearest.timed } : null));
     if (nearest) {
       setJump(value => ({ index: nearest.index, serial: (value?.serial || 0) + 1 }));
     }
@@ -124,8 +112,8 @@ export function SessionBody({
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [applySessionHash]);
 
-  const readPassage = (at: number | null, source: 'moment' | 'current' = 'moment') => {
-    trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source, action: 'read' });
+  const readPassage = (at: number | null) => {
+    trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'moment', action: 'read' });
     const nearest = at !== null ? findNearestPassageIndex(session.transcript, at) : null;
     const targetIndex = nearest ? nearest.index : 0;
     setMessage(nearest?.timed && at !== null ? `Showing the transcript near ${timeLabel(at)}. Use the source locator to check the exact passage.` : 'Showing the transcript. Use the source locator to check the exact passage in the downloadable original.');
@@ -138,31 +126,18 @@ export function SessionBody({
       <ol className="moment-list">
         {session.moments.map((moment, index) => <li key={`${index}-${moment.title}`}>
           <div className="moment-marker"><span className="moment-number">{String(index + 1).padStart(2, '0')}</span>{moment.start !== null && <span className="moment-time">{timeLabel(moment.start)}</span>}</div>
-          <div className="moment-body"><h3>{moment.title}</h3><p>{moment.description}</p><p className="source-locator">{moment.locator}{moment.end !== null && moment.start !== null ? ` · ${timeLabel(moment.start)}–${timeLabel(moment.end)}` : ''}</p><div className="moment-actions">{canPlayAt(moment.start) && <button className="text-button small" type="button" onClick={() => {
-            trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'moment', action: 'listen' });
-            player.current?.playAt(moment.start!);
-          }} aria-label={`Listen from ${timeLabel(moment.start!)}: ${moment.title}`}><Play size={14} aria-hidden="true" />Listen from {timeLabel(moment.start!)}</button>}<button className="text-button small" type="button" onClick={() => readPassage(moment.start)} aria-label={`Read in the transcript: ${moment.title}`}>Read in the transcript<ArrowDown size={14} aria-hidden="true" /></button></div></div>
+          <div className="moment-body"><h3>{moment.title}</h3><p>{moment.description}</p><p className="source-locator">{moment.locator}{moment.end !== null && moment.start !== null ? ` · ${timeLabel(moment.start)}–${timeLabel(moment.end)}` : ''}</p><div className="moment-actions"><button className="text-button small" type="button" onClick={() => readPassage(moment.start)} aria-label={`Read in the transcript: ${moment.title}`}>Read in the transcript<ArrowDown size={14} aria-hidden="true" /></button></div></div>
         </li>)}
       </ol>
     </section>
     {printCitation}
-    <RecordingAudio ref={player} sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} onTime={setCurrentTime} onPlaying={setPlaying} headingLevel={2} />
+    <RecordingAudio sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} headingLevel={2} />
     <Transcript
       session={session}
       jump={jump}
       message={message}
       linkedIndex={linkedIndex}
-      activeIndex={activeIndex}
-      playing={playing}
-      hasAudio={hasAudio}
-      canPlayAt={canPlayAt}
       onSelectPassage={jumpToPassage}
-      onPlayAt={at => {
-        trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'cue', action: 'listen' });
-        player.current?.playAt(at);
-      }}
-      onTogglePlayback={() => player.current?.toggle()}
-      onCurrentPassage={() => readPassage(currentTime, 'current')}
     />
   </>;
 }
@@ -172,39 +147,22 @@ function Transcript({
   jump,
   message,
   linkedIndex,
-  activeIndex,
-  playing,
-  hasAudio,
-  canPlayAt,
   onSelectPassage,
-  onPlayAt,
-  onTogglePlayback,
-  onCurrentPassage,
 }: {
   session: Session;
   jump: { index: number; serial: number } | null;
   message: string;
   linkedIndex: number | null;
-  activeIndex: number | null;
-  playing: boolean;
-  hasAudio: boolean;
-  canPlayAt: (at: number | null | undefined) => boolean;
   onSelectPassage: (passageNumber: number) => void;
-  onPlayAt: (at: number) => void;
-  onTogglePlayback: () => void;
-  onCurrentPassage: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [isPrinting, setIsPrinting] = useState(false);
   const findEdited = useRef(false);
-  const [follow, setFollow] = useState(false);
   const hasChatNotation = session.origin === 'archived_research' || session.origin === 'talkbank_ai_draft';
   const [showNotation, setShowNotation] = useState(false);
-  const [toolbarHeight, setToolbarHeight] = useState(0);
   const [copiedPassage, setCopiedPassage] = useState<number | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
   const [manualCopy, setManualCopy] = useState<{ passage: number; url: string } | null>(null);
-  const toolbar = useRef<HTMLDivElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualCopyInput = useRef<HTMLInputElement>(null);
 
@@ -265,27 +223,12 @@ function Transcript({
     }
   }, [manualCopy]);
 
-  useEffect(() => {
-    const element = toolbar.current;
-    if (!element) { setToolbarHeight(0); return; }
-    const measure = () => setToolbarHeight(Math.ceil(element.getBoundingClientRect().height));
-    measure();
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', measure);
-      return () => window.removeEventListener('resize', measure);
-    }
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [hasAudio]);
-
   const [pendingFocus, setPendingFocus] = useState<{ index: number; serial: number } | null>(null);
   const rows = useRef(new Map<number, HTMLDivElement>());
 
   useEffect(() => {
     if (!jump || !Number.isInteger(jump.index) || jump.index < 0 || jump.index >= session.transcript.length) return;
     setQuery('');
-    setFollow(false);
     setPendingFocus(jump);
   }, [session.transcript.length, jump]);
 
@@ -302,11 +245,6 @@ function Transcript({
     setPendingFocus(null);
     return () => window.cancelAnimationFrame(frame);
   }, [pendingFocus, query]);
-
-  useEffect(() => {
-    if (isPrinting || !follow || !playing || query.trim() || activeIndex === null || activeIndex < 0) return;
-    rows.current.get(activeIndex)?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [activeIndex, follow, isPrinting, playing, query, toolbarHeight]);
 
   const displayRows = useMemo(() => session.transcript.map((passage, index) => ({
     passage, index, text: showNotation ? passage.text : readingText(passage, session.origin),
@@ -349,14 +287,9 @@ function Transcript({
     }
   };
 
-  return <section id="transcript" className="transcript-section" aria-labelledby="transcript-heading" style={{ '--transcript-toolbar-height': `${toolbarHeight}px` } as CSSProperties}>
+  return <section id="transcript" className="transcript-section" aria-labelledby="transcript-heading">
     <div className="section-heading"><div><p className="eyebrow">The source text</p><h2 id="transcript-heading">Transcript</h2></div><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
     <p className="small muted">{session.origin === 'archived_research' ? 'A readable view of the archived research transcript. Original notation is retained in the downloadable source files.' : 'Machine-generated draft: words, speakers, and timestamps may be wrong. Check the recording before treating a passage as evidence.'}</p>
-    {hasAudio && <div ref={toolbar} className="transcript-playback-tools" role="group" aria-label="Transcript playback controls"><button type="button" className="button secondary" onClick={onTogglePlayback}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}{playing ? 'Pause audio' : 'Play audio'}</button><button type="button" className="button secondary" onClick={onCurrentPassage} disabled={activeIndex === null || activeIndex < 0}>Current passage</button><label className="follow-control"><input type="checkbox" checked={follow} onChange={event => {
-      setFollow(event.target.checked);
-      trackArchiveEvent('transcript_follow', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
-    }} />Follow playback</label></div>}
-    {follow && query.trim() && <p className="small muted transcript-filter-notice">Clear the transcript search to follow playback.</p>}
     {hasChatNotation ? <div className="transcript-view-controls"><label className="follow-control"><input type="checkbox" checked={showNotation} aria-describedby="transcript-notation-help" onChange={event => {
       setShowNotation(event.target.checked);
       trackArchiveEvent('notation_toggle', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
@@ -386,11 +319,10 @@ function Transcript({
         const isCopied = copiedPassage === passageNumber;
         return (
           <div
-            className={`transcript-line${activeIndex === index ? ' is-current' : ''}${linkedIndex === index ? ' is-linked' : ''}`}
+            className={`transcript-line${linkedIndex === index ? ' is-linked' : ''}`}
             id={`p${passageNumber}`}
             key={index}
             tabIndex={-1}
-            aria-current={activeIndex === index ? 'true' : undefined}
             ref={node => { if (node) rows.current.set(index, node); else rows.current.delete(index); }}
           >
             <div className="transcript-cue">
@@ -405,22 +337,9 @@ function Transcript({
               >
                 <span className="sr-only">Passage </span><span aria-hidden="true">#</span>{passageNumber}
               </a>
-              {canPlayAt(passage.start) ? (
-                <>
-                  <button
-                    className="cue-button"
-                    type="button"
-                    onClick={() => onPlayAt(passage.start!)}
-                    aria-label={`Play transcript passage ${passageNumber} at ${timeLabel(passage.start!)}`}
-                  >
-                    <Play size={11} aria-hidden="true" />
-                    {timeLabel(passage.start!)}
-                  </button>
-                  <span className="print-only small transcript-timestamp">{timeLabel(passage.start!)}</span>
-                </>
-              ) : typeof passage.start === 'number' ? (
+              {typeof passage.start === 'number' && (
                 <span className="small muted transcript-timestamp">{timeLabel(passage.start)}</span>
-              ) : null}
+              )}
             </div>
             <p className="transcript-text">
               {passage.speaker && <span className="speaker">{passage.speaker}: </span>}

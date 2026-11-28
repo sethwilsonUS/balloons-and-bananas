@@ -8,7 +8,7 @@ import {
   findNearestPassageIndex,
   formatAdjacentAgeSummary,
   formatCanonicalPassageUrl,
-  formatTimeReadyAnnouncement,
+  formatTimeLinkAnnouncement,
   getAdjacentSessions,
   getBackToResultsHref,
   parseSessionHash,
@@ -75,31 +75,30 @@ test('findNearestPassageIndex locates containing, boundary, gap, and untimed pas
   assert.equal(findNearestPassageIndex(timed, Number.NaN), null);
 });
 
-test('formatTimeReadyAnnouncement uses spoken words matching accessibility copy', () => {
+test('formatTimeLinkAnnouncement describes scroll-only #t= jumps in spoken words without mentioning playback', () => {
   assert.equal(
-    formatTimeReadyAnnouncement(754, 'ready'),
-    'Ready at 12 minutes 34 seconds. Press play to listen.',
+    formatTimeLinkAnnouncement(754, { passage: 4, timed: true }),
+    'Showing passage 4, the transcript passage nearest 12 minutes 34 seconds. Timestamps are approximate.',
   );
   assert.equal(
-    formatTimeReadyAnnouncement(0, 'ready'),
-    'Ready at 0 seconds. Press play to listen.',
+    formatTimeLinkAnnouncement(0, { passage: 1, timed: true }),
+    'Showing passage 1, the transcript passage nearest 0 seconds. Timestamps are approximate.',
   );
   assert.equal(
-    formatTimeReadyAnnouncement(3723, 'ready'),
-    'Ready at 1 hour 2 minutes 3 seconds. Press play to listen.',
+    formatTimeLinkAnnouncement(3723, { passage: 9, timed: true }),
+    'Showing passage 9, the transcript passage nearest 1 hour 2 minutes 3 seconds. Timestamps are approximate.',
   );
   assert.equal(
-    formatTimeReadyAnnouncement(12, 'no-audio', { hasTimedPassage: true }),
-    'No playable recording is available for this session. Showing the transcript near 12 seconds.',
+    formatTimeLinkAnnouncement(12, { passage: 1, timed: false }),
+    'This transcript has no timestamps, so 12 seconds cannot be matched to a passage. Showing the transcript from the beginning.',
   );
-  assert.equal(
-    formatTimeReadyAnnouncement(12, 'no-audio', { hasTimedPassage: false }),
-    'No playable recording is available for this session. Showing the transcript below.',
-  );
-  assert.equal(
-    formatTimeReadyAnnouncement(754, 'out-of-range', { duration: 36 }),
-    '12 minutes 34 seconds is beyond this recording’s duration (36 seconds). Showing the nearest transcript passage.',
-  );
+  assert.equal(formatTimeLinkAnnouncement(12, null), 'This session has no transcript passages to show.');
+  for (const message of [
+    formatTimeLinkAnnouncement(754, { passage: 4, timed: true }),
+    formatTimeLinkAnnouncement(12, { passage: 1, timed: false }),
+  ]) {
+    assert.doesNotMatch(message, /play|ready|recording/i);
+  }
 });
 
 test('getAdjacentSessions follows canonical age order (source-or-inferred, ties by stem, unaged last)', () => {

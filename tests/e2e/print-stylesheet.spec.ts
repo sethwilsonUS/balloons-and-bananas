@@ -105,11 +105,9 @@ test('print media hides navigation, audio player, interactive buttons, and open 
     '.audio-panel',
     '.catalog-cite-row',
     '.moment-actions',
-    '.transcript-playback-tools',
     '.transcript-view-controls',
     '.transcript-search',
     '.passage-actions',
-    '.cue-button',
     '.source-downloads',
     'dialog.cite-dialog',
   ];

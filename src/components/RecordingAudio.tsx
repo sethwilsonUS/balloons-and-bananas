@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type KeyboardEvent, forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Headphones, Pause, Play, RotateCcw, RotateCw, Volume1, Volume2, VolumeX } from 'lucide-react';
 import type { Recording, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
@@ -17,28 +17,16 @@ import {
 import { PlaybackTelemetry, type PlaybackEvent } from '../lib/playback-telemetry';
 import { request, timeLabel } from './api';
 
-export type PrepareAudioResult =
-  | { status: 'ready'; seconds: number }
-  | { status: 'no-audio' }
-  | { status: 'out-of-range'; duration: number };
-
-export interface RecordingAudioHandle {
-  playAt: (seconds: number) => void;
-  prepareAt: (seconds: number) => PrepareAudioResult;
-  toggle: () => void;
-}
 interface Props {
   sessionId: string;
   origin: TranscriptOrigin;
   recordings: Recording[];
   preferredRecordingId: string | null;
-  onTime: (seconds: number) => void;
-  onPlaying: (playing: boolean) => void;
   headingLevel?: 2 | 3;
 }
 type SignedRecording = { url: string; expiresAt: number; recordingId: string; generation: number };
 type ScrubIntent = { fromScrub: true; toEnd: boolean; target: number; reportSeek: boolean };
-type SeekSource = 'native' | 'back' | 'forward' | 'passage';
+type SeekSource = 'native' | 'back' | 'forward';
 type AudioEvent = 'audio_start' | 'audio_resume' | 'audio_pause' | 'audio_end' | 'audio_listen_milestone' | 'audio_seek' | 'audio_rate' | 'audio_file_change' | 'audio_error' | 'audio_download';
 const rateBucket = (rate: number) => rate < 1 ? 'slow' : rate > 1 ? 'fast' : 'normal';
 const playbackSample = (player: HTMLAudioElement) => ({ now: performance.now(), position: player.currentTime, rate: player.playbackRate });
@@ -50,7 +38,7 @@ function releaseMedia(player: HTMLAudioElement | null) {
   player.load();
 }
 
-const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function RecordingAudio({ sessionId, origin, recordings, preferredRecordingId, onTime, onPlaying, headingLevel = 3 }, ref) {
+export default function RecordingAudio({ sessionId, origin, recordings, preferredRecordingId, headingLevel = 3 }: Props) {
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const playableRecordings = recordings.filter(recording => recording.format.toLowerCase() === 'mp3');
   const originalWavs = recordings.filter(recording => recording.format.toLowerCase() === 'wav' && recording.kind !== 'listening-copy');
@@ -201,7 +189,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     releaseMedia(audio.current);
     setSource(null);
     setPlaying(false);
-    onPlaying(false);
     setBusy(true);
     setFailed(false);
     setMessage('');
@@ -219,7 +206,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       reportError(recording.id, 'load');
       setMessage(error instanceof Error ? error.message : 'The recording could not be loaded. Please try again.');
     }
-  }, [onPlaying, reportError, selectTelemetry]);
+  }, [reportError, selectTelemetry]);
 
   useEffect(() => { if (source) audio.current?.load(); }, [source]);
 
@@ -258,14 +245,13 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       player.currentTime = seconds;
       lastPosition.current = seconds;
       setPosition(seconds);
-      onTime(seconds);
       if (shouldPlay) void playLoaded();
       setMessage('');
     } else {
       if (seekSource) report('audio_seek', recording.id, { seekSource });
       void load(recording, seconds, shouldPlay);
     }
-  }, [available, hasLoadedSelected, load, onTime, playLoaded, report, selected]);
+  }, [available, hasLoadedSelected, load, playLoaded, report, selected]);
 
   const scrubTo = useCallback((rawSeconds: number) => {
     if (!selected?.available || !Number.isFinite(rawSeconds) || sliderMax <= 0) return;
@@ -284,7 +270,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       player.currentTime = mediaTarget;
       lastPosition.current = mediaTarget;
       setPosition(mediaTarget);
-      onTime(mediaTarget);
       scheduleScrubSeek(selected.id);
       return;
     }
@@ -303,7 +288,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       pending.current = { ...pending.current, at: clamped, fromScrub: true, toEnd, reportSeek: true };
       lastPosition.current = clamped;
       setPosition(clamped);
-      onTime(clamped);
       return;
     }
     if (playing && source && Date.now() >= source.expiresAt - 15_000) {
@@ -313,7 +297,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       retryScrubIntent.current = intent;
       lastPosition.current = clamped;
       setPosition(clamped);
-      onTime(clamped);
       void load(selected, clamped, true, intent);
       return;
     }
@@ -326,8 +309,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     retryScrubIntent.current = { fromScrub: true, toEnd, target: clamped, reportSeek: true };
     lastPosition.current = clamped;
     setPosition(clamped);
-    onTime(clamped);
-  }, [hasLoadedSelected, load, onTime, playing, scheduleScrubSeek, selected, sliderMax, source]);
+  }, [hasLoadedSelected, load, playing, scheduleScrubSeek, selected, sliderMax, source]);
 
   const handleSeekKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -420,7 +402,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         player.currentTime = target;
         lastPosition.current = target;
         setPosition(target);
-        onTime(target);
       }
       void playLoaded();
       return;
@@ -429,137 +410,9 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       retryScrubIntent.current = null;
       lastPosition.current = 0;
       setPosition(0);
-      onTime(0);
     }
     void load(selected, target, true, scrubIntent);
-  }, [busy, effectiveDuration, hasLoadedSelected, load, onTime, playLoaded, playing, selected]);
-
-  const prepareAt = useCallback((seconds: number): PrepareAudioResult => {
-    if (!available.length) {
-      return { status: 'no-audio' };
-    }
-    const player = audio.current;
-    const isLoadedSelected = hasLoadedSelected(player);
-    const hasSelectedMedia = Boolean(
-      selected?.available
-      && source?.recordingId === selected.id
-      && player
-      && player.readyState >= 1
-      && !failed,
-    );
-    const loadedDuration = hasSelectedMedia && Number.isFinite(player!.duration) && player!.duration > 0
-      ? player!.duration
-      : selectedMediaDuration;
-    const effectiveRecordingDuration = (item: Recording) => {
-      if (item.id === selected?.id && loadedDuration !== null && Number.isFinite(loadedDuration) && loadedDuration > 0) {
-        return loadedDuration;
-      }
-      return Number.isFinite(item.duration) && item.duration > 0 ? item.duration : 0;
-    };
-    const maxKnownDuration = Math.max(0, ...available.map(effectiveRecordingDuration));
-    if (!Number.isFinite(seconds) || seconds < 0) {
-      return { status: 'out-of-range', duration: maxKnownDuration };
-    }
-
-    const selectedDuration = selected ? effectiveRecordingDuration(selected) : 0;
-    let recording = selected;
-    if (!recording?.available || (selectedDuration > 0 && seconds >= selectedDuration)) {
-      recording = available.find(item => {
-        const itemDuration = effectiveRecordingDuration(item);
-        return itemDuration <= 0 || seconds < itemDuration;
-      });
-    }
-    if (!recording) {
-      return { status: 'out-of-range', duration: maxKnownDuration };
-    }
-
-    recoveryTried.current = false;
-    retryScrubIntent.current = null;
-    setMessage('');
-
-    if (isLoadedSelected && recording.id === selected!.id) {
-      if (loading.current && pending.current && pending.current.generation === generation.current) {
-        pending.current = {
-          ...pending.current,
-          at: seconds,
-          play: false,
-          fromScrub: false,
-          toEnd: false,
-          reportSeek: false,
-        };
-      }
-      if (!player.paused) {
-        player.pause();
-        setPlaying(false);
-        onPlaying(false);
-      }
-      telemetry.current.tracker.suspend();
-      programmedSeek.current = { generation: generation.current, target: seconds, when: performance.now() };
-      player.currentTime = seconds;
-      lastPosition.current = seconds;
-      setPosition(seconds);
-      onTime(seconds);
-      return { status: 'ready', seconds };
-    }
-
-    if (loading.current && pending.current && pending.current.generation === generation.current && recording.id === selected?.id) {
-      pending.current = {
-        ...pending.current,
-        at: seconds,
-        play: false,
-        fromScrub: false,
-        toEnd: false,
-        reportSeek: false,
-      };
-      lastPosition.current = seconds;
-      setPosition(seconds);
-      onTime(seconds);
-      return { status: 'ready', seconds };
-    }
-
-    const switchingRecording = recording.id !== selected?.id;
-    const hasStaleOrActiveMedia = Boolean(
-      source
-      || loading.current
-      || failed
-      || (player && !player.paused),
-    );
-    if (switchingRecording || hasStaleOrActiveMedia) {
-      telemetry.current.tracker.suspend();
-      if (switchingRecording) {
-        selectTelemetry(recording.id);
-      }
-      if (seekTimer.current) {
-        clearTimeout(seekTimer.current);
-        seekTimer.current = null;
-      }
-      generation.current += 1;
-      controller.current?.abort();
-      loading.current = false;
-      pending.current = null;
-      releaseMedia(audio.current);
-      setPlaying(false);
-      onPlaying(false);
-      if (switchingRecording) {
-        setSelectedId(recording.id);
-        setMediaDuration(null);
-      }
-      setSource(null);
-      setBusy(false);
-      setFailed(false);
-    }
-
-    lastPosition.current = seconds;
-    setPosition(seconds);
-    onTime(seconds);
-    return { status: 'ready', seconds };
-  }, [available, failed, hasLoadedSelected, onPlaying, onTime, selectTelemetry, selected, selectedMediaDuration, source]);
-
-  useImperativeHandle(
-    ref,
-    () => ({ playAt: seconds => seek(seconds, true, 'passage'), prepareAt, toggle }),
-    [prepareAt, seek, toggle],
-  );
+  }, [busy, effectiveDuration, hasLoadedSelected, load, playLoaded, playing, selected]);
 
   // Refresh only an actively playing URL, once near expiry; idle pages do not poll.
   useEffect(() => {
@@ -602,7 +455,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     player.currentTime = target;
     lastPosition.current = target;
     setPosition(target);
-    onTime(target);
     if (next.reportSeek) scheduleScrubSeek(source!.recordingId);
     if (next.play) void playLoaded();
   };
@@ -625,7 +477,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         recoveryTried.current = false;
         releaseMedia(audio.current);
         setPlaying(false);
-        onPlaying(false);
         setSelectedId(event.target.value);
         setSource(null);
         setMediaDuration(null);
@@ -633,7 +484,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
         setFailed(false);
         lastPosition.current = 0;
         setPosition(0);
-        onTime(0);
         setMessage('');
       }}>{playableRecordings.map(recording => <option key={recording.id} value={recording.id} disabled={!recording.available}>{recording.name} · {recording.kind === 'listening-copy' ? 'MP3 listening copy' : 'Original MP3'} · {timeLabel(recording.duration)}{!recording.available ? ' · Not yet available' : ''}</option>)}</select></div>}
       {selected && <p className="small muted audio-provenance">{selected.kind === 'listening-copy' ? <><strong>MP3 listening copy.</strong> Converted from{originalRecording ? <> <span className="audio-filename">{originalRecording.name}</span></> : ' the original WAV'} for playback. The original WAV is preserved.{selected.encoding ? ` Encoding: ${selected.encoding}.` : ''}</> : <><strong>Original MP3.</strong> This is the MP3 supplied in the archive.</>}</p>}
@@ -728,7 +578,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             if (retryScrubIntent.current) return;
             lastPosition.current = time;
             setPosition(time);
-            onTime(time);
           }}
           onPlay={event => {
             if (!isCurrentMedia(event.currentTarget)) return;
@@ -738,7 +587,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
                 retryScrubIntent.current = null;
                 lastPosition.current = 0;
                 setPosition(0);
-                onTime(0);
                 void load(selected, 0, true);
                 return;
               }
@@ -746,7 +594,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
               return;
             }
             setPlaying(true);
-            onPlaying(true);
           }}
           onPlaying={event => { if (isCurrentMedia(event.currentTarget)) observe(telemetry.current.tracker.playing(playbackSample(event.currentTarget)), source!.recordingId); }}
           onWaiting={event => {
@@ -774,7 +621,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
           }}
           onPause={event => { if (isCurrentMedia(event.currentTarget)) {
             if (!event.currentTarget.ended && !event.currentTarget.error && !loading.current) observe(telemetry.current.tracker.pause(playbackSample(event.currentTarget)), source!.recordingId);
-            setPlaying(false); onPlaying(false);
+            setPlaying(false);
           } }}
           onEnded={event => { if (isCurrentMedia(event.currentTarget)) {
             observe(telemetry.current.tracker.end(playbackSample(event.currentTarget)), source!.recordingId);
@@ -782,7 +629,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
               lastPosition.current = event.currentTarget.currentTime;
               setPosition(event.currentTarget.currentTime);
             }
-            setPlaying(false); onPlaying(false);
+            setPlaying(false);
           } }}
           onVolumeChange={event => {
             if (!isCurrentMedia(event.currentTarget)) return;
@@ -823,7 +670,6 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
             setBusy(false);
             setFailed(true);
             setPlaying(false);
-            onPlaying(false);
             setMessage('This recording could not be played. Retry from your current position, or choose another recording.');
           }} />
         {failed && <button className="button secondary audio-retry-button" type="button" onClick={() => {
@@ -838,6 +684,4 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     </>}
     <p className="small player-status" role="status">{message}</p>
   </section>;
-});
-
-export default RecordingAudio;
+}

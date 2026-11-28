@@ -322,7 +322,9 @@ test('obsolete #access= fragment is stripped client-side on every page while pre
   // Preserve #t=0:12 intact on `/sessions/[id]`
   await page.goto('/sessions/010815#t=0:12');
   await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#t=0:12');
-  await expect(page.locator('.audio-time-readout')).toHaveText('0:12 / 0:36');
+  // `#t=` jumps to the nearest passage only; the player stays at the start.
+  await expect(page.locator('#p3')).toHaveClass(/\bis-linked\b/);
+  await expect(page.locator('.audio-time-readout')).toHaveText('0:00 / 0:36');
 
   // Live hashchange to #access= strips it, and #access=...&p4 activates #p4
   await page.evaluate(() => { window.location.hash = '#access=live-secret'; });

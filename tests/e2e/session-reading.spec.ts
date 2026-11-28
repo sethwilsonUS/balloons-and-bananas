@@ -114,19 +114,16 @@ test('#pN anchors scroll, focus, highlight on load and hashchange, and Copy link
   await expect(passage4).toBeFocused();
   await expect(page.locator('.transcript-live-status')).toContainText('Showing transcript passage 4');
 
-  // Verify #p4 is not hidden underneath either the sticky nav or the sticky playback toolbar
+  // Verify #p4 is not hidden underneath the sticky nav
   const clearance = await page.evaluate(() => {
     const nav = document.querySelector('.session-sticky-nav')?.getBoundingClientRect();
-    const toolbar = document.querySelector('.transcript-playback-tools')?.getBoundingClientRect();
     const target = document.querySelector('#p4')?.getBoundingClientRect();
     return {
       navBottom: nav?.bottom ?? 0,
-      toolbarBottom: toolbar?.bottom ?? 0,
       targetTop: target?.top ?? 0,
     };
   });
   expect(clearance.targetTop).toBeGreaterThanOrEqual(clearance.navBottom - 1);
-  expect(clearance.targetTop).toBeGreaterThanOrEqual(clearance.toolbarBottom - 1);
 
   // Hashchange via clicking another passage anchor moves highlight and focus
   await page.locator('#p2').getByRole('link', { name: 'Passage 2', exact: true }).click();
@@ -164,65 +161,115 @@ test('#pN anchors scroll, focus, highlight on load and hashchange, and Copy link
   await expect(page.locator('.transcript-live-status')).toContainText('Passage 999 is outside this transcript');
 });
 
-test('#t=mm:ss and #t=seconds prepare audio without autoplay, scroll to nearest passage, announce ready state, and handle out-of-range and no-audio sessions', async ({ page }) => {
-  let assetJsonRequests = 0;
+function trackSignedAudioRequests(page: Page) {
+  const requests: string[] = [];
   page.on('request', req => {
-    if (req.url().includes('/api/assets/fixture-audio-locomotive-mp3?json=1')) {
-      assetJsonRequests += 1;
-    }
+    const url = new URL(req.url());
+    if (url.pathname.startsWith('/api/assets/') && url.searchParams.has('json')) requests.push(url.pathname);
   });
+  return requests;
+}
 
-  // #t=0:12 prepares player at 12 seconds without autoplay and scrolls to passage 3 (9..15s)
-  await page.goto('/sessions/010815#t=0:12');
+test('#t= links only scroll to and highlight the nearest timestamped passage, never touching the player or fetching signed audio', async ({ page }) => {
+  const signedAudioRequests = trackSignedAudioRequests(page);
+  const pageErrors: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
 
   const audioEl = page.locator('.audio-panel audio');
   const seekSlider = page.getByRole('slider', { name: 'Playback position' });
-  const timeReadout = page.locator('.audio-time-readout');
+  const liveStatus = page.locator('.transcript-live-status');
+  const expectPlayerUntouched = async () => {
+    await expect(seekSlider).toHaveAttribute('aria-valuetext', '0 seconds of 36 seconds');
+    expect(await audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(true);
+    expect(await audioEl.evaluate(el => (el as HTMLAudioElement).currentTime)).toBe(0);
+    expect(await audioEl.evaluate(el => el.getAttribute('src'))).toBeNull();
+    expect(signedAudioRequests).toEqual([]);
+  };
 
-  await expect(timeReadout).toHaveText('0:12 / 0:36');
-  await expect(seekSlider).toHaveAttribute('aria-valuetext', '12 seconds of 36 seconds');
-  expect(await audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(true);
-  expect(assetJsonRequests).toBe(0);
-
+  // #t=0:12 jumps to passage 3 (9..15s) with the same highlight/focus as #p3.
+  await page.goto('/sessions/010815#t=0:12');
   const passage3 = page.locator('#p3');
-  await expect(passage3).toHaveClass(/\bis-current\b/);
+  await expect(passage3).toHaveClass(/\bis-linked\b/);
   await expect(passage3).toBeFocused();
-  await expect(page.locator('.transcript-live-status')).toHaveText('Ready at 12 seconds. Press play to listen.');
+  await expect(liveStatus).toHaveText('Showing passage 3, the transcript passage nearest 12 seconds. Timestamps are approximate.');
+  await expect(page.locator('.transcript-line.is-current, .transcript-line[aria-current]')).toHaveCount(0);
+  await expectPlayerUntouched();
 
-  // Hashchange to plain seconds #t=16 updates position without autoplay and moves to passage 4 (15..22s)
+  // Hashchange to plain seconds #t=16 moves the highlight to passage 4 (15..22s) and still leaves the player alone.
   await page.evaluate(() => { window.location.hash = '#t=16'; });
-  await expect(timeReadout).toHaveText('0:16 / 0:36');
-  await expect(seekSlider).toHaveAttribute('aria-valuetext', '16 seconds of 36 seconds');
-  expect(await audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(true);
-  expect(assetJsonRequests).toBe(0);
-  await expect(page.locator('#p4')).toHaveClass(/\bis-current\b/);
-  await expect(page.locator('#p4')).toBeFocused();
-  await expect(page.locator('.transcript-live-status')).toHaveText('Ready at 16 seconds. Press play to listen.');
+  const passage4 = page.locator('#p4');
+  await expect(passage4).toHaveClass(/\bis-linked\b/);
+  await expect(passage4).toBeFocused();
+  await expect(passage3).not.toHaveClass(/\bis-linked\b/);
+  await expect(liveStatus).toHaveText('Showing passage 4, the transcript passage nearest 16 seconds. Timestamps are approximate.');
+  await expectPlayerUntouched();
 
-  // Pressing Play starts playback from the prepared ~16s timestamp
+  // Values past the last timestamp (#t=754, #t=1:02:03) degrade to the nearest timestamped passage.
+  for (const hash of ['#t=754', '#t=1:02:03']) {
+    await page.goto(`/sessions/010815${hash}`);
+    await expect(passage4).toHaveClass(/\bis-linked\b/);
+    await expect(passage4).toBeFocused();
+    await expect(liveStatus).toContainText('Showing passage 4, the transcript passage nearest');
+    await expectPlayerUntouched();
+  }
+
+  // Invalid values load the page normally with nothing selected (fresh load, not a same-page hashchange).
+  await page.goto('about:blank');
+  await page.goto('/sessions/010815#t=abc');
+  await expect(page.getByRole('heading', { level: 2, name: 'Transcript' })).toBeVisible();
+  await expect(page.locator('.transcript-line.is-linked')).toHaveCount(0);
+  await expect(liveStatus).toHaveText('');
+  await expectPlayerUntouched();
+
+  // Transcript-only session without timestamps or audio: shows the transcript from the start without errors.
+  await page.goto('/sessions/011103#t=12:34');
+  await expect(liveStatus).toHaveText('This transcript has no timestamps, so 12 minutes 34 seconds cannot be matched to a passage. Showing the transcript from the beginning.');
+  await expect(page.locator('#p1')).toBeFocused();
+  await expect(page.locator('.transcript-line.is-linked')).toHaveCount(0);
+  expect(signedAudioRequests).toEqual([]);
+  expect(pageErrors).toEqual([]);
+});
+
+test('transcript timestamps are plain text, nothing in the transcript seeks or plays, and playback never highlights or scrolls the transcript', async ({ page }) => {
+  const signedAudioRequests = trackSignedAudioRequests(page);
+  await page.goto('/sessions/010815');
+  const audioEl = page.locator('.audio-panel audio');
+  const transcript = page.locator('#transcript');
+
+  // Timestamps remain visible as non-interactive text; seek/play/follow controls are gone.
+  await expect(page.locator('#p1 .transcript-timestamp')).toHaveText('0:00');
+  await expect(page.locator('#p3 .transcript-timestamp')).toHaveText('0:09');
+  await expect(page.locator('#p5 .transcript-timestamp')).toHaveCount(0);
+  await expect(page.locator('.transcript-cue button, .transcript-cue .cue-button')).toHaveCount(0);
+  await expect(page.locator('.transcript-cue a')).toHaveCount(5);
+  await expect(transcript.getByRole('button', { name: /^Play|Pause audio|Current passage/ })).toHaveCount(0);
+  await expect(transcript.getByRole('checkbox', { name: 'Follow playback' })).toHaveCount(0);
+  await expect(page.locator('.transcript-playback-tools')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Listen from/ })).toHaveCount(0);
+
+  // Clicking a timestamp and a moment's "Read in the transcript" never touches the player.
+  await page.locator('#p3 .transcript-timestamp').click();
+  await page.getByRole('button', { name: /Read in the transcript: Crossing the cardboard bridge/ }).click();
+  await expect(page.locator('#p1')).toBeFocused();
+  expect(await audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(true);
+  expect(signedAudioRequests).toEqual([]);
+
+  // Play from the player's own controls: the transcript does not move or highlight while audio
+  // advances across the passage 1 -> 2 boundary (4s).
   await page.getByRole('button', { name: 'Play recording' }).click();
   await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(false);
-  await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).currentTime)).toBeGreaterThanOrEqual(15);
+  expect(await audioEl.evaluate(el => (el as HTMLAudioElement).currentTime)).toBeLessThan(4);
+  const scrollBefore = await page.evaluate(() => window.scrollY);
+  await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).currentTime), { timeout: 10_000 }).toBeGreaterThan(4.5);
+  await expect(page.locator('.transcript-line.is-current, .transcript-line[aria-current]')).toHaveCount(0);
+  await expect(page.locator('.transcript-line.is-linked')).toHaveCount(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).paused)).toBe(true);
 
-  // Out-of-range #t=12:34 on 36s session does not autoplay and announces clearly
-  await page.goto('/sessions/010815#t=12:34');
-  await expect(page.locator('.transcript-live-status')).toContainText(
-    '12 minutes 34 seconds is beyond this recording’s duration (36 seconds).',
-  );
-  await expect(page.locator('#p4')).toBeFocused();
-  expect(await page.locator('.audio-panel audio').evaluate(el => (el as HTMLAudioElement).paused)).toBe(true);
-
-  // Transcript-only session (no audio) handles #t= gracefully with zero errors
-  const pageErrors: string[] = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
-  await page.goto('/sessions/011103#t=12:34');
-  await expect(page.locator('.transcript-live-status')).toContainText(
-    'No playable recording is available for this session.',
-  );
-  await expect(page.locator('#p1')).toBeFocused();
-  expect(pageErrors).toEqual([]);
+  await page.goto('/sessions/010815#t=0:12');
+  await expect(page.locator('#p3')).toBeFocused();
+  await auditAllThemes(page, 'session page after #t= jump');
 });
 
 test('previous and next session links step through canonical age order with session IDs and labelled ages', async ({ page }) => {
