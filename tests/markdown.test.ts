@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import ArchiveMarkdown from '../src/components/ArchiveMarkdown';
-import { normalizeHeadingDepths, stripDuplicateLeadingHeading } from '../src/lib/markdown';
+import ArchiveMarkdown, { extractMarkdownHeadings } from '../src/components/ArchiveMarkdown';
+import { normalizeHeadingDepths, slugifyHeading, stripDuplicateLeadingHeading } from '../src/lib/markdown';
 
 test('stripDuplicateLeadingHeading removes leading H1 matching document title across normalization variants', () => {
   assert.equal(
@@ -167,4 +167,90 @@ test('ArchiveMarkdown strips duplicate leading heading, keeps heading hierarchy 
   assert.equal(editorialCells[0], 'Editorial note');
   assert.match(editorialCells[1], /<code>\[\[SYNTHETIC COMMENT \|<\/code> and ending <code>\| END SYNTHETIC COMMENT\]\]<\/code>/);
   assert.equal(editorialCells[2], 'Separate editorial note, not source speech.');
+});
+
+test('slugifyHeading normalizes punctuation, diacritics, apostrophes, and symbol-only inputs deterministically', () => {
+  assert.equal(slugifyHeading('Transcript layers'), 'transcript-layers');
+  assert.equal(slugifyHeading('Peters (1987)'), 'peters-1987');
+  assert.equal(slugifyHeading("Child's café — notes"), 'childs-cafe-notes');
+  assert.equal(slugifyHeading('*** ??? ***'), '');
+});
+
+test('extractMarkdownHeadings matches generated heading IDs in ArchiveMarkdown, handles duplicates, reserved IDs, code blocks, blockquotes, and footnotes', () => {
+  const markdown = [
+    '# Synthetic reading layout doc',
+    '',
+    '```markdown',
+    '## Fake heading inside fenced code',
+    '```',
+    '',
+    '## Main',
+    '',
+    '## Notes',
+    '',
+    '### Using `CHAT` tiers[^1]',
+    '',
+    '#### Deep subsection',
+    '',
+    '> ## Quoted heading',
+    '',
+    '## Notes 2',
+    '',
+    '## Notes',
+    '',
+    '## ***',
+    '',
+    '[^1]: Synthetic footnote text.',
+  ].join('\n');
+
+  const headings = extractMarkdownHeadings(markdown, {
+    documentTitle: 'Synthetic reading layout doc',
+    baseHeadingLevel: 2,
+  });
+
+  assert.deepEqual(headings, [
+    { id: 'main-2', text: 'Main', level: 2 },
+    { id: 'notes', text: 'Notes', level: 2 },
+    { id: 'using-chat-tiers', text: 'Using CHAT tiers', level: 3 },
+    { id: 'notes-2', text: 'Notes 2', level: 2 },
+    { id: 'notes-3', text: 'Notes', level: 2 },
+    { id: 'section', text: '***', level: 2 },
+    { id: 'footnote-label', text: 'Footnotes', level: 2 },
+  ]);
+
+  const htmlWithIds = renderToStaticMarkup(
+    createElement(ArchiveMarkdown, {
+      text: markdown,
+      documentTitle: 'Synthetic reading layout doc',
+      baseHeadingLevel: 2,
+      generateHeadingIds: true,
+    }),
+  );
+
+  // Every extracted TOC heading ID exists in the rendered HTML
+  for (const heading of headings) {
+    assert.match(
+      htmlWithIds,
+      new RegExp(`<h${heading.level}\\b[^>]*id="${heading.id}"[^>]*>`),
+      `Expected rendered <h${heading.level} id="${heading.id}"> in ArchiveMarkdown output`,
+    );
+  }
+  // Never collides with <main id="main">
+  assert.doesNotMatch(htmlWithIds, /<h[2-6]\b[^>]*id="main"/);
+  // Deep h4 and symbol-only heading still receive deterministic unique IDs even though excluded from TOC
+  assert.match(htmlWithIds, /<h4\b[^>]*id="deep-subsection"[^>]*>Deep subsection<\/h4>/);
+  assert.match(htmlWithIds, /<h2\b[^>]*id="section"[^>]*>/);
+  // Quoted heading receives an ID in HTML without appearing in "On this page"
+  assert.match(htmlWithIds, /<blockquote>\s*<h[2-6]\b[^>]*id="quoted-heading"[^>]*>Quoted heading<\/h[2-6]>/);
+
+  // Default generateHeadingIds=false (used inside collapsed /research cards) does not emit heading IDs
+  const htmlWithoutIds = renderToStaticMarkup(
+    createElement(ArchiveMarkdown, {
+      text: '## Notes\n\n### Subheading',
+      baseHeadingLevel: 3,
+    }),
+  );
+  assert.match(htmlWithoutIds, /<h3>Notes<\/h3>/);
+  assert.match(htmlWithoutIds, /<h4>Subheading<\/h4>/);
+  assert.doesNotMatch(htmlWithoutIds, /id="notes"/);
 });

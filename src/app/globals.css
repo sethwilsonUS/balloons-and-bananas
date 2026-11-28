@@ -585,26 +585,67 @@ a.ai-badge:hover { color: var(--rust); }
 .page-title-row svg { color: var(--muted); }
 .research-page, .document-page, .about-page { padding-top: var(--space-6); }
 .research-document { padding: var(--space-6) 0 var(--space-6); border-top: 1px solid var(--line); }
+.research-document-category { margin: 0 0 var(--space-1); font-weight: 550; }
 .research-document > h2 { margin-bottom: var(--space-2); }
 .research-document > h2 a { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-height); padding: var(--space-1) 0; color: var(--ink); text-decoration: none; }
 .research-document > h2 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }
-.research-document > p:not(.eyebrow) { max-width: var(--measure-reading); color: var(--reading); font-size: var(--text-base); line-height: var(--leading-reading); margin-bottom: var(--space-4); }
-.research-document .document-downloads { margin: var(--space-4) 0; }
+.research-document > p:not(.research-document-category) { max-width: var(--measure-reading); color: var(--reading); font-size: var(--text-base); line-height: var(--leading-reading); margin-bottom: var(--space-4); }
+.research-document .document-downloads { margin: var(--space-2) 0 var(--space-3); }
 .document-reading { max-width: 900px; }
 .document-reading > summary { display: list-item; padding: var(--space-3) 0; font-size: var(--text-sm); font-weight: 550; text-decoration: underline; text-underline-offset: .2em; min-height: var(--control-height); color: var(--forest); }
 .document-reading[open] > summary { margin-bottom: var(--space-5); }
 .document-reading .prose { border-left: 1px solid var(--line); padding-left: var(--space-5); }
 .document-reading .prose > h3:first-child,
 .document-reading .prose > h4:first-child { margin-top: 0; }
-.document-detail > .prose { margin-top: var(--space-6); }
+
+/* Scholarly reading-page layout for research documents and About: 68ch column + sidebar beside on wide screens, below title on narrow screens. */
+.document-page.reading-layout,
+.about-page.reading-layout { row-gap: var(--space-5); }
+.document-page > .reading-header,
+.about-page > .reading-header { min-width: 0; }
+.document-page > .reading-header .detail-header h1,
+.about-page > .reading-header .detail-header h1 { margin: var(--space-3) 0 var(--space-4); }
+.document-page > .reading-header .section-intro,
+.about-page > .reading-header .section-intro { margin-bottom: 0; }
+.document-page :is(h2, h3, h4, h5, h6, [id]),
+.about-page :is(section, h2, h3, h4, h5, h6, [id]) { scroll-margin-top: var(--space-6); }
+.document-page > .reading-column { padding-top: var(--space-6); border-top: 1px solid var(--line); }
 .document-detail .prose > h2:first-child { margin-top: 0; }
 .document-detail .prose > h3:first-child { margin-top: 0; }
 .document-footer-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); margin-top: var(--space-7); padding-top: var(--space-5); border-top: 1px solid var(--line); font-size: var(--text-sm); }
 
-.about-toc { padding: var(--space-4) var(--space-5); border: 1px solid var(--line); border-radius: 5px; background: var(--paper-light); margin-bottom: var(--space-6); }
-.about-toc .eyebrow { margin-bottom: var(--space-2); }
-.about-toc ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); }
-.about-toc li a { display: inline-flex; align-items: center; min-height: var(--control-height); font-size: var(--text-sm); }
+.document-page > .reading-sidebar,
+.about-page > .reading-sidebar { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-4) var(--space-5); border: 1px solid var(--line); border-radius: 5px; background: var(--paper-light); }
+.reading-sidebar-heading { font-family: var(--sans); font-size: var(--text-xs); line-height: 1.5; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 var(--space-2); }
+.reading-toc-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.reading-toc-item a { display: inline-flex; align-items: center; min-height: var(--control-height); padding: var(--space-1) 0; font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--forest); text-decoration: underline; text-underline-offset: .2em; text-decoration-thickness: 1px; overflow-wrap: anywhere; }
+.reading-toc-item a:hover { color: var(--rust); text-decoration-thickness: 2px; }
+.reading-toc-item--sub { padding-left: var(--space-4); }
+.reading-sidebar-actions { display: flex; flex-direction: column; gap: var(--space-4); }
+.reading-toc + .reading-sidebar-actions { padding-top: var(--space-4); border-top: 1px solid var(--line); }
+.reading-sidebar-group { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); width: 100%; }
+.reading-sidebar .document-downloads { flex-direction: column; align-items: flex-start; gap: var(--space-1); margin-top: 0; }
+.reading-sidebar .document-downloads .text-link { align-items: flex-start; padding: var(--space-2) 0; }
+.reading-sidebar .document-downloads .text-link svg { margin-top: 3px; }
+.document-share { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); width: 100%; }
+.document-share-status { margin: 0; }
+.document-share-manual { display: flex; flex-direction: column; gap: var(--space-2); width: 100%; padding: var(--space-3); border: 1px solid var(--control-line); border-radius: var(--control-radius); background: var(--paper-light); }
+.document-share-manual label { font-size: var(--text-xs); font-weight: 600; color: var(--ink); }
+.document-share-manual-row { display: flex; flex-direction: column; gap: var(--space-2); }
+.document-share-manual-row .button { align-self: flex-start; }
+
+@media (min-width: 1001px) {
+  .document-page.reading-layout,
+  .about-page.reading-layout { row-gap: var(--space-6); }
+  .document-page > .reading-header,
+  .about-page > .reading-header { grid-column: 1; grid-row: 1; }
+  .document-page > .reading-column,
+  .about-page > .reading-column { grid-column: 1; grid-row: 2; }
+  .document-page > .reading-sidebar,
+  .about-page > .reading-sidebar { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: var(--space-6); padding: var(--space-1) 0 var(--space-1) var(--space-5); border: 0; border-left: 1px solid var(--line); border-radius: 0; background: transparent; }
+  .reading-toc-item a { min-height: 2.25rem; }
+}
+
 .about-section { padding-top: var(--space-6); margin-top: var(--space-6); border-top: 1px solid var(--line); }
 .about-section:first-of-type { margin-top: 0; }
 .about-section h2 { margin-bottom: var(--space-4); }
@@ -699,6 +740,8 @@ a.ai-badge:hover { color: var(--rust); }
   .transcript-line { grid-template-columns: 60px minmax(0, 1fr); gap: var(--space-2); }
   .prose blockquote { padding-left: var(--space-4); }
   .document-reading .prose { padding-left: var(--space-4); }
+  .document-page > .reading-sidebar,
+  .about-page > .reading-sidebar { padding: var(--space-4); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -804,6 +847,9 @@ input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { backgro
   .theme-menu { border: 2px solid CanvasText; background: Canvas; }
   .theme-menu-item[aria-checked='true'] { outline: 1px solid Highlight; }
   .section-nav a[aria-current]::after { background: Highlight; }
+  .document-page > .reading-sidebar,
+  .about-page > .reading-sidebar { border-color: CanvasText; }
+  .document-share-manual { border-color: CanvasText; }
 }
 .audio-volume-control { display: flex; align-items: flex-end; gap: var(--space-3); flex: 1 1 240px; max-width: 340px; min-width: 0; }
 .audio-mute-button { flex-shrink: 0; }
@@ -1029,7 +1075,8 @@ input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { backgro
   .back-button,
   .session-sticky-nav,
   .session-adjacent-nav,
-  .about-toc,
+  .document-page > .reading-sidebar,
+  .about-page > .reading-sidebar,
   .document-footer-nav,
   .audio-panel,
   .audio-player,

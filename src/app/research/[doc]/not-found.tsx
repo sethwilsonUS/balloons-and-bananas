@@ -12,7 +12,7 @@ export default function ResearchDocumentNotFound() {
           <p className="eyebrow">404 · Document not found</p>
           <h1 id="not-found-heading">This research document could not be found</h1>
           <p className="section-intro">
-            No research document in {ARCHIVE_NAME} matches this URL. Browse the research reading list, read about the collection’s methods, or search the sessions.
+            No research document in {ARCHIVE_NAME} matches this URL; browse the research reading list, read about the collection’s methods, or search the sessions.
           </p>
           <div className="not-found-actions">
             <a className="button primary" href="/research">
