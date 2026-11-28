@@ -14,6 +14,7 @@ import {
 } from '@/lib/session-reading';
 import { findSessionBySlug } from '@/lib/sessions';
 import { ARCHIVE_NAME, formatDocumentTitle, formatSessionPageTitle } from '@/lib/site';
+import { SessionCiteProvider } from '@/components/CiteControl';
 import RouteHeader from '@/components/RouteHeader';
 import SessionCatalogRecord from '@/components/SessionCatalogRecord';
 import SessionPageClient from '@/components/SessionPageClient';
@@ -104,73 +105,82 @@ export default async function SessionPage({
   const { session } = lookup;
 
   const resolvedBackHref = explicitFrom ?? resolveBackToResultsUrl(headerList.get('referer'), requestOrigin);
+  const citationSession = {
+    slug: session.slug,
+    ages: session.ages,
+    inferredAge: session.inferredAge,
+    dates: session.dates,
+    origin: session.origin,
+  };
 
   return (
     <div className="archive-shell">
       <RouteHeader activeSection="sessions" showShare sharePath={`/sessions/${encodeURIComponent(session.slug)}`} />
       <main id="main" tabIndex={-1}>
         <article className="session-detail session-page">
-          <header className="detail-header">
-            <p className="eyebrow">Session {session.slug}</p>
-            <h1>{session.title}</h1>
-            <SessionCatalogRecord session={session} />
-            {(adjacent.previous || adjacent.next) && (
-              <nav className="session-adjacent-nav" aria-label="Adjacent sessions in age order">
-                {adjacent.previous && (
-                  <a
-                    className="session-step-link session-step-prev"
-                    href={`/sessions/${encodeURIComponent(adjacent.previous.slug)}`}
-                  >
-                    <span className="session-step-direction">
-                      <ArrowLeft size={16} aria-hidden="true" />
-                      Previous session
-                    </span>
-                    <span className="session-step-target">
-                      <code className="session-step-slug">{adjacent.previous.slug}</code>
-                      <span className="session-step-age">
-                        <AdjacentAgeText session={adjacent.previous} />
+          <SessionCiteProvider session={citationSession} initialOrigin={requestOrigin}>
+            <header className="detail-header">
+              <p className="eyebrow">Session {session.slug}</p>
+              <h1>{session.title}</h1>
+              <SessionCatalogRecord session={session} />
+              {(adjacent.previous || adjacent.next) && (
+                <nav className="session-adjacent-nav" aria-label="Adjacent sessions in age order">
+                  {adjacent.previous && (
+                    <a
+                      className="session-step-link session-step-prev"
+                      href={`/sessions/${encodeURIComponent(adjacent.previous.slug)}`}
+                    >
+                      <span className="session-step-direction">
+                        <ArrowLeft size={16} aria-hidden="true" />
+                        Previous session
                       </span>
-                    </span>
-                  </a>
-                )}
-                {adjacent.next && (
-                  <a
-                    className="session-step-link session-step-next"
-                    href={`/sessions/${encodeURIComponent(adjacent.next.slug)}`}
-                  >
-                    <span className="session-step-direction">
-                      Next session
-                      <ArrowRight size={16} aria-hidden="true" />
-                    </span>
-                    <span className="session-step-target">
-                      <code className="session-step-slug">{adjacent.next.slug}</code>
-                      <span className="session-step-age">
-                        <AdjacentAgeText session={adjacent.next} />
+                      <span className="session-step-target">
+                        <code className="session-step-slug">{adjacent.previous.slug}</code>
+                        <span className="session-step-age">
+                          <AdjacentAgeText session={adjacent.previous} />
+                        </span>
                       </span>
-                    </span>
-                  </a>
-                )}
-              </nav>
-            )}
-          </header>
-          <SessionStickyNav initialBackHref={resolvedBackHref} />
-          <section id="guide" className="guide-overview-section" aria-labelledby="guide-overview-heading">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">AI-written companion</p>
-                <h2 id="guide-overview-heading">Guide overview</h2>
+                    </a>
+                  )}
+                  {adjacent.next && (
+                    <a
+                      className="session-step-link session-step-next"
+                      href={`/sessions/${encodeURIComponent(adjacent.next.slug)}`}
+                    >
+                      <span className="session-step-direction">
+                        Next session
+                        <ArrowRight size={16} aria-hidden="true" />
+                      </span>
+                      <span className="session-step-target">
+                        <code className="session-step-slug">{adjacent.next.slug}</code>
+                        <span className="session-step-age">
+                          <AdjacentAgeText session={adjacent.next} />
+                        </span>
+                      </span>
+                    </a>
+                  )}
+                </nav>
+              )}
+            </header>
+            <SessionStickyNav initialBackHref={resolvedBackHref} />
+            <section id="guide" className="guide-overview-section" aria-labelledby="guide-overview-heading">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">AI-written companion</p>
+                  <h2 id="guide-overview-heading">Guide overview</h2>
+                </div>
+                <span className="ai-badge">AI-written guide</span>
               </div>
-              <span className="ai-badge">AI-written guide</span>
-            </div>
-            <p className="detail-overview">{session.overview}</p>
-            <TopicLabels topics={session.topics} />
-            <div className="provenance-note">
-              <p>
-                <strong>About this guide.</strong> This overview, its themes, and its moments were written with AI from the transcript. They are a starting point for exploring the session; they are not part of the source transcript or an independently verified account of the recordings.
-              </p>
-            </div>
-          </section>
-          <SessionPageClient session={session} />
+              <p className="detail-overview">{session.overview}</p>
+              <TopicLabels topics={session.topics} />
+              <div className="provenance-note">
+                <p>
+                  <strong>About this guide.</strong> This overview, its themes, and its moments were written with AI from the transcript. They are a starting point for exploring the session; they are not part of the source transcript or an independently verified account of the recordings.
+                </p>
+              </div>
+            </section>
+            <SessionPageClient session={session} />
+          </SessionCiteProvider>
         </article>
       </main>
       <footer className="site-footer">
