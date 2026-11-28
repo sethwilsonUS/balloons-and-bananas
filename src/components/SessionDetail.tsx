@@ -1,21 +1,19 @@
 'use client';
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowDown, Check, Download, Link2, Pause, Play, Search, X } from 'lucide-react';
+import { ArrowDown, Check, Download, Link2, Pause, Play, Search, X } from 'lucide-react';
 import type { Session, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
 import { getNotationLinks, readingText } from '../lib/transcript-display';
-import { linguisticMarkers, type LinguisticMarkerId } from '../lib/linguistic-markers';
+import { linguisticMarkers } from '../lib/linguistic-markers';
 import {
   findNearestPassageIndex,
   formatCanonicalPassageUrl,
   formatTimeReadyAnnouncement,
   parseSessionHash,
 } from '../lib/session-reading';
-import { ApiError, request, timeLabel, transcriptOriginLabels } from './api';
-import { CitePassageButton, SessionCiteProvider } from './CiteControl';
-import SessionAge from './SessionAge';
-import { TopicLabels } from './TopicThemes';
+import { timeLabel, transcriptOriginLabels } from './api';
+import { CitePassageButton } from './CiteControl';
 import RecordingAudio, { type RecordingAudioHandle } from './RecordingAudio';
 
 function Highlight({ text, query, start = 0, end = text.length }: { text: string; query: string; start?: number; end?: number }) {
@@ -39,16 +37,16 @@ function Highlight({ text, query, start = 0, end = text.length }: { text: string
   return <>{pieces}</>;
 }
 
-function TranscriptText({ text, query, links, onMarker, sessionId, origin }: { text: string; query: string; links: ReturnType<typeof getNotationLinks>; onMarker?: (marker: LinguisticMarkerId) => void; sessionId: string; origin: TranscriptOrigin }) {
+function TranscriptText({ text, query, links, sessionId, origin }: { text: string; query: string; links: ReturnType<typeof getNotationLinks>; sessionId: string; origin: TranscriptOrigin }) {
   if (!links.length) return <Highlight text={text} query={query} />;
   const pieces = [];
   let cursor = 0;
   for (const link of links) {
     pieces.push(<Highlight key={`text-${cursor}`} text={text} query={query} start={cursor} end={link.start} />);
     const label = linguisticMarkers.find(item => item.id === link.marker)?.label.toLowerCase() || 'notation';
-    pieces.push(<a key={`marker-${link.start}`} className="notation-marker-link" href={`/?marker=${encodeURIComponent(link.marker)}&speaker=any`}
+    pieces.push(<a key={`marker-${link.start}`} className="notation-marker-link" href={`/search?marker=${encodeURIComponent(link.marker)}&speaker=any`}
       aria-label={`${text.slice(link.start, link.end)} — find ${label} across transcripts`}
-      onClick={event => { trackArchiveEvent('notation_explore', { recordingId: sessionId, origin, marker: link.marker }); if (!onMarker || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return; event.preventDefault(); onMarker(link.marker); }}
+      onClick={() => trackArchiveEvent('notation_explore', { recordingId: sessionId, origin, marker: link.marker })}
       onAuxClick={event => { if (event.button === 1) trackArchiveEvent('notation_explore', { recordingId: sessionId, origin, marker: link.marker }); }}>
       <Highlight text={text} query={query} start={link.start} end={link.end} />
     </a>);
@@ -58,25 +56,9 @@ function TranscriptText({ text, query, links, onMarker, sessionId, origin }: { t
   return <>{pieces}</>;
 }
 
-export function SessionBody({
-  session,
-  targetPassage = null,
-  onMarker,
-  headingLevel = 3,
-  momentsBeforePlayer = false,
-  enableHashNavigation = false,
-}: {
-  session: Session;
-  targetPassage?: number | null;
-  onMarker?: (marker: LinguisticMarkerId, sourcePassage: number) => void;
-  headingLevel?: 2 | 3;
-  momentsBeforePlayer?: boolean;
-  enableHashNavigation?: boolean;
-}) {
-  const SectionHeading = headingLevel === 2 ? 'h2' : 'h3';
-  const MomentHeading = headingLevel === 2 ? 'h3' : 'h4';
+export function SessionBody({ session }: { session: Session }) {
   const [jump, setJump] = useState<{ index: number; serial: number } | null>(null);
-  const [selectedPassage, setSelectedPassage] = useState<number | null>(targetPassage);
+  const [selectedPassage, setSelectedPassage] = useState<number | null>(null);
   const [message, setMessage] = useState('');
   const [currentTime, setCurrentTime] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -91,22 +73,6 @@ export function SessionBody({
   const linkedIndex = selectedPassage !== null && Number.isSafeInteger(selectedPassage) && selectedPassage > 0 && selectedPassage <= session.transcript.length
     ? selectedPassage - 1
     : null;
-  const targetPassageValid = targetPassage !== null && Number.isSafeInteger(targetPassage) && targetPassage > 0 && targetPassage <= session.transcript.length;
-
-  useEffect(() => {
-    if (targetPassage === null) {
-      if (!enableHashNavigation) setSelectedPassage(null);
-      return;
-    }
-    setSelectedPassage(targetPassage);
-    if (!targetPassageValid) {
-      setMessage(`Passage ${targetPassage} is outside this transcript. The available transcript is shown below.`);
-      setJump(null);
-      return;
-    }
-    setMessage(`Showing transcript passage ${targetPassage}, with surrounding passages for context.`);
-    setJump(value => ({ index: targetPassage - 1, serial: (value?.serial || 0) + 1 }));
-  }, [enableHashNavigation, targetPassage, targetPassageValid]);
 
   const jumpToPassage = useCallback((passageNumber: number) => {
     setSelectedPassage(passageNumber);
@@ -142,14 +108,14 @@ export function SessionBody({
   }, [jumpToPassage, session.transcript]);
 
   useEffect(() => {
-    if (!enableHashNavigation || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
     if (window.location.hash) {
       applySessionHash(window.location.hash);
     }
     const onHashChange = () => applySessionHash(window.location.hash);
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
-  }, [applySessionHash, enableHashNavigation]);
+  }, [applySessionHash]);
 
   const readPassage = (at: number | null, source: 'moment' | 'current' = 'moment') => {
     trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source, action: 'read' });
@@ -159,34 +125,29 @@ export function SessionBody({
     setJump(value => ({ index: targetIndex, serial: (value?.serial || 0) + 1 }));
   };
 
-  const audioSection = <RecordingAudio ref={player} sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} onTime={setCurrentTime} onPlaying={setPlaying} headingLevel={headingLevel} />;
-  const momentsSection = <section id="moments" className="moments-section" aria-labelledby="moments-heading">
-    <div className="section-heading"><div><p className="eyebrow">From the guide</p><SectionHeading id="moments-heading">Moments</SectionHeading></div><span className="muted small">{session.moments.length} {session.moments.length === 1 ? 'moment' : 'moments'}</span></div>
-    <ol className="moment-list">
-      {session.moments.map((moment, index) => <li key={`${index}-${moment.title}`}>
-        <div className="moment-marker"><span className="moment-number">{String(index + 1).padStart(2, '0')}</span>{moment.start !== null && <span className="moment-time">{timeLabel(moment.start)}</span>}</div>
-        <div className="moment-body"><MomentHeading>{moment.title}</MomentHeading><p>{moment.description}</p><p className="source-locator">{moment.locator}{moment.end !== null && moment.start !== null ? ` · ${timeLabel(moment.start)}–${timeLabel(moment.end)}` : ''}</p><div className="moment-actions">{canPlayAt(moment.start) && <button className="text-button small" type="button" onClick={() => {
-          trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'moment', action: 'listen' });
-          player.current?.playAt(moment.start!);
-        }} aria-label={`Listen from ${timeLabel(moment.start!)}: ${moment.title}`}><Play size={14} aria-hidden="true" />Listen from {timeLabel(moment.start!)}</button>}<button className="text-button small" type="button" onClick={() => readPassage(moment.start)} aria-label={`Read in the transcript: ${moment.title}`}>Read in the transcript<ArrowDown size={14} aria-hidden="true" /></button></div></div>
-      </li>)}
-    </ol>
-  </section>;
-
   return <>
-    {momentsBeforePlayer ? <>{momentsSection}{audioSection}</> : <>{audioSection}{momentsSection}</>}
+    <section id="moments" className="moments-section" aria-labelledby="moments-heading">
+      <div className="section-heading"><div><p className="eyebrow">From the guide</p><h2 id="moments-heading">Moments</h2></div><span className="muted small">{session.moments.length} {session.moments.length === 1 ? 'moment' : 'moments'}</span></div>
+      <ol className="moment-list">
+        {session.moments.map((moment, index) => <li key={`${index}-${moment.title}`}>
+          <div className="moment-marker"><span className="moment-number">{String(index + 1).padStart(2, '0')}</span>{moment.start !== null && <span className="moment-time">{timeLabel(moment.start)}</span>}</div>
+          <div className="moment-body"><h3>{moment.title}</h3><p>{moment.description}</p><p className="source-locator">{moment.locator}{moment.end !== null && moment.start !== null ? ` · ${timeLabel(moment.start)}–${timeLabel(moment.end)}` : ''}</p><div className="moment-actions">{canPlayAt(moment.start) && <button className="text-button small" type="button" onClick={() => {
+            trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'moment', action: 'listen' });
+            player.current?.playAt(moment.start!);
+          }} aria-label={`Listen from ${timeLabel(moment.start!)}: ${moment.title}`}><Play size={14} aria-hidden="true" />Listen from {timeLabel(moment.start!)}</button>}<button className="text-button small" type="button" onClick={() => readPassage(moment.start)} aria-label={`Read in the transcript: ${moment.title}`}>Read in the transcript<ArrowDown size={14} aria-hidden="true" /></button></div></div>
+        </li>)}
+      </ol>
+    </section>
+    <RecordingAudio ref={player} sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} onTime={setCurrentTime} onPlaying={setPlaying} headingLevel={2} />
     <Transcript
       session={session}
       jump={jump}
       message={message}
       linkedIndex={linkedIndex}
-      autoShowNotation={targetPassageValid}
       activeIndex={activeIndex}
       playing={playing}
       hasAudio={hasAudio}
       canPlayAt={canPlayAt}
-      headingLevel={headingLevel}
-      enableHashNavigation={enableHashNavigation}
       onSelectPassage={jumpToPassage}
       onPlayAt={at => {
         trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'cue', action: 'listen' });
@@ -194,7 +155,6 @@ export function SessionBody({
       }}
       onTogglePlayback={() => player.current?.toggle()}
       onCurrentPassage={() => readPassage(currentTime, 'current')}
-      onMarker={onMarker}
     />
   </>;
 }
@@ -204,42 +164,33 @@ function Transcript({
   jump,
   message,
   linkedIndex,
-  autoShowNotation,
   activeIndex,
   playing,
   hasAudio,
   canPlayAt,
-  headingLevel,
-  enableHashNavigation,
   onSelectPassage,
   onPlayAt,
   onTogglePlayback,
   onCurrentPassage,
-  onMarker,
 }: {
   session: Session;
   jump: { index: number; serial: number } | null;
   message: string;
   linkedIndex: number | null;
-  autoShowNotation: boolean;
   activeIndex: number | null;
   playing: boolean;
   hasAudio: boolean;
   canPlayAt: (at: number | null | undefined) => boolean;
-  headingLevel: 2 | 3;
-  enableHashNavigation: boolean;
   onSelectPassage: (passageNumber: number) => void;
   onPlayAt: (at: number) => void;
   onTogglePlayback: () => void;
   onCurrentPassage: () => void;
-  onMarker?: (marker: LinguisticMarkerId, sourcePassage: number) => void;
 }) {
-  const SectionHeading = headingLevel === 2 ? 'h2' : 'h3';
   const [query, setQuery] = useState('');
   const findEdited = useRef(false);
   const [follow, setFollow] = useState(false);
   const hasChatNotation = session.origin === 'archived_research' || session.origin === 'talkbank_ai_draft';
-  const [showNotation, setShowNotation] = useState(hasChatNotation && autoShowNotation);
+  const [showNotation, setShowNotation] = useState(false);
   const [toolbarHeight, setToolbarHeight] = useState(0);
   const [copiedPassage, setCopiedPassage] = useState<number | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
@@ -247,12 +198,6 @@ function Transcript({
   const toolbar = useRef<HTMLDivElement>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualCopyInput = useRef<HTMLInputElement>(null);
-
-  // Inspectable source notation is the initial view for exact linguistic passage links.
-  // Playback and ordinary passage jumps do not override a reader's choice.
-  useEffect(() => {
-    if (hasChatNotation && autoShowNotation) setShowNotation(true);
-  }, [hasChatNotation, autoShowNotation]);
 
   useEffect(() => () => {
     if (copyTimer.current) clearTimeout(copyTimer.current);
@@ -348,7 +293,7 @@ function Transcript({
   };
 
   return <section id="transcript" className="transcript-section" aria-labelledby="transcript-heading" style={{ '--transcript-toolbar-height': `${toolbarHeight}px` } as CSSProperties}>
-    <div className="section-heading"><div><p className="eyebrow">The source text</p><SectionHeading id="transcript-heading">Transcript</SectionHeading></div><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
+    <div className="section-heading"><div><p className="eyebrow">The source text</p><h2 id="transcript-heading">Transcript</h2></div><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
     <p className="small muted">{session.origin === 'archived_research' ? 'A readable view of the archived research transcript. Original notation is retained in the downloadable source files.' : 'Machine-generated draft: words, speakers, and timestamps may be wrong. Check the recording before treating a passage as evidence.'}</p>
     {hasAudio && <div ref={toolbar} className="transcript-playback-tools" role="group" aria-label="Transcript playback controls"><button type="button" className="button secondary" onClick={onTogglePlayback}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}{playing ? 'Pause audio' : 'Play audio'}</button><button type="button" className="button secondary" onClick={onCurrentPassage} disabled={activeIndex === null || activeIndex < 0}>Current passage</button><label className="follow-control"><input type="checkbox" checked={follow} onChange={event => {
       setFollow(event.target.checked);
@@ -395,11 +340,8 @@ function Transcript({
               <a
                 className="passage-anchor"
                 href={`#p${passageNumber}`}
-                onClick={event => {
-                  if (!enableHashNavigation) {
-                    event.preventDefault();
-                    onSelectPassage(passageNumber);
-                  } else if (window.location.hash.toLowerCase() === `#p${passageNumber}`) {
+                onClick={() => {
+                  if (window.location.hash.toLowerCase() === `#p${passageNumber}`) {
                     onSelectPassage(passageNumber);
                   }
                 }}
@@ -428,7 +370,6 @@ function Transcript({
                 text={text}
                 query={query}
                 links={links}
-                onMarker={onMarker ? marker => onMarker(marker, passageNumber) : undefined}
               />
             </p>
             <div className="passage-actions">
@@ -451,10 +392,9 @@ function Transcript({
   </section>;
 }
 
-export function SessionSources({ session, headingLevel = 3 }: { session: Session; headingLevel?: 2 | 3 }) {
-  const SectionHeading = headingLevel === 2 ? 'h2' : 'h3';
+export function SessionSources({ session }: { session: Session }) {
   return <section className="source-section" aria-labelledby="sources-heading">
-    <p className="eyebrow">Keep the evidence in view</p><SectionHeading id="sources-heading">Sources &amp; reading notes</SectionHeading>
+    <p className="eyebrow">Keep the evidence in view</p><h2 id="sources-heading">Sources &amp; reading notes</h2>
     {session.limits.length > 0 && <ul className="reading-notes">{session.limits.map((limit, index) => <li key={index}>{limit}</li>)}</ul>}
     <div className="source-downloads">{session.sources.map(source => <a key={source.id} href={`/api/assets/${encodeURIComponent(source.id)}`} className="download-link" download={source.name} referrerPolicy="no-referrer" onClick={() => {
       const format = ['cha', 'txt', 'json', 'vtt', 'md', 'html'].includes(source.format.toLowerCase()) ? source.format.toLowerCase() : 'other';
@@ -463,73 +403,4 @@ export function SessionSources({ session, headingLevel = 3 }: { session: Session
     }}><Download size={18} aria-hidden="true" /><span><strong>{source.label}</strong><span className="small muted">{source.name} · {source.format.toUpperCase()}</span></span></a>)}</div>
     <details className="technical-notes"><summary>Source identification</summary><p>{session.association}</p><p><strong>Source file: </strong><code>{session.sourceName}</code></p>{session.ages.length > 0 && <p><strong>Stored age notation (CHAT): </strong>{session.ages.join(' / ')}</p>}{session.ages.length === 0 && session.inferredAge && <p><strong>Inferred age notation (from filename): </strong>{session.inferredAge}</p>}<p className="small">Source SHA-256</p><code>{session.sourceSha256}</code></details>
   </section>;
-}
-
-export default function SessionDetail({ id, passage = null, onBack, onMarker, onDocument, onSessionState }: {
-  id: string;
-  passage?: number | null;
-  onBack: () => void;
-  onMarker: (marker: LinguisticMarkerId, sourcePassage: number) => void;
-  onDocument: (id: string) => void;
-  onSessionState?: (state: { id: string; title: string | null; notFound: boolean }) => void;
-}) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [error, setError] = useState('');
-  const [notFound, setNotFound] = useState(false);
-  const [retry, setRetry] = useState(0);
-  const heading = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setSession(null);
-    setError('');
-    setNotFound(false);
-    void request<Session>(`/api/entries/${encodeURIComponent(id)}`, { signal: controller.signal }).then(data => {
-      if (!controller.signal.aborted) setSession(data);
-    }).catch((reason: unknown) => {
-      if (controller.signal.aborted) return;
-      const missing = reason instanceof ApiError && reason.status === 404;
-      setNotFound(missing);
-      setError(missing ? 'This session could not be found.' : 'This session could not be loaded. Please try again.');
-    });
-    return () => controller.abort();
-  }, [id, retry]);
-
-  useEffect(() => {
-    onSessionState?.({ id, title: session?.id === id ? session.title : null, notFound });
-  }, [session, id, notFound, onSessionState]);
-
-  useEffect(() => {
-    if (session) trackArchiveEvent('recording_view', { recordingId: session.id, origin: session.origin });
-  }, [session]);
-
-  useEffect(() => {
-    if (session && (passage === null || !Number.isSafeInteger(passage) || passage < 1 || passage > session.transcript.length)) heading.current?.focus();
-  }, [session, passage]);
-
-  return <article className="session-detail">
-    <button type="button" className="text-button back-button" onClick={onBack}><ArrowLeft size={17} aria-hidden="true" />Back to sessions</button>
-    {error ? <div className="error-panel" role="alert"><p>{error}</p><button className="button secondary" type="button" onClick={() => setRetry(value => value + 1)}>Try again</button></div> : !session ? <p className="loading-message" role="status">Opening the session…</p> : (
-      <SessionCiteProvider
-        session={{
-          slug: session.slug || session.id,
-          ages: session.ages,
-          inferredAge: session.inferredAge,
-          dates: session.dates,
-          origin: session.origin,
-        }}
-      >
-        <header className="detail-header">
-          <div className="session-meta"><span className="eyebrow">Session</span><span>{session.sourceName}</span><SessionAge ages={session.ages} inferredAge={session.inferredAge} onDocument={onDocument} />{session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}</div>
-          <h2 ref={heading} tabIndex={-1}>{session.title}</h2>
-          <div className="badge-row"><span className="ai-badge">AI-written guide</span><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
-          <p className="detail-overview">{session.overview}</p>
-          <TopicLabels topics={session.topics} />
-        </header>
-        <div className="provenance-note"><p><strong>About this guide.</strong> This overview, its themes, and its moments were written with AI from the transcript. They are a starting point for exploring the session; they are not part of the source transcript or an independently verified account of the recordings.</p></div>
-        <SessionBody key={session.id} session={session} targetPassage={passage} onMarker={onMarker} />
-        <SessionSources session={session} />
-      </SessionCiteProvider>
-    )}
-  </article>;
 }

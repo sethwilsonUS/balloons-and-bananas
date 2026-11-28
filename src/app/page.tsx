@@ -4,7 +4,6 @@ import { notFound, permanentRedirect } from 'next/navigation';
 import { connection } from 'next/server';
 import { ArrowRight, BookOpen, CalendarRange, Headphones, Search } from 'lucide-react';
 import ArchiveAnalytics from '@/components/ArchiveAnalytics';
-import ArchiveApp from '@/components/ArchiveApp';
 import RouteHeader from '@/components/RouteHeader';
 import SiteFooter from '@/components/SiteFooter';
 import { ThemeShortcutLinks } from '@/components/TopicThemes';
@@ -25,17 +24,6 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const LEGACY_SECTION_VALUES = new Set<string>(['sessions', 'recordings', 'research']);
-
-function hasLegacySectionParam(
-  params: Record<string, string | string[] | undefined>,
-): boolean {
-  const raw = Object.hasOwn(params, 'section') ? params.section : undefined;
-  const first = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : undefined;
-  const trimmed = first?.trim();
-  return Boolean(trimmed && LEGACY_SECTION_VALUES.has(trimmed));
-}
 
 const resolveArchiveLegacyLookup = cache(
   async (
@@ -60,7 +48,7 @@ async function resolveLegacyRoot(
   if (intent.kind === 'none') {
     return { kind: 'none' };
   }
-  if (intent.kind === 'marker') {
+  if (intent.kind === 'marker' || intent.kind === 'section') {
     return { kind: 'redirect', destination: intent.destination };
   }
   if (intent.kind === 'entry') {
@@ -107,9 +95,6 @@ export default async function HomePage({
   if (resolved.kind === 'not-found') {
     notFound();
   }
-  if (hasLegacySectionParam(params)) {
-    return <ArchiveApp />;
-  }
 
   const data = await archive();
   const summary = catalog(data);
@@ -118,7 +103,7 @@ export default async function HomePage({
   return (
     <div className="archive-shell">
       <ArchiveAnalytics ready section="overview" sessionId={null} documentId={null} />
-      <RouteHeader activeSection="overview" sessionCount={summary.counts.sessions} />
+      <RouteHeader activeSection="overview" />
       <main id="main" tabIndex={-1}>
         <header className="masthead home-masthead">
           <h1>{ARCHIVE_NAME}</h1>

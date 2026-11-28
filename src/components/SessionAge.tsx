@@ -1,5 +1,3 @@
-'use client';
-
 import { formatAge, INFERRED_AGE_EXPLANATION_HREF } from '../lib/age';
 
 /**
@@ -10,7 +8,6 @@ import { formatAge, INFERRED_AGE_EXPLANATION_HREF } from '../lib/age';
 export default function SessionAge({ ages, inferredAge, showPrefix = true, showChatCode = false }: {
   ages: string[];
   inferredAge: string | null;
-  onDocument?: (id: string) => void;
   showPrefix?: boolean;
   showChatCode?: boolean;
 }) {

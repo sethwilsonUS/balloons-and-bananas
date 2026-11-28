@@ -7,6 +7,7 @@ import {
   type RawSearchParams,
 } from './search-params';
 import { resolveBackToResultsUrl } from './session-reading';
+import { buildSessionsUrl, parseOriginParam } from './sessions-browse';
 import { positiveThemes } from './topics';
 import type { ArchiveData, ArchiveDocument, Session } from './types';
 
@@ -14,6 +15,12 @@ const POSITIVE_INT_RE = /^[1-9]\d*$/;
 const ACCESS_SEGMENT_RE = /^access=/i;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 const VALID_THEME_TOPICS: ReadonlySet<string> = new Set(positiveThemes.map(theme => theme.topic));
+
+const LEGACY_SECTION_TARGETS: Record<string, '/sessions' | '/research'> = {
+  sessions: '/sessions',
+  recordings: '/sessions',
+  research: '/research',
+};
 
 /**
  * Legacy document IDs whose content now lives on `/about` if the standalone
@@ -26,7 +33,8 @@ export type LegacyRootIntent =
   | { kind: 'none' }
   | { kind: 'entry'; rawId: string; passage: number | null; from: string | null }
   | { kind: 'document'; rawId: string }
-  | { kind: 'marker'; destination: string };
+  | { kind: 'marker'; destination: string }
+  | { kind: 'section'; destination: string };
 
 export type LegacyRedirectResolution =
   | { kind: 'none' }
@@ -82,10 +90,12 @@ export function isSafeRootRelativeDestination(value: string): boolean {
 
 /**
  * Classify query parameters on `/` into a legacy redirect intent using the same
- * precedence order as the historical single-page reader (`entry` > `document` > `marker`).
+ * precedence order as the historical single-page reader (`entry` > `document` >
+ * `marker` > `section`).
  *
- * Returns `{ kind: 'marker', destination }` directly when a valid linguistic marker
- * link can be redirected without loading archive data (used in Next.js `proxy.ts`).
+ * Returns `{ kind: 'marker', destination }` or `{ kind: 'section', destination }`
+ * directly when the legacy link can be redirected without loading archive data
+ * (used in Next.js `proxy.ts`).
  */
 export function classifyLegacyRootRequest(params: RawSearchParams): LegacyRootIntent {
   const rawEntry = readParam(params, 'entry')?.trim() ?? '';
@@ -115,6 +125,22 @@ export function classifyLegacyRootRequest(params: RawSearchParams): LegacyRootIn
     return {
       kind: 'marker',
       destination,
+    };
+  }
+
+  const rawSection = readParam(params, 'section')?.trim().toLowerCase() ?? '';
+  if (rawSection && Object.hasOwn(LEGACY_SECTION_TARGETS, rawSection)) {
+    const baseTarget = LEGACY_SECTION_TARGETS[rawSection];
+    if (baseTarget === '/sessions') {
+      const origin = parseOriginParam(readParam(params, 'origin') ?? undefined);
+      return {
+        kind: 'section',
+        destination: buildSessionsUrl(origin),
+      };
+    }
+    return {
+      kind: 'section',
+      destination: baseTarget,
     };
   }
 
@@ -206,6 +232,7 @@ export function resolveLegacyRootIntent(
     case 'none':
       return { kind: 'none' };
     case 'marker':
+    case 'section':
       return { kind: 'redirect', destination: intent.destination };
     case 'entry':
       return resolveLegacyEntryTarget(data.sessions, intent.rawId, intent.passage, intent.from);

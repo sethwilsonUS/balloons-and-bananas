@@ -194,36 +194,37 @@ test('unknown /sessions/[id] returns HTTP 404 with private headers, helpful sear
 
   const searchLink = page.getByRole('link', { name: 'Search sessions' });
   await expect(searchLink).toBeVisible();
-  await expect(searchLink).toHaveAttribute('href', '/?section=sessions');
+  await expect(searchLink).toHaveAttribute('href', '/search');
 
   await auditAllThemes(page, '/sessions/nonexistent-fixture-session 404');
 
-  // Following the search link lands on the archive search view
+  // Following the search link lands on /search
   await searchLink.click();
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Search the archive' })).toBeVisible();
 });
 
-test('browse and search cards link to /sessions/<slug>, browser Back restores previous results, and browser storage holds no archive or query text', async ({ page }) => {
-  await page.goto('/?section=sessions');
+test('search cards link to /sessions/<slug>, browser Back restores previous results, and browser storage holds no archive or query text', async ({ page }) => {
+  await page.goto('/search');
 
-  // Search from legacy sessions view -> 2 results for "locomotive"
+  // Search from /search -> 2 results for "locomotive"
   await page.getByLabel('Search sessions and transcripts').fill('locomotive');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
 
-  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
+  await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
   const firstCardLink = page.getByRole('link', { name: /Blue locomotive and wooden bridge/i });
   const secondCardLink = page.getByRole('link', { name: /Paper lighthouse and harbor bells/i });
-  await expect(firstCardLink).toHaveAttribute('href', '/sessions/010815');
-  await expect(secondCardLink).toHaveAttribute('href', '/sessions/020604-local');
+  await expect(firstCardLink).toHaveAttribute('href', /^\/sessions\/010815(?:\?|#|$)/);
+  await expect(secondCardLink).toHaveAttribute('href', /^\/sessions\/020604-local(?:\?|#|$)/);
 
   // Switch to List view and confirm list links also point to /sessions/<slug>
   await page.getByRole('button', { name: 'List', exact: true }).click();
-  await expect(page.locator('.sessions-compact-list a[href="/sessions/010815"]')).toBeVisible();
+  await expect(page.locator('.sessions-compact-list a[href^="/sessions/010815"]')).toBeVisible();
   await page.getByRole('button', { name: 'Details', exact: true }).click();
 
   // Navigate to /sessions/010815 via card link
   await firstCardLink.click();
-  await expect(page).toHaveURL(/\/sessions\/010815$/);
+  await expect(page).toHaveURL(/\/sessions\/010815(?:\?.*)?$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
 
   // Confirm neither localStorage nor sessionStorage contains query text or archive text
@@ -239,11 +240,11 @@ test('browse and search cards link to /sessions/<slug>, browser Back restores pr
 
   // Browser Back returns to the previous "locomotive" search results
   await page.goBack();
-  await expect(page).toHaveURL(/\/(?:\?.*)?$/);
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  await expect(page).toHaveURL(/\/search\?q=locomotive$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Search the archive' })).toBeVisible();
   await expect(page.getByLabel('Search sessions and transcripts')).toHaveValue('locomotive');
   await expect(page.getByLabel('Sort by')).toHaveValue('relevance');
-  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
+  await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
   await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toBeVisible();
   await expect(page.getByRole('link', { name: /Paper lighthouse and harbor bells/i })).toBeVisible();
 
@@ -251,19 +252,20 @@ test('browse and search cards link to /sessions/<slug>, browser Back restores pr
   await page.getByRole('button', { name: /Clear filters/i }).click();
   await page.getByLabel('Theme', { exact: true }).selectOption('Play and imagination');
   await page.getByLabel('Sort by').selectOption('age-desc');
-  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
+  await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
   const submarineLink = page.getByRole('link', { name: /Yellow submarine in the courtyard/i });
-  await expect(submarineLink).toHaveAttribute('href', '/sessions/020110-tb');
+  await expect(submarineLink).toHaveAttribute('href', /^\/sessions\/020110-tb(?:\?|#|$)/);
 
   await submarineLink.click();
-  await expect(page).toHaveURL(/\/sessions\/020110-tb$/);
+  await expect(page).toHaveURL(/\/sessions\/020110-tb(?:\?.*)?$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Yellow submarine in the courtyard' })).toBeVisible();
 
   await page.goBack();
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  await expect(page).toHaveURL(/\/search\?topic=Play\+and\+imagination&sort=age-desc$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Search the archive' })).toBeVisible();
   await expect(page.getByLabel('Theme', { exact: true })).toHaveValue('Play and imagination');
   await expect(page.getByLabel('Sort by')).toHaveValue('age-desc');
-  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
+  await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
 });
 
 test('build-output check proves no synthetic fixture phrases appear anywhere in .next/', async () => {

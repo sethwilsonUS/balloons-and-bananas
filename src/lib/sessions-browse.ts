@@ -13,16 +13,6 @@ export const VALID_TRANSCRIPT_ORIGINS: readonly TranscriptOrigin[] = [
 
 const ORIGIN_SET = new Set<string>(VALID_TRANSCRIPT_ORIGINS);
 
-export const LEGACY_ROOT_PARAM_KEYS = [
-  'entry',
-  'passage',
-  'document',
-  'marker',
-  'speaker',
-] as const;
-
-const LEGACY_SECTION_VALUES = new Set<string>(['sessions', 'recordings', 'research']);
-
 export function isTranscriptOrigin(value: unknown): value is TranscriptOrigin {
   return typeof value === 'string' && ORIGIN_SET.has(value);
 }
@@ -47,22 +37,6 @@ export function parseOriginParam(value: string | string[] | undefined): Transcri
  */
 export function parseStoredView(value: unknown): SessionView | null {
   return value === 'details' || value === 'list' ? value : null;
-}
-
-/**
- * Detect legacy single-page-app query parameters on `/` so existing shared links
- * continue to reach ArchiveApp until Ticket 15 replaces them with permanent redirects.
- * Reads the first occurrence per key to match URLSearchParams.get() in ArchiveApp.
- */
-export function hasLegacyRootParams(
-  searchParams: Record<string, string | string[] | undefined>,
-): boolean {
-  for (const key of LEGACY_ROOT_PARAM_KEYS) {
-    const first = firstParamValue(searchParams[key])?.trim();
-    if (first && first.length > 0) return true;
-  }
-  const section = firstParamValue(searchParams.section)?.trim();
-  return Boolean(section && LEGACY_SECTION_VALUES.has(section));
 }
 
 export type SessionAudioStatus = 'mp3' | 'no-mp3' | 'none';

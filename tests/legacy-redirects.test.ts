@@ -36,11 +36,23 @@ test('table-driven legacy root query classification and resolution across every 
   }> = [
     // Plain root & non-legacy root params
     { name: 'bare root', query: '', expected: { kind: 'none' } },
-    { name: 'section=sessions left alone', query: 'section=sessions', expected: { kind: 'none' } },
+    { name: 'section=overview renders homepage', query: 'section=overview', expected: { kind: 'none' } },
+    { name: 'section=unknown renders homepage', query: 'section=unknown', expected: { kind: 'none' } },
+    { name: 'section=toString ignored safely (prototype key)', query: 'section=toString', expected: { kind: 'none' } },
+    { name: 'section=constructor ignored safely (prototype key)', query: 'section=constructor', expected: { kind: 'none' } },
     { name: 'empty entry ignored', query: 'entry=', expected: { kind: 'none' } },
     { name: 'whitespace entry ignored', query: 'entry=%20%20', expected: { kind: 'none' } },
     { name: 'empty document ignored', query: 'document=', expected: { kind: 'none' } },
     { name: 'invalid marker ignored', query: 'marker=not-a-marker', expected: { kind: 'none' } },
+
+    // Legacy ?section=sessions|recordings|research redirects
+    { name: 'section=sessions -> /sessions', query: 'section=sessions', expected: { kind: 'redirect', destination: '/sessions' } },
+    { name: 'section=recordings -> /sessions', query: 'section=recordings', expected: { kind: 'redirect', destination: '/sessions' } },
+    { name: 'section=SESSIONS (case-insensitive) -> /sessions', query: 'section=SESSIONS', expected: { kind: 'redirect', destination: '/sessions' } },
+    { name: 'section=sessions preserves valid origin', query: 'section=sessions&origin=archived_research', expected: { kind: 'redirect', destination: '/sessions?origin=archived_research' } },
+    { name: 'section=sessions drops invalid origin', query: 'section=sessions&origin=bogus', expected: { kind: 'redirect', destination: '/sessions' } },
+    { name: 'section=research -> /research', query: 'section=research', expected: { kind: 'redirect', destination: '/research' } },
+    { name: 'section=RESEARCH (case-insensitive) -> /research', query: 'section=RESEARCH', expected: { kind: 'redirect', destination: '/research' } },
 
     // ?entry=<legacyId> and &passage=N
     {
@@ -203,26 +215,36 @@ test('table-driven legacy root query classification and resolution across every 
       expected: { kind: 'redirect', destination: '/search?marker=repetition' },
     },
 
-    // Precedence: entry > document > marker
+    // Precedence: entry > document > marker > section
     {
-      name: 'entry takes precedence over document and marker',
-      query: 'entry=fixture-010815-locomotive&document=fixture-provenance-guide&marker=repetition',
+      name: 'entry takes precedence over document, marker, and section',
+      query: 'entry=fixture-010815-locomotive&document=fixture-provenance-guide&marker=repetition&section=research',
       expected: { kind: 'redirect', destination: '/sessions/010815' },
     },
     {
-      name: 'unknown entry still takes precedence over document and marker (404)',
-      query: 'entry=unknown-id&document=fixture-provenance-guide&marker=repetition',
+      name: 'unknown entry still takes precedence over document, marker, and section (404)',
+      query: 'entry=unknown-id&document=fixture-provenance-guide&marker=repetition&section=sessions',
       expected: { kind: 'not-found', entity: 'session' },
     },
     {
-      name: 'document takes precedence over marker',
-      query: 'document=fixture-provenance-guide&marker=repetition&speaker=any',
+      name: 'document takes precedence over marker and section',
+      query: 'document=fixture-provenance-guide&marker=repetition&speaker=any&section=sessions',
       expected: { kind: 'redirect', destination: '/research/fixture-provenance-guide' },
+    },
+    {
+      name: 'marker takes precedence over section',
+      query: 'marker=repetition&speaker=any&section=research',
+      expected: { kind: 'redirect', destination: '/search?marker=repetition&speaker=any' },
     },
     {
       name: 'empty entry falls through to document',
       query: 'entry=&document=fixture-provenance-guide',
       expected: { kind: 'redirect', destination: '/research/fixture-provenance-guide' },
+    },
+    {
+      name: 'empty entry/document and invalid marker fall through to section',
+      query: 'entry=&document=&marker=bogus&section=sessions',
+      expected: { kind: 'redirect', destination: '/sessions' },
     },
   ];
 
@@ -348,7 +370,7 @@ test('table-driven stripAccessFromHash strips #access= and preserves all other f
   }
 });
 
-test('Next.js 16 proxy() returns HTTP 308 with private headers for /?marker= and passes through /?entry=, /?document=, and /', () => {
+test('Next.js 16 proxy() returns HTTP 308 with private headers for /?marker= and /?section= and passes through /?entry=, /?document=, and /', () => {
   const markerAny = proxy(new NextRequest('https://archive.example/?marker=repetition&speaker=any'));
   assert.equal(markerAny.status, 308);
   assert.equal(markerAny.headers.get('location'), 'https://archive.example/search?marker=repetition&speaker=any');
@@ -370,13 +392,35 @@ test('Next.js 16 proxy() returns HTTP 308 with private headers for /?marker= and
   assert.equal(markerValidTopic.status, 308);
   assert.equal(markerValidTopic.headers.get('location'), 'https://archive.example/search?topic=Play+and+imagination&marker=repetition');
 
-  // Entry and document take precedence over marker and pass through to page.tsx for archive lookup
+  for (const [url, expectedLocation] of [
+    ['https://archive.example/?section=sessions', 'https://archive.example/sessions'],
+    ['https://archive.example/?section=recordings', 'https://archive.example/sessions'],
+    ['https://archive.example/?section=SESSIONS&origin=archived_research', 'https://archive.example/sessions?origin=archived_research'],
+    ['https://archive.example/?section=sessions&origin=bogus', 'https://archive.example/sessions'],
+    ['https://archive.example/?section=research', 'https://archive.example/research'],
+    ['https://archive.example/?marker=repetition&section=research', 'https://archive.example/search?marker=repetition'],
+  ]) {
+    const res = proxy(new NextRequest(url));
+    assert.equal(res.status, 308, `expected 308 for ${url}`);
+    assert.equal(res.headers.get('location'), expectedLocation, `location for ${url}`);
+    assert.match(res.headers.get('cache-control') || '', /\bno-store\b/i);
+    assert.match(res.headers.get('cdn-cache-control') || '', /\bno-store\b/i);
+    assert.match(res.headers.get('x-robots-tag') || '', /\bnoindex\b/i);
+    assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
+  }
+
+  // Entry and document take precedence over marker and section and pass through to page.tsx for archive lookup
   for (const passThroughUrl of [
     'https://archive.example/',
     'https://archive.example/?entry=fixture-010815-locomotive',
     'https://archive.example/?entry=fixture-010815-locomotive&marker=repetition',
+    'https://archive.example/?entry=fixture-010815-locomotive&section=sessions',
     'https://archive.example/?document=fixture-provenance-guide&marker=repetition',
+    'https://archive.example/?document=fixture-provenance-guide&section=research',
     'https://archive.example/?marker=bogus',
+    'https://archive.example/?section=overview',
+    'https://archive.example/?section=bogus',
+    'https://archive.example/?section=toString',
   ]) {
     const res = proxy(new NextRequest(passThroughUrl));
     assert.equal(res.status, 200, `expected passthrough for ${passThroughUrl}`);

@@ -19,7 +19,7 @@ export default function ResearchDocumentNotFound() {
               <BookOpen size={17} aria-hidden="true" />
               Research &amp; context
             </a>
-            <a className="button secondary" href="/?section=sessions">
+            <a className="button secondary" href="/search">
               <Search size={17} aria-hidden="true" />
               Search sessions
             </a>

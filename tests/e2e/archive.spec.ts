@@ -101,14 +101,14 @@ test('overview loads, theme toggle switches light/dark/system themes, and axe is
 });
 
 test('search returns results and moves focus to the results heading', async ({ page }) => {
-  await page.goto('/?section=sessions');
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  await page.goto('/search');
+  await expect(page.getByRole('heading', { level: 1, name: 'Search the archive' })).toBeVisible();
 
   const archiveSearch = page.getByLabel('Search sessions and transcripts');
   await archiveSearch.fill('locomotive');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
 
-  const resultsHeading = page.locator('.results-toolbar h3');
+  const resultsHeading = page.locator('.results-toolbar h2');
   await expect(resultsHeading).toHaveText('2 sessions');
   await expect(resultsHeading).toBeFocused();
   await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toBeVisible();
@@ -222,18 +222,18 @@ test('passage deep link (?entry=...&passage=3) redirects to /sessions/<slug>#p3,
 });
 
 test('research section and document reader render markdown tables and downloads with zero serious axe violations', async ({ page, request }) => {
-  await page.goto('/?section=research');
+  await page.goto('/research');
 
-  await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 3, name: 'Fixture annotation provenance guide' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 3, name: 'Fixture research reading list' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Research & context' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Fixture annotation provenance guide' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'Fixture research reading list' })).toBeVisible();
   await auditBothThemes(page, 'research section');
 
-  // Open standalone document reader via internal link
-  await page.getByRole('link', { name: 'annotation provenance guide' }).click();
-  const docHeading = page.locator('.document-detail > h2');
+  // Open standalone document reader via card link
+  await page.getByRole('link', { name: 'Fixture annotation provenance guide' }).click();
+  await expect(page).toHaveURL(/\/research\/fixture-provenance-guide$/);
+  const docHeading = page.locator('.document-detail h1');
   await expect(docHeading).toHaveText('Fixture annotation provenance guide');
-  await expect(docHeading).toBeFocused();
 
   // Verify the markdown table has 3 intact columns including escaped pipe inside code span
   const table = page.locator('.document-detail .table-scroll table');
