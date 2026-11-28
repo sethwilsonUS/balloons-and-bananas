@@ -174,13 +174,21 @@ test('resolveBackToResultsUrl and getBackToResultsHref accept safe same-origin s
     resolveBackToResultsUrl('/?marker=repetition&speaker=child', origin),
     '/?marker=repetition&speaker=child',
   );
+  assert.equal(
+    resolveBackToResultsUrl('/?entry=&marker=repetition', origin),
+    '/?entry=&marker=repetition',
+  );
 
-  // Reject unsafe, cross-origin, or non-results URLs
+  // Reject unsafe, cross-origin, or non-results URLs (including root URLs whose entry/document selector takes precedence)
   for (const rejected of [
     '',
     '/',
     '/sessions/010815',
     '/research/methods',
+    '/?entry=fixture-010815-locomotive&marker=repetition',
+    '/?document=fixture-provenance-guide&section=sessions',
+    '/?entry=fixture-010815-locomotive&section=sessions',
+    '/?marker=not-a-marker',
     'https://evil.example/search?q=test',
     '//evil.example/search',
     'javascript:alert(1)',

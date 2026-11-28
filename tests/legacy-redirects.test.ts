@@ -99,6 +99,21 @@ test('table-driven legacy root query classification and resolution across every 
       expected: { kind: 'redirect', destination: '/sessions/010815?from=%2Fsessions' },
     },
     {
+      name: 'valid root marker ?from= preserved alongside ?entry=',
+      query: 'entry=fixture-010815-locomotive&from=%2F%3Fmarker%3Drepetition%26speaker%3Dany',
+      expected: { kind: 'redirect', destination: '/sessions/010815?from=%2F%3Fmarker%3Drepetition%26speaker%3Dany' },
+    },
+    {
+      name: 'root ?from= with nonempty entry selector rejected (would loop to detail page)',
+      query: 'entry=fixture-010815-locomotive&from=%2F%3Fentry%3Dfixture-010815-locomotive%26marker%3Drepetition',
+      expected: { kind: 'redirect', destination: '/sessions/010815' },
+    },
+    {
+      name: 'root ?from= with nonempty document selector rejected (resolves to detail page)',
+      query: 'entry=fixture-010815-locomotive&from=%2F%3Fdocument%3Dfixture-provenance-guide%26section%3Dsessions',
+      expected: { kind: 'redirect', destination: '/sessions/010815' },
+    },
+    {
       name: 'external ?from= rejected on ?entry= redirect',
       query: 'entry=fixture-010815-locomotive&from=https%3A%2F%2Fevil.example%2Fsearch',
       expected: { kind: 'redirect', destination: '/sessions/010815' },

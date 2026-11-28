@@ -1,5 +1,6 @@
 import { compareSessionsByAge, formatAge } from './age';
 import { formatDurationWords } from './audio-player';
+import { isLinguisticMarkerId } from './linguistic-markers';
 import type { Passage, Session } from './types';
 
 export type SessionHashTarget =
@@ -246,12 +247,20 @@ export function resolveBackToResultsUrl(
   if (parsed.origin !== baseOrigin) return null;
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
 
+  const hasRootDetailSelector = Boolean(
+    parsed.searchParams.get('entry')?.trim()
+    || parsed.searchParams.get('document')?.trim(),
+  );
   const isAllowedRoute =
     parsed.pathname === '/search'
     || parsed.pathname === '/sessions'
     || (
       parsed.pathname === '/'
-      && (parsed.searchParams.get('section') === 'sessions' || parsed.searchParams.has('marker'))
+      && !hasRootDetailSelector
+      && (
+        parsed.searchParams.get('section') === 'sessions'
+        || isLinguisticMarkerId(parsed.searchParams.get('marker')?.trim())
+      )
     );
 
   if (!isAllowedRoute) return null;
