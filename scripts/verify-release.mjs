@@ -143,6 +143,43 @@ async function main() {
   check(/User-agent:\s*\*/i.test(robotsText), 'robots:all_agents');
   check(/^Disallow:\s*\/\s*$/im.test(robotsText), 'robots:disallow_all');
 
+  // Verify site-wide Open Graph & Twitter card metadata in <head> and 1200x630 PNG routes.
+  const headMatch = /<head[^>]*>([\s\S]*?)<\/head>/i.exec(html);
+  const rootHead = headMatch ? headMatch[1] : '';
+  const headMeta = (attr, key) => {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = new RegExp(
+      `<meta\\s+[^>]*${attr}="${escaped}"[^>]*content="([^"]*)"|<meta\\s+[^>]*content="([^"]*)"[^>]*${attr}="${escaped}"`,
+      'i',
+    ).exec(rootHead);
+    return match ? (match[1] ?? match[2] ?? null) : null;
+  };
+  check(headMeta('property', 'og:title') === 'The Seth Tapes', 'public_root:og_title');
+  check(headMeta('property', 'og:type') === 'website', 'public_root:og_type');
+  check(headMeta('property', 'og:image:width') === '1200' && headMeta('property', 'og:image:height') === '630', 'public_root:og_image_dimensions');
+  check(headMeta('property', 'og:image:type') === 'image/png', 'public_root:og_image_type');
+  check(/^https:\/\/[^/]+\/opengraph-image(?:\?.*)?$/.test(headMeta('property', 'og:image') || ''), 'public_root:og_image_url');
+  check(headMeta('name', 'twitter:card') === 'summary_large_image', 'public_root:twitter_card');
+  check(/^https:\/\/[^/]+\/twitter-image(?:\?.*)?$/.test(headMeta('name', 'twitter:image') || ''), 'public_root:twitter_image_url');
+
+  const pngSig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  for (const [ogPath, ogLabel] of [['/opengraph-image', 'opengraph_image'], ['/twitter-image', 'twitter_image']]) {
+    const ogRes = await call(ogPath, ogLabel);
+    await expectStatus(ogRes, 200, ogLabel, false);
+    check(/\bnoindex\b/i.test(ogRes.headers.get('x-robots-tag') || ''), `${ogLabel}:noindex`);
+    check(ogRes.headers.get('referrer-policy') === 'no-referrer', `${ogLabel}:no_referrer`);
+    check(/^image\/png\b/i.test(ogRes.headers.get('content-type') || ''), `${ogLabel}:content_type`);
+    const ogBytes = await boundedBytes(ogRes, 512 * 1024, ogLabel);
+    check(
+      ogBytes.length >= 24
+        && ogBytes.subarray(0, 8).equals(pngSig)
+        && ogBytes.subarray(12, 16).toString('ascii') === 'IHDR'
+        && ogBytes.readUInt32BE(16) === 1200
+        && ogBytes.readUInt32BE(20) === 630,
+      `${ogLabel}:valid_1200x630_png`,
+    );
+  }
+
   const representative = data.entries.find(entry => entry.sources.length > 0);
   check(Boolean(representative), 'local_source_available');
   const endpoints = [

@@ -26,6 +26,10 @@ const privateNoStoreHeaders = [
 const config: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
+  outputFileTracingIncludes: {
+    '/opengraph-image': ['./src/app/og-fonts/**/*'],
+    '/twitter-image': ['./src/app/og-fonts/**/*'],
+  },
   async headers() {
     return [
       {

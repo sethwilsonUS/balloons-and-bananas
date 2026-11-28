@@ -2,12 +2,22 @@ import type { Metadata } from 'next';
 import AccessHashBootstrap from '@/components/AccessHashBootstrap';
 import AccessHashGuard from '@/components/AccessHashGuard';
 import ThemeBootstrap from '@/components/ThemeBootstrap';
-import { ARCHIVE_NAME, ARCHIVE_SUBTITLE } from '@/lib/site';
+import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, resolveMetadataBase } from '@/lib/site';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: resolveMetadataBase(),
   title: ARCHIVE_NAME,
   description: `${ARCHIVE_SUBTITLE}.`,
+  openGraph: {
+    type: 'website',
+    siteName: ARCHIVE_NAME,
+    title: ARCHIVE_NAME,
+    description: `${ARCHIVE_SUBTITLE}.`,
+  },
+  twitter: {
+    card: 'summary_large_image',
+  },
   robots: { index: false, follow: false, noarchive: true, nosnippet: true, noimageindex: true },
   referrer: 'no-referrer',
 };
