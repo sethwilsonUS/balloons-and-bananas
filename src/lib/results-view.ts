@@ -1,11 +1,20 @@
-import type { SearchPageSize, SearchResponse, SearchResult, SearchSort } from './types';
+import type { SearchPageSize, SearchResponse, SearchResult, SearchSort, TranscriptOrigin } from './types';
 
 export type SessionView = 'details' | 'list';
 export type SearchBusyKind = null | 'search' | 'view';
 export const SEARCH_SORTS: readonly SearchSort[] = ['age-asc', 'age-desc', 'relevance'];
+export const TRANSCRIPT_ORIGINS: readonly TranscriptOrigin[] = ['archived_research', 'talkbank_ai_draft', 'local_ai_draft'];
 
 export function isSearchSort(value: unknown): value is SearchSort {
   return value === 'age-asc' || value === 'age-desc' || value === 'relevance';
+}
+
+export function isSessionView(value: unknown): value is SessionView {
+  return value === 'details' || value === 'list';
+}
+
+export function isTranscriptOrigin(value: unknown): value is TranscriptOrigin {
+  return value === 'archived_research' || value === 'talkbank_ai_draft' || value === 'local_ai_draft';
 }
 
 const foldWords = (text: string) =>

@@ -55,6 +55,14 @@ const config: NextConfig = {
         source: '/about',
         headers: privateNoStoreHeaders,
       },
+      {
+        source: '/search',
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: '/search/:path*',
+        headers: privateNoStoreHeaders,
+      },
     ];
   },
 };

@@ -21,7 +21,7 @@ export default function RouteHeader({
   sharePath,
   shareTargetLabel = 'session',
 }: {
-  activeSection?: 'overview' | 'sessions' | 'research' | 'about';
+  activeSection?: 'overview' | 'sessions' | 'search' | 'research' | 'about';
   showShare?: boolean;
   sharePath?: string;
   shareTargetLabel?: string;
@@ -29,12 +29,22 @@ export default function RouteHeader({
   const [shareState, setShareState] = useState<'idle' | 'busy' | 'copied' | 'manual' | 'error'>('idle');
   const [shareUrl, setShareUrl] = useState('');
   const shareInput = useRef<HTMLInputElement>(null);
+  const shareRequestIdRef = useRef(0);
 
   useEffect(() => {
     stripObsoleteAccessHash();
     window.addEventListener('hashchange', stripObsoleteAccessHash);
-    return () => window.removeEventListener('hashchange', stripObsoleteAccessHash);
+    return () => {
+      shareRequestIdRef.current += 1;
+      window.removeEventListener('hashchange', stripObsoleteAccessHash);
+    };
   }, []);
+
+  useEffect(() => {
+    shareRequestIdRef.current += 1;
+    setShareState('idle');
+    setShareUrl('');
+  }, [sharePath]);
 
   useEffect(() => {
     if (shareState === 'manual') {
@@ -44,20 +54,25 @@ export default function RouteHeader({
   }, [shareState]);
 
   const copyShareLink = async () => {
+    const requestId = ++shareRequestIdRef.current;
     setShareState('busy');
     try {
-      const targetPath = sharePath || window.location.pathname;
+      const targetPath = sharePath || (window.location.pathname + window.location.search);
       const text = new URL(targetPath, window.location.origin).toString();
-      setShareUrl(text);
       try {
         await navigator.clipboard.writeText(text);
+        if (shareRequestIdRef.current !== requestId) return;
+        setShareUrl(text);
         setShareState('copied');
         trackArchiveEvent('share_link', { outcome: 'copied' });
       } catch {
+        if (shareRequestIdRef.current !== requestId) return;
+        setShareUrl(text);
         setShareState('manual');
         trackArchiveEvent('share_link', { outcome: 'manual' });
       }
     } catch {
+      if (shareRequestIdRef.current !== requestId) return;
       trackArchiveEvent('share_link', { outcome: 'error' });
       setShareState('error');
     }
@@ -114,6 +129,7 @@ export default function RouteHeader({
         <nav className="section-nav" aria-label="Collection sections">
           <a href="/" aria-current={activeSection === 'overview' ? 'page' : undefined}>Overview</a>
           <a href="/?section=sessions" aria-current={activeSection === 'sessions' ? 'page' : undefined}>Sessions</a>
+          <a href="/search" aria-current={activeSection === 'search' ? 'page' : undefined}>Search</a>
           <a href="/research" aria-current={activeSection === 'research' ? 'page' : undefined}>Research &amp; context</a>
           <a href="/about" aria-current={activeSection === 'about' ? 'page' : undefined}>About &amp; methods</a>
         </nav>

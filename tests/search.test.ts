@@ -257,3 +257,94 @@ test('guide overview and title hits do not duplicate card text or concatenate ti
   assert.ok(truncatedHit.results[0].excerpt.includes('telescopic lantern'));
   assert.ok(!truncatedHit.results[0].excerpt.includes('Long veranda session'));
 });
+
+test('age-range filter uses source-or-inferred age, excludes unaged sessions, and composes with all other filters', () => {
+  const search = makeSearch(data);
+
+  // Empty query + age range acts as filtered browsing in age order (includes inferred age 2;06.04, excludes unaged).
+  const twoYearOlds = search({ ageMin: 24, ageMax: 35 });
+  assert.deepEqual(twoYearOlds.results.map(r => r.session.id), ['research', 'ai']);
+  assert.ok(twoYearOlds.results.every(r => r.matchedIn === 'browse'));
+
+  // Upper bound excludes 2;06.04 (30 months) while retaining 2;01.02 (25 months) and 1;09.12 (21 months).
+  const upTo29 = search({ ageMax: 29 });
+  assert.deepEqual(upTo29.results.map(r => r.session.id), ['orphan', 'research']);
+
+  // Lower bound includes exact month boundary 30 (2;06.04).
+  const from30 = search({ ageMin: 30 });
+  assert.deepEqual(from30.results.map(r => r.session.id), ['ai']);
+
+  // Composes with text query, origin, topic, sort, and pagination.
+  const queryAndAge = search({ query: 'locomotive', ageMin: 26 });
+  assert.deepEqual(queryAndAge.results.map(r => r.session.id), ['ai']);
+
+  // Inverted range returns 0 results cleanly.
+  assert.equal(search({ ageMin: 30, ageMax: 20 }).total, 0);
+
+  // Zero-month lower bound still filters out unaged sessions.
+  assert.deepEqual(search({ ageMin: 0 }).results.map(r => r.session.id), ['orphan', 'research', 'ai']);
+});
+
+test('transcript hits report the 1-based matchedPassage for deep linking while guide and browse hits omit it', () => {
+  const passageData: ArchiveData = {
+    ...data,
+    sessions: [
+      mockSession('multi-passage', {
+        title: 'Paper lighthouse and harbor bells',
+        overview: 'Folding a paper lighthouse beside the window.',
+        transcript: [
+          { text: 'Ring the harbor bell once for the morning ferry.' },
+          { text: 'The paper lighthouse shines over the windowsill harbor.' },
+          { text: 'Can the blue locomotive meet the ferry at the pier?' },
+        ],
+      }),
+    ],
+  };
+  const search = makeSearch(passageData);
+
+  // Pure transcript hit picks passage 3.
+  const pierHit = search({ query: 'pier' });
+  assert.equal(pierHit.total, 1);
+  assert.equal(pierHit.results[0].matchedIn, 'transcript');
+  assert.equal(pierHit.results[0].matchedPassage, 3);
+  assert.ok(pierHit.results[0].excerpt.includes('pier'));
+
+  // Cross-field query ("paper" in title & passage 2, "pier" only in passage 3) picks passage 3
+  // because "pier" is the term missing from the guide.
+  const crossFieldHit = search({ query: 'paper pier' });
+  assert.equal(crossFieldHit.total, 1);
+  assert.equal(crossFieldHit.results[0].matchedIn, 'transcript');
+  assert.equal(crossFieldHit.results[0].matchedPassage, 3);
+  assert.ok(crossFieldHit.results[0].excerpt.includes('pier'));
+
+  // Long passage where guide term ("paper") appears >270 chars before missing transcript terms ("pier ferry"):
+  // excerpt must center on the missing terms so "pier" / "ferry" appear rather than only the early "paper".
+  const longPassageData: ArchiveData = {
+    ...data,
+    sessions: [
+      mockSession('long-passage', {
+        title: 'Paper workshop',
+        overview: 'Folding paper sheets on the table.',
+        transcript: [
+          { text: 'Spotting the pier far away.' },
+          { text: `Folding paper shapes ${'and talking carefully about blocks '.repeat(12)}before meeting the pier ferry at dusk.` },
+        ],
+      }),
+    ],
+  };
+  const longHit = makeSearch(longPassageData)({ query: 'paper pier ferry' });
+  assert.equal(longHit.total, 1);
+  assert.equal(longHit.results[0].matchedIn, 'transcript');
+  assert.equal(longHit.results[0].matchedPassage, 2);
+  assert.ok(longHit.results[0].excerpt.includes('pier'));
+  assert.ok(longHit.results[0].excerpt.includes('ferry'));
+
+  // Guide and browse hits never set matchedPassage.
+  const guideHit = search({ query: 'harbor bells' });
+  assert.equal(guideHit.results[0].matchedIn, 'guide');
+  assert.equal(guideHit.results[0].matchedPassage, undefined);
+
+  const browseHit = search({});
+  assert.equal(browseHit.results[0].matchedIn, 'browse');
+  assert.equal(browseHit.results[0].matchedPassage, undefined);
+});

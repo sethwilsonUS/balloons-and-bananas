@@ -45,6 +45,8 @@ test('site branding uses one name and descriptive per-view document titles', () 
   assert.equal(formatDocumentTitle({ kind: 'overview' }), 'Overview · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'sessions', hasFilters: false }), 'Sessions · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'sessions', hasFilters: true }), 'Search results · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'search', hasFilters: false }), 'Search · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'search', hasFilters: true }), 'Search results · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'session' }), 'Session · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'session', title: 'Blue locomotive and wooden bridge' }), 'Blue locomotive and wooden bridge · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'session', notFound: true }), 'Session not found · The Seth Tapes');

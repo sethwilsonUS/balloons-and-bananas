@@ -1,18 +1,9 @@
 import type { CSSProperties } from 'react';
 import { Check } from 'lucide-react';
 import { balancedColumnCount, compactGridSpans } from '../lib/results-view';
+import { positiveThemes } from '../lib/topics';
 
-// These shortcuts label existing exact topic filters; they never alter source text.
-export const positiveThemes = [
-  { label: 'Curiosity', topic: 'Learning and questions' },
-  { label: 'Humor', topic: 'Humor and sound play' },
-  { label: 'Imagination', topic: 'Play and imagination' },
-  { label: 'Connection', topic: 'Affection and comfort' },
-  { label: 'Independence', topic: 'Help and independence' },
-  { label: 'Music & stories', topic: 'Music and stories' },
-  { label: 'Exploring', topic: 'Outings and nature' },
-  { label: 'Vision & discovery', topic: 'Vision and access' },
-] as const;
+export { positiveThemes };
 
 export function ThemeShortcuts({ topics, selectedTopic, onSelect }: {
   topics: Array<{ name: string; count: number }>;

@@ -51,6 +51,15 @@ test('event allowlist rejects arbitrary text in known fields and oversized/nonfi
   for (const invalidSort of ['oldest', 'newest', 'private-sort']) {
     assert.equal(sanitizeArchiveEvent('filter_changed', { filter: 'sort', value: invalidSort }), null);
   }
+  for (const ageBucket of ['', 'min', 'max', 'range']) {
+    assert.deepEqual(
+      sanitizeArchiveEvent('filter_changed', { filter: 'age', value: ageBucket }),
+      { name: 'filter_changed', properties: { filter: 'age', value: ageBucket } },
+    );
+  }
+  for (const invalidAge of ['1;08.15', '24', '24-30', 'private-age']) {
+    assert.equal(sanitizeArchiveEvent('filter_changed', { filter: 'age', value: invalidAge }), null);
+  }
   assert.equal(sanitizeArchiveEvent('source_download', { recordingId: RECORDING, format: 'private-filename.txt' }), null);
   assert.equal(sanitizeArchiveEvent('audio_error', { recordingId: RECORDING, errorCode: 'private error message' }), null);
   assert.equal(sanitizeArchiveEvent('audio_start', { origin: 'archived_research' }), null);
@@ -75,6 +84,7 @@ test('virtual page sanitizer never retains unrecognized paths, query strings or 
   }
   assert.equal(sanitizeAnalyticsUrl(`${ANALYTICS_ORIGIN}/research?secret=1#access=secret`), `${ANALYTICS_ORIGIN}/research`);
   assert.equal(sanitizeAnalyticsUrl(`${ANALYTICS_ORIGIN}/about?secret=1#inferred-ages`), `${ANALYTICS_ORIGIN}/about`);
+  assert.equal(sanitizeAnalyticsUrl(`${ANALYTICS_ORIGIN}/search?q=private-words&ageMin=24#p3`), `${ANALYTICS_ORIGIN}/search`);
 });
 
 test('public relay blocks foreign requests, bounds bodies and forwards only clean context', async () => {

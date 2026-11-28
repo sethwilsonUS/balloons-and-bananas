@@ -1,5 +1,5 @@
 import MiniSearch, { type SearchResult as MiniSearchResult } from 'minisearch';
-import { compareSessionsByAge } from './age';
+import { compareSessionsByAge, isValidAgeMonths, sessionMatchesAgeRange } from './age';
 import { makeLinguisticSearch } from './linguistic-search';
 import { isSearchSort, SEARCH_SORTS, shortOverview } from './results-view';
 import type { ArchiveData, SearchPageSize, SearchRequest, SearchResponse, SearchSort, Session, SessionCard } from './types';
@@ -112,6 +112,53 @@ function pickGuideExcerpt(session: Session, queryTerms: string[], hit: MiniSearc
   return pickTruncatedOverviewExcerpt(session, queryTerms, hit);
 }
 
+function pickTranscriptMatch(
+  session: Session,
+  queryTerms: string[],
+  foldedGuideText: string,
+  hit: MiniSearchResult | undefined,
+): { excerpt: string; matchedPassage?: number } {
+  const transcriptFieldTerms = matchedTermsForField(hit, 'transcript');
+  const transcriptTerms = [...new Set([...queryTerms, ...transcriptFieldTerms])];
+  const missingFromGuide = queryTerms.filter(term => !foldedGuideText.includes(term));
+
+  let bestIndex = -1;
+  let bestMissingHits = 0;
+  let bestExactHits = 0;
+  let bestMatchedHits = 0;
+
+  for (let index = 0; index < session.transcript.length; index += 1) {
+    const text = session.transcript[index]?.text ?? '';
+    if (!text.trim()) continue;
+    const folded = fold(text);
+    const missingHits = missingFromGuide.filter(term => folded.includes(term)).length;
+    const exactHits = queryTerms.filter(term => folded.includes(term)).length;
+    const matchedHits = transcriptTerms.filter(term => folded.includes(term)).length;
+    if (missingHits === 0 && exactHits === 0 && matchedHits === 0) continue;
+    const isBetter = bestIndex === -1
+      || missingHits > bestMissingHits
+      || (missingHits === bestMissingHits && exactHits > bestExactHits)
+      || (missingHits === bestMissingHits && exactHits === bestExactHits && matchedHits > bestMatchedHits);
+    if (isBetter) {
+      bestIndex = index;
+      bestMissingHits = missingHits;
+      bestExactHits = exactHits;
+      bestMatchedHits = matchedHits;
+    }
+  }
+
+  if (bestIndex >= 0) {
+    const focusTerms = bestMissingHits > 0 ? missingFromGuide : transcriptTerms;
+    return {
+      excerpt: excerpt(session.transcript[bestIndex].text, focusTerms),
+      matchedPassage: bestIndex + 1,
+    };
+  }
+
+  const transcript = session.transcript.map(passage => passage.text).join('\n');
+  return { excerpt: excerpt(transcript, transcriptTerms) };
+}
+
 export function makeSearch(data: ArchiveData) {
   const byId = new Map(data.sessions.map(session => [session.id, session]));
   const linguisticSearch = makeLinguisticSearch(data.sessions);
@@ -128,7 +175,7 @@ export function makeSearch(data: ArchiveData) {
   })));
 
   return function search(request: SearchRequest): SearchResponse {
-    // The route rejects invalid sizes. Keep direct callers bounded as well.
+    // The route rejects invalid sizes and ages. Keep direct callers bounded as well.
     const pageSize: SearchPageSize = request.pageSize === 36 ? 36 : 18;
     const query = (request.query ?? '').trim().slice(0, 300);
     const terms = fold(query).split(/\s+/).filter(Boolean);
@@ -137,6 +184,11 @@ export function makeSearch(data: ArchiveData) {
     let sessions = query ? rawHits.map(r => byId.get(r.id)!).filter(Boolean) : [...data.sessions];
     if (request.origin) sessions = sessions.filter(session => session.origin === request.origin);
     if (request.topic) sessions = sessions.filter(session => session.topics.includes(request.topic!));
+    const ageMin = isValidAgeMonths(request.ageMin) ? request.ageMin : undefined;
+    const ageMax = isValidAgeMonths(request.ageMax) ? request.ageMax : undefined;
+    if (ageMin !== undefined || ageMax !== undefined) {
+      sessions = sessions.filter(session => sessionMatchesAgeRange(session, ageMin, ageMax));
+    }
     const linguisticMatches = request.marker ? linguisticSearch(request.marker, request.speaker ?? 'child') : undefined;
     if (linguisticMatches) sessions = sessions.filter(session => linguisticMatches.has(session.id));
     const sort: SearchSort = request.sort ?? (query ? 'relevance' : 'age-asc');
@@ -160,7 +212,8 @@ export function makeSearch(data: ArchiveData) {
         session.overview,
         ...session.moments.map(moment => `${moment.title}: ${moment.description}`),
       ].join('\n');
-      const inGuide = terms.every(t => fold(guideText).includes(t)) || !matchedFields.has('transcript');
+      const foldedGuideText = fold(guideText);
+      const inGuide = terms.every(t => foldedGuideText.includes(t)) || !matchedFields.has('transcript');
       if (inGuide) {
         return {
           session: sessionCard(session),
@@ -169,12 +222,12 @@ export function makeSearch(data: ArchiveData) {
           ...linguistic,
         };
       }
-      const transcript = session.transcript.map(passage => passage.text).join('\n');
-      const transcriptTerms = [...new Set([...terms, ...matchedTermsForField(hit, 'transcript')])];
+      const transcriptMatch = pickTranscriptMatch(session, terms, foldedGuideText, hit);
       return {
         session: sessionCard(session),
-        excerpt: excerpt(transcript, transcriptTerms),
+        excerpt: transcriptMatch.excerpt,
         matchedIn: 'transcript',
+        ...(transcriptMatch.matchedPassage !== undefined ? { matchedPassage: transcriptMatch.matchedPassage } : {}),
         ...linguistic,
       };
     }) };

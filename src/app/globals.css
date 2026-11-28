@@ -259,6 +259,10 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 
 /* Search stays compact; results read like an annotated index, not a card wall. */
 .browse-section, .research-section, .document-detail { padding-top: 48px; }
+.route-page-header { margin-bottom: 28px; }
+.route-page-header .eyebrow { font-size: .65rem; margin: 0; }
+.route-page-header h1 { font-size: clamp(2rem, 4.4vw, 3.3rem); line-height: 1.15; margin: 18px 0 16px; }
+.route-page-header .section-intro { margin-bottom: 0; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 22px; margin-bottom: 25px; }
 .section-heading h2, .section-heading h3 { margin: 0; }
 .section-heading .eyebrow { margin-bottom: 7px; }
@@ -273,8 +277,13 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .search-submit { min-width: 44px; min-height: 44px; display: grid; place-items: center; border: 0; background: none; border-radius: 3px; margin-right: -9px; }
 .filter-row { display: grid; grid-template-columns: 1.2fr 1.35fr .85fr; gap: 17px; margin-top: 20px; }
 .filter-row select { font-size: .84rem; }
+.age-filter-fieldset { min-width: 0; margin: 20px 0 0; padding: 18px 0 0; border: 0; border-top: 1px solid var(--line); }
+.age-filter-fieldset legend { color: var(--reading); font-size: .82rem; font-weight: 600; padding: 0 0 10px; }
+.age-filter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+.age-filter-row select { font-size: .84rem; }
+.age-filter-note { margin: 10px 0 0; }
 .results-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 20px; margin: 33px 0 5px; }
-.results-toolbar h3 { margin: 0; font-size: 1rem; }
+.results-toolbar h2, .results-toolbar h3 { margin: 0; font-family: var(--sans); font-size: 1rem; line-height: 1.35; letter-spacing: 0; }
 .results-toolbar .text-button { color: var(--muted); }
 .search-status { margin: 0 0 0 auto; }
 .results-list[aria-busy='true'] { cursor: progress; }
@@ -285,9 +294,9 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .session-meta > span + span::before { content: '·'; position: absolute; left: -11px; }
 .inferred-age-link { color: var(--forest); text-decoration: underline; text-underline-offset: .2em; text-decoration-thickness: 1px; border-radius: 2px; }
 .inferred-age-link:hover { color: var(--rust); }
-.session-card h4 { font-family: var(--serif); font-size: clamp(1.35rem, 2.6vw, 1.72rem); line-height: 1.28; margin: 0 0 14px; }
-.session-card h4 a { display: flex; align-items: center; justify-content: space-between; gap: 25px; color: var(--ink); text-decoration: none; }
-.session-card h4 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }
+.session-card h3, .session-card h4 { font-family: var(--serif); font-size: clamp(1.35rem, 2.6vw, 1.72rem); line-height: 1.28; margin: 0 0 14px; }
+.session-card h3 a, .session-card h4 a { display: flex; align-items: center; justify-content: space-between; gap: 25px; color: var(--ink); text-decoration: none; }
+.session-card h3 a:hover, .session-card h4 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }
 .card-overview { font-size: 1rem; line-height: 1.7; color: var(--reading); max-width: 950px; margin: 0 0 17px; }
 .card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
 .audio-count { display: flex; align-items: center; gap: 7px; font-size: .72rem; }
@@ -297,7 +306,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .compact-topics { margin-top: 14px; }
 .compact-topics li { font-size: .75rem; }
 .search-excerpt { border-left: 2px solid var(--line); background: var(--subtle-bg); padding: 12px 16px; margin: 0 0 18px; }
-.excerpt-label { color: var(--muted); font-size: .63rem; text-transform: uppercase; letter-spacing: .08em; }
+.excerpt-label, .excerpt-passage-tag { color: var(--muted); font-size: .63rem; text-transform: uppercase; letter-spacing: .08em; }
 .search-excerpt p { font-size: .84rem; color: var(--reading); margin: 5px 0 0; }
 .empty-state { text-align: center; padding: 70px 25px; color: var(--muted); }
 .empty-state h3 { margin: 20px 0 10px; color: var(--ink); }
@@ -314,10 +323,10 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .session-list-row { display: grid; grid-template-columns: 43px minmax(0, 1fr); gap: 18px; padding: 19px 0; border-bottom: 1px solid var(--line); }
 .session-list-row .session-index { font-size: 1.2rem; padding-top: 2px; }
 .session-list-row .session-meta { margin-bottom: 5px; }
-.session-list-row h4 { font: 500 1.3rem/1.4 var(--serif); margin: 0 0 8px; }
-.session-list-row h4 a { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; color: var(--ink); text-decoration: none; }
-.session-list-row h4 a svg { margin-top: 5px; }
-.session-list-row h4 a:hover { color: var(--rust); text-decoration: underline; }
+.session-list-row h3, .session-list-row h4 { font: 500 1.3rem/1.4 var(--serif); margin: 0 0 8px; }
+.session-list-row h3 a, .session-list-row h4 a { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; color: var(--ink); text-decoration: none; }
+.session-list-row h3 a svg, .session-list-row h4 a svg { margin-top: 5px; }
+.session-list-row h3 a:hover, .session-list-row h4 a:hover { color: var(--rust); text-decoration: underline; }
 .session-list-row .card-overview { font-size: 1rem; line-height: 1.6; margin-bottom: 10px; }
 .compact-result-matches { margin-top: 7px; }
 .compact-result-matches > summary { min-height: 44px; padding: 10px 0; color: var(--forest); font-size: .9rem; }
@@ -481,15 +490,15 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .filter-row > .field:last-child { grid-column: 1 / -1; max-width: 240px; }
   .session-card { grid-template-columns: 30px minmax(0, 1fr); gap: 15px; }
   .session-index { font-size: 1.3rem; padding-top: 28px; }
-  .session-card h4 a { gap: 15px; }
-  .session-card h4 a svg { width: 17px; }
+  .session-card h3 a, .session-card h4 a { gap: 15px; }
+  .session-card h3 a svg, .session-card h4 a svg { width: 17px; }
   .session-meta { font-size: .75rem; }
   .card-overview { font-size: 1rem; }
   .card-bottom { gap: 9px; }
   .results-toolbar { margin-top: 23px; }
   .search-status { flex-basis: 100%; }
   .back-button { margin-bottom: 20px; }
-  .detail-header h1, .detail-header h2 { font-size: 2.2rem; }
+  .route-page-header h1, .detail-header h1, .detail-header h2 { font-size: 2.2rem; }
   .catalog-record { padding: 16px 18px; }
   .catalog-record-row { grid-template-columns: 1fr; gap: 2px; }
   .detail-overview { font-size: .99rem; }
@@ -524,10 +533,11 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .main-search input { font-size: .87rem; }
   .filter-row { grid-template-columns: 1fr; }
   .filter-row > .field:last-child { max-width: none; }
+  .age-filter-row { grid-template-columns: 1fr; gap: 12px; }
   .session-card { display: block; padding: 27px 0; }
   .session-index { display: none; }
-  .session-card h4 { font-size: 1.5rem; }
-  .session-card h4 a svg { display: none; }
+  .session-card h3, .session-card h4 { font-size: 1.5rem; }
+  .session-card h3 a svg, .session-card h4 a svg { display: none; }
   .pagination { gap: 9px; flex-wrap: wrap; }
   .pagination .button { padding: 9px 12px; font-size: .76rem; }
   .pagination > span { font-size: .7rem; }
@@ -623,6 +633,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .transcript-search input,
   .manual-share input,
   .filter-row select,
+  .age-filter-row select,
   .theme-control select { font-size: 1rem; }
 }
 

@@ -1,7 +1,7 @@
 import { isLinguisticMarkerId } from './linguistic-markers';
 
 export const ANALYTICS_ORIGIN = 'https://balloons-and-bananas.vercel.app';
-export const ANALYTICS_PATHS = ['/overview', '/recordings', '/recording', '/research', '/document', '/about'] as const;
+export const ANALYTICS_PATHS = ['/overview', '/recordings', '/recording', '/search', '/research', '/document', '/about'] as const;
 export type AnalyticsPath = typeof ANALYTICS_PATHS[number];
 type Property = string | number | boolean;
 type Validator = (value: unknown) => boolean;
@@ -27,7 +27,7 @@ const schemas = {
   section_view: { section: oneOf('overview', 'recordings', 'research', 'about') },
   recording_view: recording,
   recording_open: { recordingId, action: oneOf('guide', 'passage'), origin, view, passage: integer(1_000_000, 1) },
-  filter_changed: { filter: oneOf('theme', 'origin', 'marker', 'speaker', 'sort', 'clear'), value: (value: unknown) => value === '' || value === 'all' || themes(value) || origin(value) || isLinguisticMarkerId(value) || oneOf('child', 'any', 'relevance', 'age-asc', 'age-desc')(value) },
+  filter_changed: { filter: oneOf('theme', 'origin', 'marker', 'speaker', 'age', 'sort', 'clear'), value: (value: unknown) => value === '' || value === 'all' || themes(value) || origin(value) || isLinguisticMarkerId(value) || oneOf('child', 'any', 'min', 'max', 'range', 'relevance', 'age-asc', 'age-desc')(value) },
   view_changed: { view },
   share_link: { outcome: oneOf('copied', 'manual', 'error') },
   research_open: { documentId, action: oneOf('read', 'download'), assetId },
