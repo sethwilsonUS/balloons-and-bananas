@@ -1,11 +1,12 @@
-import { ArrowRight, Headphones } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { trackArchiveEvent } from '../lib/analytics';
 import { linguisticMarkers, type LinguisticSpeaker } from '../lib/linguistic-markers';
 import { shortOverview, visibleExcerpt, type SessionView } from '../lib/results-view';
 import { buildSessionHrefFromSearch } from '../lib/search-params';
+import { getSessionAudioStatus } from '../lib/sessions-browse';
 import type { SearchResult } from '../lib/types';
-import { timeLabel, transcriptOriginLabels } from './api';
-import SessionAge from './SessionAge';
+import { timeLabel } from './api';
+import CatalogRecord from './CatalogRecord';
 import { TopicLabels } from './TopicThemes';
 
 export type { SessionView };
@@ -138,11 +139,6 @@ export default function SessionResults({
       <article className={view === 'list' ? 'session-list-row' : 'session-card'} aria-labelledby={headingId}>
         <div className="session-index" aria-hidden="true">{String(firstIndex + index).padStart(2, '0')}</div>
         <div className="session-card-body">
-          <div className="session-meta">
-            <span>{session.sourceName}</span>
-            <SessionAge ages={session.ages} inferredAge={session.inferredAge} />
-            {session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}
-          </div>
           <h3 id={headingId}>
             <a
               href={sessionHref}
@@ -158,6 +154,16 @@ export default function SessionResults({
               <ArrowRight size={view === 'list' ? 17 : 20} aria-hidden="true" />
             </a>
           </h3>
+          <CatalogRecord
+            variant={view === 'list' ? 'compact' : 'card'}
+            slug={slug}
+            sourceName={session.sourceName}
+            ages={session.ages}
+            inferredAge={session.inferredAge}
+            dates={session.dates}
+            origin={session.origin}
+            audioStatus={view === 'details' ? getSessionAudioStatus(session.recordings) : undefined}
+          />
           <p className="card-overview">{view === 'list' ? shortOverview(session.overview) : session.overview}</p>
           {view === 'details' && (
             <>
@@ -171,19 +177,6 @@ export default function SessionResults({
               />
             </>
           )}
-          <div className="card-bottom">
-            <span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span>
-            {view === 'details' && (
-              <span className="audio-count small muted">
-                <Headphones size={15} aria-hidden="true" />
-                {session.recordings.some(recording => recording.available && recording.format.toLowerCase() === 'mp3')
-                  ? 'MP3 playback available'
-                  : session.recordings.length
-                    ? 'MP3 playback not yet available'
-                    : 'Transcript only'}
-              </span>
-            )}
-          </div>
           {view === 'details' ? (
             <TopicLabels topics={session.topics} compact />
           ) : hasMatches && (
