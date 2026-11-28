@@ -17,6 +17,7 @@ import {
   OG_SANS_FAMILY,
   OG_SERIF_FAMILY,
 } from '../src/app/og-fonts';
+import { renderOpenGraphImageResponse } from '../src/lib/og-card';
 import {
   DEFAULT_SITE_HOST,
   DEFAULT_SITE_URL,
@@ -151,9 +152,10 @@ test('opengraph-image and twitter-image export literal Next.js metadata, share N
 
   // Confirm Next.js static analysis requirements: literal exports, Node.js runtime (no edge),
   // zero remote fetches, and direct reuse of Ticket 36's renderCassetteTapeArtwork.
-  const [ogSrc, twSrc, nextConfigSrc] = await Promise.all([
+  const [ogSrc, twSrc, ogCardSrc, nextConfigSrc] = await Promise.all([
     readFile(path.resolve('src/app/opengraph-image.tsx'), 'utf8'),
     readFile(path.resolve('src/app/twitter-image.tsx'), 'utf8'),
+    readFile(path.resolve('src/lib/og-card.tsx'), 'utf8'),
     readFile(path.resolve('next.config.ts'), 'utf8'),
   ]);
   for (const [name, src] of [
@@ -166,8 +168,9 @@ test('opengraph-image and twitter-image export literal Next.js metadata, share N
     assert.doesNotMatch(src, /export const runtime\s*=\s*['"]edge['"]/, `${name}: must not use edge runtime`);
     assert.doesNotMatch(src, /\bfetch\s*\(/, `${name}: must not fetch remote assets at render time`);
   }
-  assert.match(ogSrc, /renderCassetteTapeArtwork/, 'opengraph-image.tsx must reuse renderCassetteTapeArtwork');
-  assert.doesNotMatch(ogSrc, /<path\b/, 'opengraph-image.tsx must not duplicate cassette SVG geometry');
+  assert.doesNotMatch(ogCardSrc, /\bfetch\s*\(/, 'src/lib/og-card.tsx must not fetch remote assets');
+  assert.match(ogCardSrc, /renderCassetteTapeArtwork/, 'og-card.tsx must reuse renderCassetteTapeArtwork');
+  assert.doesNotMatch(ogCardSrc, /<path\b/, 'og-card.tsx must not duplicate cassette SVG geometry');
   assert.match(nextConfigSrc, /outputFileTracingIncludes/, 'next.config.ts must declare outputFileTracingIncludes');
   assert.match(nextConfigSrc, /'\/opengraph-image':\s*\['\.\/src\/app\/og-fonts\/\*\*\/\*'\]/);
   assert.match(nextConfigSrc, /'\/twitter-image':\s*\['\.\/src\/app\/og-fonts\/\*\*\/\*'\]/);
@@ -180,4 +183,13 @@ test('opengraph-image and twitter-image export literal Next.js metadata, share N
   const dims = parsePngDimensions(bytes);
   assert.deepEqual(dims, { width: 1200, height: 630 });
   assert.ok(bytes.length > 10_000, `Expected full rendered PNG (>10KB), got ${bytes.length} bytes`);
+
+  // Regression check: when bundled fonts cannot be loaded (`fonts: []`), omitting the `fonts`
+  // option lets Next.js fall back to its built-in default font instead of throwing in Satori.
+  const fallbackRes = renderOpenGraphImageResponse({ fonts: [] });
+  assert.equal(fallbackRes.status, 200);
+  assert.match(fallbackRes.headers.get('content-type') || '', /^image\/png/i);
+  const fallbackBytes = Buffer.from(await fallbackRes.arrayBuffer());
+  assert.deepEqual(parsePngDimensions(fallbackBytes), { width: 1200, height: 630 });
+  assert.ok(fallbackBytes.length > 10_000, `Expected valid fallback PNG (>10KB), got ${fallbackBytes.length} bytes`);
 });
