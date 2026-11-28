@@ -648,63 +648,6 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
-@media print {
-  :root, :root[data-theme] {
-    color-scheme: light;
-    --paper: #f7f4ed;
-    --paper-light: #fcfaf5;
-    --ink: #243b30;
-    --muted: #60675f;
-    --forest: #254c38;
-    --forest-soft: #e6ece1;
-    --rust: #a14428;
-    --rust-soft: #f2e6dc;
-    --line: #d5d5c8;
-    --control-line: #737d6c;
-    --reading: #4b5a4c;
-    --placeholder: #60675f;
-    --primary-bg: #254c38;
-    --primary-hover: #183a29;
-    --on-primary: #fcfaf5;
-    --selection-bg: #dce6cc;
-    --selection-ink: #173324;
-    --highlight-bg: #f2dc99;
-    --highlight-ink: #233629;
-    --error-bg: #f5e9df;
-    --error-line: #99543f;
-    --subtle-bg: #efeee5;
-    --row-bg: #f1f0e7;
-    --focus-bg: #f4e7d5;
-    --original-ink: #34503b;
-    --original-bg: #eaf0e6;
-    --original-line: #c8d2c2;
-    --archive-ai-ink: #674b2e;
-    --archive-ai-bg: #f2ebdd;
-    --archive-ai-line: #d8cbb8;
-    --local-ai-ink: #5d485d;
-    --local-ai-bg: #eee8ec;
-    --local-ai-line: #d6cbd3;
-  }
-  body { background: white; color: black; font-size: 11pt; }
-  .archive-shell { max-width: none; padding: 0; }
-  .theme-control, .top-bar, .section-nav, .site-footer, .back-button, .session-sticky-nav, .session-adjacent-nav, .catalog-cite-row, .cite-dialog, .passage-actions, .passage-manual-copy, .button, .text-button, .search-form, .home-search-section, .theme-discovery, .sessions-browse-controls, .age-jump-nav, .share-feedback, .manual-share, .transcript-search, .audio-player { display: none !important; }
-  .sessions-detail-list > li, .sessions-compact-list > li { content-visibility: visible !important; }
-  .masthead { padding: 0 0 25px; }
-  .masthead h1 { font-size: 30pt; }
-  .source-key, .provenance-note, .audio-panel, .catalog-record { background: white; }
-  a { color: black; }
-  .moment-list > li, .session-card, .transcript-line { break-inside: avoid; }
-  .transcript-line { content-visibility: visible !important; }
-  .concordance-scroll { overflow: visible; border-color: black; }
-  .concordance-table { min-width: 0; font-size: 9pt; }
-  .concordance-table thead th { white-space: normal; }
-  .concordance-session-cell,
-  .concordance-age-cell,
-  .concordance-speaker-cell,
-  .concordance-table tbody td.concordance-left,
-  .concordance-table tbody td.concordance-match,
-  .concordance-table tbody td.concordance-right { min-width: 0; max-width: none; }
-}
 
 .theme-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .theme-control label { font-size: var(--text-xs); color: var(--muted); }
@@ -977,4 +920,534 @@ input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { backgro
   .cite-preview-code { padding: 12px 14px; }
   .cite-panel-actions .button { width: 100%; }
   .how-to-cite-credit { padding: 14px 16px; }
+}
+
+/* Print-only elements stay completely hidden from visual users and screen readers on screen. */
+.print-only { display: none; }
+
+@page {
+  margin: 0.65in 0.7in;
+}
+
+@media print {
+  :root,
+  :root[data-theme],
+  :root:not([data-theme='light']) {
+    color-scheme: light;
+    --paper: #ffffff;
+    --paper-light: #ffffff;
+    --ink: #000000;
+    --muted: #000000;
+    --forest: #000000;
+    --forest-soft: #ffffff;
+    --rust: #000000;
+    --rust-soft: #ffffff;
+    --line: #595959;
+    --control-line: #000000;
+    --reading: #000000;
+    --placeholder: #000000;
+    --primary-bg: #000000;
+    --primary-hover: #000000;
+    --on-primary: #ffffff;
+    --selection-bg: #ffffff;
+    --selection-ink: #000000;
+    --highlight-bg: #ffffff;
+    --highlight-ink: #000000;
+    --error-bg: #ffffff;
+    --error-line: #000000;
+    --subtle-bg: #ffffff;
+    --row-bg: #ffffff;
+    --focus-bg: #ffffff;
+    --original-ink: #000000;
+    --original-bg: #ffffff;
+    --original-line: #000000;
+    --archive-ai-ink: #000000;
+    --archive-ai-bg: #ffffff;
+    --archive-ai-line: #000000;
+    --local-ai-ink: #000000;
+    --local-ai-bg: #ffffff;
+    --local-ai-line: #000000;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10.5pt;
+    line-height: 1.48;
+    margin: 0;
+    padding: 0;
+  }
+
+  .archive-shell { max-width: none; padding: 0; margin: 0; }
+  main { min-height: 0; }
+
+  .print-only { display: block; }
+  span.print-only { display: inline; }
+
+  /* Hide site chrome, navigation, audio player, interactive controls, UI-only disclosures, and dialogs. */
+  .skip-link,
+  .site-header,
+  .top-bar,
+  .theme-control,
+  .section-nav,
+  .site-footer,
+  .footer-links,
+  .back-button,
+  .session-sticky-nav,
+  .session-adjacent-nav,
+  .share-feedback,
+  .manual-share,
+  .about-toc,
+  .document-footer-nav,
+  .audio-panel,
+  .audio-player,
+  audio,
+  .catalog-cite-row,
+  .moment-actions,
+  .transcript-playback-tools,
+  .transcript-view-controls,
+  .transcript-filter-notice,
+  .transcript-search,
+  .transcript-live-status,
+  .transcript-copy-status,
+  .passage-manual-copy,
+  .passage-actions,
+  .cue-button,
+  .source-downloads,
+  .document-downloads,
+  .button,
+  .text-button,
+  .search-form,
+  .home-search-section,
+  .theme-discovery,
+  .sessions-browse-controls,
+  .age-jump-nav,
+  .linguistic-filters,
+  .pagination,
+  .session-page .detail-header > .eyebrow,
+  dialog,
+  dialog[open],
+  .cite-dialog,
+  .cite-dialog[open] {
+    display: none !important;
+  }
+
+  dialog::backdrop,
+  .cite-dialog::backdrop {
+    display: none !important;
+  }
+
+  a { color: #000000; text-decoration: none; }
+  code { color: #000000; overflow-wrap: anywhere; }
+  pre { background: #ffffff; color: #000000; border-color: #000000; overflow: visible; }
+  mark { background: #ffffff; color: #000000; font-weight: 650; border-bottom: 1pt solid #000000; padding: 0; }
+  p { orphans: 3; widows: 3; }
+
+  h1, h2, h3, h4, h5, h6, .section-heading {
+    color: #000000;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .masthead { padding: 0 0 18pt; }
+  .masthead h1 { font-size: 24pt; }
+
+  .session-detail { max-width: none; padding: 0; margin: 0; }
+
+  .print-session-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 4pt 14pt;
+    padding-bottom: 7pt;
+    margin-bottom: 14pt;
+    border-bottom: 1.5pt solid #000000;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .print-header-title {
+    font-family: var(--serif);
+    font-size: 11pt;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #000000;
+    margin: 0;
+  }
+
+  .print-header-url {
+    font-family: var(--mono);
+    font-size: 8.5pt;
+    line-height: 1.35;
+    color: #000000;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .detail-header h1 {
+    font-size: 19pt;
+    line-height: 1.18;
+    margin: 0 0 12pt;
+    color: #000000;
+  }
+
+  .section-heading {
+    margin-bottom: 10pt;
+    gap: 8pt 14pt;
+  }
+
+  .section-heading h2 {
+    font-size: 13.5pt;
+    line-height: 1.25;
+  }
+
+  .eyebrow,
+  .ai-badge,
+  .muted,
+  .small {
+    color: #000000;
+  }
+
+  .eyebrow {
+    font-size: 8pt;
+    margin-bottom: 3pt;
+  }
+
+  .origin-badge,
+  .origin-badge.talkbank_ai_draft,
+  .origin-badge.local_ai_draft {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 0.75pt solid #000000 !important;
+    padding: 1pt 5pt;
+    font-size: 8.5pt;
+  }
+
+  .catalog-record,
+  .catalog-record--full {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .catalog-record--full {
+    border: 0.75pt solid #000000;
+    border-top: 2pt solid #000000;
+    border-radius: 0;
+    padding: 9pt 11pt;
+    margin-bottom: 16pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .catalog-record--full .catalog-record-row {
+    grid-template-columns: 120pt minmax(0, 1fr);
+    gap: 2pt 12pt;
+    padding: 5pt 0;
+    border-bottom: 0.5pt solid #595959;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .catalog-record--full .catalog-record-row:last-child,
+  .catalog-record--full .catalog-record-row:has(+ .catalog-cite-row) {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .catalog-record dt,
+  .catalog-record dd,
+  .catalog-session-id,
+  .catalog-guide-label,
+  .catalog-meta-note,
+  .catalog-meta-sep,
+  .age-notation {
+    color: #000000;
+    font-size: 9.5pt;
+    line-height: 1.4;
+  }
+
+  .catalog-record dt {
+    font-size: 8pt;
+  }
+
+  .guide-overview-section {
+    margin: 14pt 0 18pt;
+  }
+
+  .detail-overview {
+    max-width: none;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    color: #000000;
+    margin: 0 0 8pt;
+  }
+
+  .guide-overview-section .topic-list {
+    margin: 6pt 0 10pt;
+  }
+
+  .topic-list li {
+    color: #000000;
+    font-size: 8.5pt;
+  }
+
+  .source-key,
+  .provenance-note {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .provenance-note {
+    border: 0.5pt solid #595959;
+    border-left: 2pt solid #000000;
+    padding: 7pt 10pt;
+    margin: 10pt 0 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .provenance-note p {
+    max-width: none;
+    font-size: 9pt;
+    line-height: 1.45;
+    color: #000000;
+  }
+
+  .moments-section {
+    margin: 0 0 18pt;
+  }
+
+  .moment-list > li {
+    grid-template-columns: 42pt minmax(0, 1fr);
+    gap: 10pt;
+    padding: 8pt 0;
+    border-top: 0.5pt solid #595959;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .moment-number,
+  .moment-time {
+    color: #000000;
+    font-size: 8.5pt;
+  }
+
+  .moment-body h3 {
+    font-size: 11pt;
+    line-height: 1.3;
+    margin: 0 0 4pt;
+    color: #000000;
+  }
+
+  .moment-body > p {
+    max-width: none;
+    font-size: 10pt;
+    line-height: 1.45;
+    color: #000000;
+    margin-bottom: 4pt;
+  }
+
+  .moment-body .source-locator {
+    font-size: 8.5pt;
+    color: #000000;
+    margin-bottom: 0;
+  }
+
+  .print-citation-section {
+    margin: 0 0 18pt;
+    padding: 9pt 11pt;
+    border: 0.75pt solid #000000;
+    border-left: 2.5pt solid #000000;
+    background: #ffffff;
+    color: #000000;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-citation-section .section-heading {
+    margin-bottom: 7pt;
+  }
+
+  .print-citation-text {
+    font-size: 9.5pt;
+    line-height: 1.48;
+    color: #000000;
+    margin: 0 0 6pt;
+    overflow-wrap: anywhere;
+  }
+
+  .print-citation-url {
+    font-size: 9pt;
+    line-height: 1.4;
+    color: #000000;
+    margin: 0 0 6pt;
+    overflow-wrap: anywhere;
+  }
+
+  .print-citation-note {
+    font-size: 8.5pt;
+    line-height: 1.4;
+    color: #000000;
+    margin: 0;
+  }
+
+  .transcript-section {
+    padding-top: 14pt;
+    border-top: 1.5pt solid #000000;
+    margin-bottom: 18pt;
+  }
+
+  .transcript-section > p {
+    max-width: none;
+    font-size: 9pt;
+    line-height: 1.45;
+    color: #000000;
+    margin-bottom: 6pt;
+  }
+
+  .transcript-lines {
+    margin: 10pt 0 0;
+    border-top: 0.75pt solid #000000;
+  }
+
+  .transcript-line,
+  .transcript-line:nth-child(even),
+  .transcript-line.is-current,
+  .transcript-line.is-linked,
+  .transcript-line:focus {
+    grid-template-columns: 56pt minmax(0, 1fr);
+    gap: 10pt;
+    padding: 6pt 0;
+    border-bottom: 0.5pt solid #595959;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    outline: none !important;
+    content-visibility: visible !important;
+    contain-intrinsic-size: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .transcript-cue {
+    padding: 1pt 0 0;
+    gap: 2pt;
+  }
+
+  .passage-anchor {
+    color: #000000;
+    text-decoration: none;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    font-size: 9pt;
+  }
+
+  .transcript-timestamp {
+    color: #000000;
+    font-size: 8.5pt;
+  }
+
+  .transcript-line p {
+    max-width: none;
+    font-size: 10pt;
+    line-height: 1.48;
+    color: #000000;
+  }
+
+  .source-section {
+    border-top: 0.75pt solid #000000;
+    padding-top: 12pt;
+    margin-top: 16pt;
+  }
+
+  .source-section h2 {
+    font-size: 13pt;
+    margin-bottom: 8pt;
+  }
+
+  .reading-notes {
+    max-width: none;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    color: #000000;
+    margin-bottom: 10pt;
+  }
+
+  .reading-notes li {
+    margin-bottom: 4pt;
+  }
+
+  .technical-notes {
+    color: #000000;
+    font-size: 9pt;
+    line-height: 1.45;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .technical-notes > summary {
+    list-style: none;
+    text-decoration: none;
+    font-weight: 650;
+    min-height: 0;
+    padding: 0 0 4pt;
+    color: #000000;
+  }
+
+  .technical-notes > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .technical-notes::details-content {
+    content-visibility: visible;
+    display: block;
+  }
+
+  .technical-notes p {
+    max-width: none;
+    margin-bottom: 4pt;
+    color: #000000;
+  }
+
+  .technical-notes code {
+    font-size: 8.5pt;
+    line-height: 1.45;
+  }
+
+  .sessions-detail-list > li,
+  .sessions-compact-list > li {
+    content-visibility: visible !important;
+  }
+
+  .session-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .table-scroll,
+  .concordance-scroll {
+    overflow: visible;
+    border-color: #000000;
+  }
+
+  .concordance-table {
+    min-width: 0;
+    font-size: 9pt;
+  }
+
+  .concordance-table thead th {
+    white-space: normal;
+  }
+
+  .concordance-session-cell,
+  .concordance-age-cell,
+  .concordance-speaker-cell,
+  .concordance-table tbody td.concordance-left,
+  .concordance-table tbody td.concordance-match,
+  .concordance-table tbody td.concordance-right {
+    min-width: 0;
+    max-width: none;
+  }
 }

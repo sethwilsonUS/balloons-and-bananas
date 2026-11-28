@@ -1,6 +1,7 @@
 'use client';
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { ArrowDown, Check, Download, Link2, Pause, Play, Search, X } from 'lucide-react';
 import type { Session, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
@@ -56,7 +57,13 @@ function TranscriptText({ text, query, links, sessionId, origin }: { text: strin
   return <>{pieces}</>;
 }
 
-export function SessionBody({ session }: { session: Session }) {
+export function SessionBody({
+  session,
+  printCitation,
+}: {
+  session: Session;
+  printCitation?: ReactNode;
+}) {
   const [jump, setJump] = useState<{ index: number; serial: number } | null>(null);
   const [selectedPassage, setSelectedPassage] = useState<number | null>(null);
   const [message, setMessage] = useState('');
@@ -138,6 +145,7 @@ export function SessionBody({ session }: { session: Session }) {
         </li>)}
       </ol>
     </section>
+    {printCitation}
     <RecordingAudio ref={player} sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} onTime={setCurrentTime} onPlaying={setPlaying} headingLevel={2} />
     <Transcript
       session={session}
@@ -187,6 +195,7 @@ function Transcript({
   onCurrentPassage: () => void;
 }) {
   const [query, setQuery] = useState('');
+  const [isPrinting, setIsPrinting] = useState(false);
   const findEdited = useRef(false);
   const [follow, setFollow] = useState(false);
   const hasChatNotation = session.origin === 'archived_research' || session.origin === 'talkbank_ai_draft';
@@ -201,6 +210,52 @@ function Transcript({
 
   useEffect(() => () => {
     if (copyTimer.current) clearTimeout(copyTimer.current);
+  }, []);
+
+  // Ensure print output always includes the full numbered transcript even when
+  // the reader has an active Find filter, without modifying the screen query.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = typeof window.matchMedia === 'function' ? window.matchMedia('print') : null;
+    let beforePrintActive = false;
+
+    const applyPrintState = (sync: boolean) => {
+      const next = beforePrintActive || Boolean(mql?.matches);
+      if (sync) {
+        flushSync(() => setIsPrinting(next));
+      } else {
+        setIsPrinting(next);
+      }
+    };
+
+    if (mql?.matches) {
+      setIsPrinting(true);
+    }
+
+    const handleBeforePrint = () => {
+      beforePrintActive = true;
+      applyPrintState(true);
+    };
+    const handleAfterPrint = () => {
+      beforePrintActive = false;
+      applyPrintState(false);
+    };
+    const handleMediaChange = () => {
+      applyPrintState(true);
+    };
+
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    if (mql && typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handleMediaChange);
+    }
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+      if (mql && typeof mql.removeEventListener === 'function') {
+        mql.removeEventListener('change', handleMediaChange);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -249,9 +304,9 @@ function Transcript({
   }, [pendingFocus, query]);
 
   useEffect(() => {
-    if (!follow || !playing || query.trim() || activeIndex === null || activeIndex < 0) return;
+    if (isPrinting || !follow || !playing || query.trim() || activeIndex === null || activeIndex < 0) return;
     rows.current.get(activeIndex)?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [activeIndex, follow, playing, query, toolbarHeight]);
+  }, [activeIndex, follow, isPrinting, playing, query, toolbarHeight]);
 
   const displayRows = useMemo(() => session.transcript.map((passage, index) => ({
     passage, index, text: showNotation ? passage.text : readingText(passage, session.origin),
@@ -259,6 +314,8 @@ function Transcript({
   })), [session.origin, session.transcript, showNotation]);
 
   const results = useMemo(() => displayRows.filter(({ passage, text }) => !query.trim() || `${passage.speaker || ''} ${text}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [displayRows, query]);
+  const visibleRows = isPrinting ? displayRows : results;
+  const activeQuery = isPrinting ? '' : query;
 
   useEffect(() => {
     if (!findEdited.current || !query.trim()) return;
@@ -299,13 +356,13 @@ function Transcript({
       setFollow(event.target.checked);
       trackArchiveEvent('transcript_follow', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
     }} />Follow playback</label></div>}
-    {follow && query.trim() && <p className="small muted">Clear the transcript search to follow playback.</p>}
+    {follow && query.trim() && <p className="small muted transcript-filter-notice">Clear the transcript search to follow playback.</p>}
     {hasChatNotation ? <div className="transcript-view-controls"><label className="follow-control"><input type="checkbox" checked={showNotation} aria-describedby="transcript-notation-help" onChange={event => {
       setShowNotation(event.target.checked);
       trackArchiveEvent('notation_toggle', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
     }} />Show linguistic notation</label><p id="transcript-notation-help" className="small muted">Off: an easier reading view with research codes and dependent notes hidden. Partial-word spellings and uncertainty remain. On: the notation and notes stored in this reading copy; full analysis tiers are in the downloadable CHAT source. This changes only the display; source files are unchanged.</p>{showNotation && <p className="small muted">Linked repetition, retracing, and pause symbols find matching passages across transcripts, initially including any speaker.</p>}</div> : <p className="small muted transcript-view-controls">This local AI draft has no CHAT notation layer to switch on. Its text is displayed unchanged.</p>}
     <div className="transcript-search field"><label htmlFor="transcript-query">Find within this transcript</label><div className="search-input"><Search size={18} aria-hidden="true" /><input id="transcript-query" type="search" value={query} onChange={event => { findEdited.current = true; setQuery(event.target.value); }} placeholder="A word, name, or phrase" autoComplete="off" spellCheck={false} aria-describedby="transcript-search-help" /></div><p id="transcript-search-help" className="small muted">Searches the text currently displayed, including speaker labels and visible source notes.</p></div>
-    <p className="small muted" role="status">{query.trim() ? `${results.length.toLocaleString()} matching ${results.length === 1 ? 'passage' : 'passages'}` : `${session.transcript.length.toLocaleString()} transcript ${session.transcript.length === 1 ? 'passage' : 'passages'}`}</p>
+    <p className="small muted" role="status">{activeQuery.trim() ? `${results.length.toLocaleString()} matching ${results.length === 1 ? 'passage' : 'passages'}` : `${session.transcript.length.toLocaleString()} transcript ${session.transcript.length === 1 ? 'passage' : 'passages'}`}</p>
     <p className="small muted transcript-live-status" role="status" aria-live="polite" aria-atomic="true">{message}</p>
     <p className="small muted transcript-copy-status" role="status" aria-live="polite" aria-atomic="true">{copyMessage}</p>
     {manualCopy && (
@@ -324,7 +381,7 @@ function Transcript({
       </div>
     )}
     <div className="transcript-lines">
-      {results.map(({ passage, index, text, links }) => {
+      {visibleRows.map(({ passage, index, text, links }) => {
         const passageNumber = index + 1;
         const isCopied = copiedPassage === passageNumber;
         return (
@@ -349,15 +406,18 @@ function Transcript({
                 <span className="sr-only">Passage </span><span aria-hidden="true">#</span>{passageNumber}
               </a>
               {canPlayAt(passage.start) ? (
-                <button
-                  className="cue-button"
-                  type="button"
-                  onClick={() => onPlayAt(passage.start!)}
-                  aria-label={`Play transcript passage ${passageNumber} at ${timeLabel(passage.start!)}`}
-                >
-                  <Play size={11} aria-hidden="true" />
-                  {timeLabel(passage.start!)}
-                </button>
+                <>
+                  <button
+                    className="cue-button"
+                    type="button"
+                    onClick={() => onPlayAt(passage.start!)}
+                    aria-label={`Play transcript passage ${passageNumber} at ${timeLabel(passage.start!)}`}
+                  >
+                    <Play size={11} aria-hidden="true" />
+                    {timeLabel(passage.start!)}
+                  </button>
+                  <span className="print-only small transcript-timestamp">{timeLabel(passage.start!)}</span>
+                </>
               ) : typeof passage.start === 'number' ? (
                 <span className="small muted transcript-timestamp">{timeLabel(passage.start)}</span>
               ) : null}
@@ -368,7 +428,7 @@ function Transcript({
                 sessionId={session.id}
                 origin={session.origin}
                 text={text}
-                query={query}
+                query={activeQuery}
                 links={links}
               />
             </p>
@@ -387,12 +447,43 @@ function Transcript({
           </div>
         );
       })}
-      {!results.length && <p className="empty-inline">No matching passages. Try a different word or clear your search.</p>}
+      {!visibleRows.length && <p className="empty-inline">No matching passages. Try a different word or clear your search.</p>}
     </div>
   </section>;
 }
 
 export function SessionSources({ session }: { session: Session }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const wasOpenBeforePrintRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    wasOpenBeforePrintRef.current = null;
+    if (typeof window === 'undefined') return;
+    const details = detailsRef.current;
+    if (!details) return;
+    const handleBeforePrint = () => {
+      if (wasOpenBeforePrintRef.current === null) {
+        wasOpenBeforePrintRef.current = details.open;
+      }
+      details.open = true;
+    };
+    const handleAfterPrint = () => {
+      if (wasOpenBeforePrintRef.current === null) return;
+      details.open = wasOpenBeforePrintRef.current;
+      wasOpenBeforePrintRef.current = null;
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+      if (wasOpenBeforePrintRef.current !== null) {
+        details.open = wasOpenBeforePrintRef.current;
+        wasOpenBeforePrintRef.current = null;
+      }
+    };
+  }, [session.id]);
+
   return <section className="source-section" aria-labelledby="sources-heading">
     <p className="eyebrow">Keep the evidence in view</p><h2 id="sources-heading">Sources &amp; reading notes</h2>
     {session.limits.length > 0 && <ul className="reading-notes">{session.limits.map((limit, index) => <li key={index}>{limit}</li>)}</ul>}
@@ -401,6 +492,6 @@ export function SessionSources({ session }: { session: Session }) {
       const category = format === 'cha' ? 'chat' : ['txt', 'json', 'vtt'].includes(format) ? 'transcript' : ['md', 'html'].includes(format) ? 'guide' : 'other';
       trackArchiveEvent('source_download', { recordingId: session.id, origin: session.origin, format, category });
     }}><Download size={18} aria-hidden="true" /><span><strong>{source.label}</strong><span className="small muted">{source.name} · {source.format.toUpperCase()}</span></span></a>)}</div>
-    <details className="technical-notes"><summary>Source identification</summary><p>{session.association}</p><p><strong>Source file: </strong><code>{session.sourceName}</code></p>{session.ages.length > 0 && <p><strong>Stored age notation (CHAT): </strong>{session.ages.join(' / ')}</p>}{session.ages.length === 0 && session.inferredAge && <p><strong>Inferred age notation (from filename): </strong>{session.inferredAge}</p>}<p className="small">Source SHA-256</p><code>{session.sourceSha256}</code></details>
+    <details ref={detailsRef} className="technical-notes"><summary>Source identification</summary><p>{session.association}</p><p><strong>Source file: </strong><code>{session.sourceName}</code></p>{session.ages.length > 0 && <p><strong>Stored age notation (CHAT): </strong>{session.ages.join(' / ')}</p>}{session.ages.length === 0 && session.inferredAge && <p><strong>Inferred age notation (from filename): </strong>{session.inferredAge}</p>}<p className="small">Source SHA-256</p><code>{session.sourceSha256}</code></details>
   </section>;
 }

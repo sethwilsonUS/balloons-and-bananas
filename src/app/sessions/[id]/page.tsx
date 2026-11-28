@@ -6,6 +6,7 @@ import { connection } from 'next/server';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { archive } from '@/lib/archive';
 import { formatAge } from '@/lib/age';
+import { resolveServerRequestOrigin } from '@/lib/print';
 import {
   type AdjacentSession,
   formatAdjacentAgeSummary,
@@ -18,6 +19,7 @@ import { SessionCiteProvider } from '@/components/CiteControl';
 import RouteHeader from '@/components/RouteHeader';
 import SessionCatalogRecord from '@/components/SessionCatalogRecord';
 import SessionPageClient from '@/components/SessionPageClient';
+import { SessionPrintCitation, SessionPrintHeader } from '@/components/SessionPrintMeta';
 import SessionStickyNav from '@/components/SessionStickyNav';
 import SiteFooter from '@/components/SiteFooter';
 import { TopicLabels } from '@/components/TopicThemes';
@@ -33,18 +35,6 @@ const loadSessionContext = cache(async (rawId: string) => {
   const adjacent = getAdjacentSessions(data.sessions, lookup.session.slug);
   return { lookup, adjacent };
 });
-
-function resolveRequestOrigin(headerList: Headers): string {
-  const forwardedHost = headerList.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const host = forwardedHost || headerList.get('host')?.trim() || 'localhost';
-  const forwardedProto = headerList.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const proto = forwardedProto === 'https' || forwardedProto === 'http' ? forwardedProto : 'http';
-  try {
-    return new URL(`${proto}://${host}`).origin;
-  } catch {
-    return 'http://localhost';
-  }
-}
 
 function AdjacentAgeText({ session }: { session: AdjacentSession }) {
   const summary = formatAdjacentAgeSummary(session);
@@ -97,15 +87,17 @@ export default async function SessionPage({
   const rawFrom = Array.isArray(resolvedSearchParams.from)
     ? resolvedSearchParams.from[0]
     : resolvedSearchParams.from;
-  const requestOrigin = resolveRequestOrigin(headerList);
-  const explicitFrom = resolveBackToResultsUrl(rawFrom, requestOrigin);
+  const requestOrigin = resolveServerRequestOrigin(headerList);
+  const explicitFrom = resolveBackToResultsUrl(rawFrom, requestOrigin ?? 'http://localhost');
   if (!lookup.canonical) {
     const canonicalPath = `/sessions/${encodeURIComponent(lookup.session.slug)}`;
     redirect(explicitFrom ? `${canonicalPath}?from=${encodeURIComponent(explicitFrom)}` : canonicalPath);
   }
   const { session } = lookup;
 
-  const resolvedBackHref = explicitFrom ?? resolveBackToResultsUrl(headerList.get('referer'), requestOrigin);
+  const resolvedBackHref = explicitFrom
+    ?? (requestOrigin ? resolveBackToResultsUrl(headerList.get('referer'), requestOrigin) : null);
+  const accessDate = new Date().toISOString().slice(0, 10);
   const citationSession = {
     slug: session.slug,
     ages: session.ages,
@@ -121,6 +113,7 @@ export default async function SessionPage({
         <article className="session-detail session-page">
           <SessionCiteProvider session={citationSession} initialOrigin={requestOrigin}>
             <header className="detail-header">
+              <SessionPrintHeader slug={session.slug} initialOrigin={requestOrigin} />
               <p className="eyebrow">Session {session.slug}</p>
               <h1>{session.title}</h1>
               <SessionCatalogRecord session={session} />
@@ -180,7 +173,16 @@ export default async function SessionPage({
                 </p>
               </div>
             </section>
-            <SessionPageClient session={session} />
+            <SessionPageClient
+              session={session}
+              printCitation={
+                <SessionPrintCitation
+                  session={citationSession}
+                  initialOrigin={requestOrigin}
+                  initialAccessDate={accessDate}
+                />
+              }
+            />
           </SessionCiteProvider>
         </article>
       </main>
