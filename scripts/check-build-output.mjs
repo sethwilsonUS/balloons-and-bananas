@@ -47,9 +47,17 @@ async function main() {
     throw new Error('Expected /sessions/[id]/page in .next/server/app-paths-manifest.json');
   }
 
-  const prerenderedSessionHtml = path.join(nextDir, 'server', 'app', 'sessions', '[id].html');
-  if (await exists(prerenderedSessionHtml)) {
-    throw new Error('Dynamic /sessions/[id] route must never be prerendered to static HTML.');
+  const sessionsServerDir = path.join(nextDir, 'server', 'app', 'sessions');
+  const prerenderedSessionHtmlFiles = (await exists(sessionsServerDir))
+    ? (await collectFiles(sessionsServerDir))
+      .filter(filePath => filePath.toLowerCase().endsWith('.html'))
+      .map(filePath => path.relative(process.cwd(), filePath))
+    : [];
+  const prerenderedSessionHtmlPresent = prerenderedSessionHtmlFiles.length > 0;
+  if (prerenderedSessionHtmlPresent) {
+    throw new Error(
+      `Dynamic /sessions/[id] route must never be prerendered to static HTML (found: ${prerenderedSessionHtmlFiles.join(', ')}).`,
+    );
   }
 
   const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
@@ -97,7 +105,7 @@ async function main() {
   console.log(JSON.stringify({
     ok: true,
     routeBuilt: '/sessions/[id]/page',
-    prerenderedSessionHtmlPresent: false,
+    prerenderedSessionHtmlPresent,
     filesScanned: files.length,
     phrasesChecked: needles.length,
     leaks: [],
