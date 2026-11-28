@@ -251,9 +251,6 @@ test('SessionBody renders all 135 passages without a 100-passage cap or Show mor
   const html = renderToStaticMarkup(
     React.createElement(SessionBody, {
       session: longSession,
-      headingLevel: 2,
-      momentsBeforePlayer: true,
-      enableHashNavigation: true,
     }),
   );
 

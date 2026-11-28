@@ -6,7 +6,6 @@ import {
   filterBrowseSessions,
   formatSessionsBrowseStatus,
   groupSessionsByAgeYear,
-  hasLegacyRootParams,
   isTranscriptOrigin,
   parseOriginParam,
   parseStoredView,
@@ -60,28 +59,6 @@ function mockBrowseItem(id: string, overrides: Partial<SessionBrowseItem> = {}):
 
 test('VIEW_STORAGE_KEY preserves the existing Details/List preference storage key', () => {
   assert.equal(VIEW_STORAGE_KEY, 'balloons-and-bananas:recordings-view');
-});
-
-test('hasLegacyRootParams detects legacy ArchiveApp links while letting clean homepage visits through', () => {
-  assert.equal(hasLegacyRootParams({}), false);
-  assert.equal(hasLegacyRootParams({ utm_source: 'family' }), false);
-  assert.equal(hasLegacyRootParams({ section: 'overview' }), false);
-  assert.equal(hasLegacyRootParams({ section: 'invalid-section' }), false);
-  assert.equal(hasLegacyRootParams({ entry: '' }), false);
-  assert.equal(hasLegacyRootParams({ entry: '   ' }), false);
-  assert.equal(hasLegacyRootParams({ entry: ['', '  '] }), false);
-  // Matches URLSearchParams.get() in ArchiveApp, which inspects the first occurrence.
-  assert.equal(hasLegacyRootParams({ entry: ['', 'fixture-010815-locomotive'] }), false);
-
-  assert.equal(hasLegacyRootParams({ entry: 'fixture-010815-locomotive' }), true);
-  assert.equal(hasLegacyRootParams({ entry: ['fixture-010815-locomotive', 'second'] }), true);
-  assert.equal(hasLegacyRootParams({ passage: '3' }), true);
-  assert.equal(hasLegacyRootParams({ document: 'fixture-provenance-guide' }), true);
-  assert.equal(hasLegacyRootParams({ marker: 'repetition' }), true);
-  assert.equal(hasLegacyRootParams({ speaker: 'any' }), true);
-  assert.equal(hasLegacyRootParams({ section: 'sessions' }), true);
-  assert.equal(hasLegacyRootParams({ section: 'recordings' }), true);
-  assert.equal(hasLegacyRootParams({ section: 'research' }), true);
 });
 
 test('parseOriginParam and isTranscriptOrigin validate transcript origin filters strictly', () => {

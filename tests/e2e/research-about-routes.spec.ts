@@ -290,7 +290,7 @@ test('/research/[doc] renders per-request SSR reader with H1 > H2 > H3 scale, in
   await expect(page).toHaveTitle('Document not found · Research · The Seth Tapes');
   await expect(page.getByRole('heading', { level: 1, name: /This research document could not be found/i })).toBeVisible();
   await expect(page.locator('.not-found-actions a[href="/research"]')).toBeVisible();
-  await expect(page.locator('.not-found-actions a[href="/?section=sessions"]')).toBeVisible();
+  await expect(page.locator('.not-found-actions a[href="/search"]')).toBeVisible();
   await auditAllThemes(page, '/research/nonexistent-fixture-doc 404');
 });
 

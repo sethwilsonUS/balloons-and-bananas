@@ -19,6 +19,7 @@ import RouteHeader from '@/components/RouteHeader';
 import SessionCatalogRecord from '@/components/SessionCatalogRecord';
 import SessionPageClient from '@/components/SessionPageClient';
 import SessionStickyNav from '@/components/SessionStickyNav';
+import SiteFooter from '@/components/SiteFooter';
 import { TopicLabels } from '@/components/TopicThemes';
 
 export const runtime = 'nodejs';
@@ -183,16 +184,7 @@ export default async function SessionPage({
           </SessionCiteProvider>
         </article>
       </main>
-      <footer className="site-footer">
-        <div>
-          <span className="collection-mark" aria-hidden="true"><span /><span /></span>
-          <p>
-            {ARCHIVE_NAME}<br />
-            <span>An unlisted public archive. Anyone with the link can visit.</span><br />
-            <span>Usage analytics exclude search and transcript text.</span>
-          </p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

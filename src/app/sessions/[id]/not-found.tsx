@@ -1,5 +1,6 @@
 import { ArrowRight, Search } from 'lucide-react';
 import RouteHeader from '@/components/RouteHeader';
+import SiteFooter from '@/components/SiteFooter';
 import { ARCHIVE_NAME } from '@/lib/site';
 
 export default function SessionNotFound() {
@@ -14,7 +15,7 @@ export default function SessionNotFound() {
             No session in {ARCHIVE_NAME} matches this URL. Check the session ID, or search the collection to find the session you need.
           </p>
           <div className="not-found-actions">
-            <a className="button primary" href="/?section=sessions">
+            <a className="button primary" href="/search">
               <Search size={17} aria-hidden="true" />
               Search sessions
             </a>
@@ -25,16 +26,7 @@ export default function SessionNotFound() {
           </div>
         </section>
       </main>
-      <footer className="site-footer">
-        <div>
-          <span className="collection-mark" aria-hidden="true"><span /><span /></span>
-          <p>
-            {ARCHIVE_NAME}<br />
-            <span>An unlisted public archive. Anyone with the link can visit.</span><br />
-            <span>Usage analytics exclude search and transcript text.</span>
-          </p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

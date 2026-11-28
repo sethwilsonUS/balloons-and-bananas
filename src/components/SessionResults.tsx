@@ -13,17 +13,15 @@ export type { SessionView };
 function SearchExcerpt({
   result,
   excerpt,
-  showPassageTag = false,
 }: {
   result: SearchResult;
   excerpt: string;
-  showPassageTag?: boolean;
 }) {
   if (result.matchedIn === 'browse' || !excerpt) return null;
   return (
     <div className="search-excerpt">
       <span className="excerpt-label">{result.matchedIn === 'transcript' ? 'From the transcript' : 'From the guide'}</span>
-      {showPassageTag && result.matchedIn === 'transcript' && result.matchedPassage !== undefined && (
+      {result.matchedIn === 'transcript' && result.matchedPassage !== undefined && (
         <span className="excerpt-passage-tag">{` · Passage ${result.matchedPassage}`}</span>
       )}
       <p>{excerpt}</p>
@@ -36,17 +34,13 @@ function MatchingPassages({
   speaker,
   view,
   returnTo,
-  linkPassagesToSessionRoute,
   onBeforeSessionNavigate,
-  onPassage,
 }: {
   result: SearchResult;
   speaker: LinguisticSpeaker;
   view: SessionView;
   returnTo?: string;
-  linkPassagesToSessionRoute: boolean;
   onBeforeSessionNavigate?: () => void;
-  onPassage?: (id: string, passage: number) => void;
 }) {
   const evidence = result.linguisticEvidence;
   if (!evidence) return null;
@@ -65,9 +59,7 @@ function MatchingPassages({
       <ol className="linguistic-examples">
         {evidence.examples.map(example => {
           const passageNumber = example.passageIndex + 1;
-          const href = linkPassagesToSessionRoute
-            ? buildSessionHrefFromSearch(slug, { passage: passageNumber, returnTo })
-            : `?entry=${encodeURIComponent(result.session.id)}&passage=${passageNumber}`;
+          const href = buildSessionHrefFromSearch(slug, { passage: passageNumber, returnTo });
           return (
             <li key={example.passageIndex}>
               <p className="small muted linguistic-example-locator">
@@ -79,7 +71,7 @@ function MatchingPassages({
               <a
                 className="text-link small"
                 href={href}
-                onClick={event => {
+                onClick={() => {
                   onBeforeSessionNavigate?.();
                   trackArchiveEvent('recording_open', {
                     recordingId: result.session.id,
@@ -88,10 +80,6 @@ function MatchingPassages({
                     action: 'passage',
                     passage: passageNumber,
                   });
-                  if (linkPassagesToSessionRoute || !onPassage) return;
-                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-                  event.preventDefault();
-                  onPassage(result.session.id, passageNumber);
                 }}
                 onAuxClick={event => {
                   if (event.button === 1) {
@@ -122,25 +110,16 @@ export default function SessionResults({
   view,
   firstIndex,
   speaker,
-  headingLevel = 4,
   returnTo,
-  linkPassagesToSessionRoute = false,
   onBeforeSessionNavigate,
-  onPassage,
-  onDocument,
 }: {
   results: SearchResult[];
   view: SessionView;
   firstIndex: number;
   speaker: LinguisticSpeaker;
-  headingLevel?: 3 | 4;
   returnTo?: string;
-  linkPassagesToSessionRoute?: boolean;
   onBeforeSessionNavigate?: () => void;
-  onPassage?: (id: string, passage: number) => void;
-  onDocument?: (id: string) => void;
 }) {
-  const CardHeading = headingLevel === 3 ? 'h3' : 'h4';
   const rows = results.map((result, index) => {
     const { session, matchedIn, matchedPassage, linguisticEvidence } = result;
     const excerpt = visibleExcerpt(result, view);
@@ -148,10 +127,8 @@ export default function SessionResults({
     const markerLabel = linguisticEvidence && linguisticMarkers.find(item => item.id === linguisticEvidence.marker)?.label;
     const headingId = `result-${session.id}`;
     const slug = session.slug || session.id;
-    const targetPassage = linkPassagesToSessionRoute && matchedIn === 'transcript' ? matchedPassage : undefined;
-    const sessionHref = linkPassagesToSessionRoute
-      ? buildSessionHrefFromSearch(slug, { passage: targetPassage, returnTo })
-      : `/sessions/${encodeURIComponent(slug)}`;
+    const targetPassage = matchedIn === 'transcript' ? matchedPassage : undefined;
+    const sessionHref = buildSessionHrefFromSearch(slug, { passage: targetPassage, returnTo });
     const clickAction = targetPassage !== undefined ? 'passage' : 'guide';
     const openProperties = targetPassage !== undefined
       ? { recordingId: session.id, origin: session.origin, view, action: clickAction, passage: targetPassage }
@@ -163,10 +140,10 @@ export default function SessionResults({
         <div className="session-card-body">
           <div className="session-meta">
             <span>{session.sourceName}</span>
-            <SessionAge ages={session.ages} inferredAge={session.inferredAge} onDocument={onDocument} />
+            <SessionAge ages={session.ages} inferredAge={session.inferredAge} />
             {session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}
           </div>
-          <CardHeading id={headingId}>
+          <h3 id={headingId}>
             <a
               href={sessionHref}
               onClick={() => {
@@ -180,19 +157,17 @@ export default function SessionResults({
               {session.title}
               <ArrowRight size={view === 'list' ? 17 : 20} aria-hidden="true" />
             </a>
-          </CardHeading>
+          </h3>
           <p className="card-overview">{view === 'list' ? shortOverview(session.overview) : session.overview}</p>
           {view === 'details' && (
             <>
-              <SearchExcerpt result={result} excerpt={excerpt} showPassageTag={linkPassagesToSessionRoute} />
+              <SearchExcerpt result={result} excerpt={excerpt} />
               <MatchingPassages
                 result={result}
                 speaker={speaker}
                 view={view}
                 returnTo={returnTo}
-                linkPassagesToSessionRoute={linkPassagesToSessionRoute}
                 onBeforeSessionNavigate={onBeforeSessionNavigate}
-                onPassage={onPassage}
               />
             </>
           )}
@@ -220,15 +195,13 @@ export default function SessionResults({
                   <>Search match <span className="small muted">· {matchedIn === 'transcript' ? 'transcript' : 'guide'}</span></>
                 )}
               </summary>
-              <SearchExcerpt result={result} excerpt={excerpt} showPassageTag={linkPassagesToSessionRoute} />
+              <SearchExcerpt result={result} excerpt={excerpt} />
               <MatchingPassages
                 result={result}
                 speaker={speaker}
                 view={view}
                 returnTo={returnTo}
-                linkPassagesToSessionRoute={linkPassagesToSessionRoute}
                 onBeforeSessionNavigate={onBeforeSessionNavigate}
-                onPassage={onPassage}
               />
             </details>
           )}

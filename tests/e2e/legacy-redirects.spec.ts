@@ -153,14 +153,54 @@ test('every legacy root query shape returns permanent HTTP 308 with exact Locati
       label: 'legacy ?marker= preserves valid curated topic',
     },
     {
-      path: '/?entry=fixture-010815-locomotive&document=fixture-provenance-guide&marker=repetition',
-      expectedLocation: '/sessions/010815',
-      label: 'precedence entry > document > marker',
+      path: '/?section=sessions',
+      expectedLocation: '/sessions',
+      label: 'legacy ?section=sessions',
     },
     {
-      path: '/?document=fixture-provenance-guide&marker=repetition&speaker=any',
+      path: '/?section=recordings',
+      expectedLocation: '/sessions',
+      label: 'legacy ?section=recordings',
+    },
+    {
+      path: '/?section=SESSIONS',
+      expectedLocation: '/sessions',
+      label: 'legacy uppercase ?section=SESSIONS',
+    },
+    {
+      path: '/?section=sessions&origin=archived_research',
+      expectedLocation: '/sessions?origin=archived_research',
+      label: 'legacy ?section=sessions preserves valid origin',
+    },
+    {
+      path: '/?section=sessions&origin=bogus',
+      expectedLocation: '/sessions',
+      label: 'legacy ?section=sessions strips invalid origin',
+    },
+    {
+      path: '/?section=research',
+      expectedLocation: '/research',
+      label: 'legacy ?section=research',
+    },
+    {
+      path: '/?section=RESEARCH',
+      expectedLocation: '/research',
+      label: 'legacy uppercase ?section=RESEARCH',
+    },
+    {
+      path: '/?entry=fixture-010815-locomotive&document=fixture-provenance-guide&marker=repetition&section=research',
+      expectedLocation: '/sessions/010815',
+      label: 'precedence entry > document > marker > section',
+    },
+    {
+      path: '/?document=fixture-provenance-guide&marker=repetition&speaker=any&section=sessions',
       expectedLocation: '/research/fixture-provenance-guide',
-      label: 'precedence document > marker',
+      label: 'precedence document > marker > section',
+    },
+    {
+      path: '/?marker=repetition&section=research',
+      expectedLocation: '/search?marker=repetition',
+      label: 'precedence marker > section',
     },
   ];
 
@@ -169,6 +209,13 @@ test('every legacy root query shape returns permanent HTTP 308 with exact Locati
     expect(res.status(), `${tc.label}: HTTP 308`).toBe(308);
     expectPrivateHeaders(res, tc.label);
     expect(resolveLocationPath(res.headers()['location'], originBase), tc.label).toBe(tc.expectedLocation);
+  }
+
+  // Non-redirecting ?section= values still render the homepage (HTTP 200)
+  for (const path of ['/?section=overview', '/?section=unknown']) {
+    const res = await request.get(path, { maxRedirects: 0 });
+    expect(res.status(), `${path}: HTTP 200`).toBe(200);
+    expectPrivateHeaders(res, path);
   }
 });
 
@@ -217,6 +264,21 @@ test('browser navigation through legacy ?entry=, ?passage=, ?document=, and ?mar
   await page.goto('/?marker=repetition');
   await expect(page).toHaveURL(/\/search\?marker=repetition$/);
   await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
+
+  // 8. Legacy ?section=sessions|recordings|research redirect permanently to real routes and strip #access=
+  await page.goto('/?section=sessions#access=obsolete-family-key');
+  await expect(page).toHaveURL(/\/sessions$/);
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('');
+  await expect(page.getByRole('heading', { level: 1, name: 'Sessions', exact: true })).toBeVisible();
+
+  await page.goto('/?section=recordings&origin=archived_research');
+  await expect(page).toHaveURL(/\/sessions\?origin=archived_research$/);
+  await expect(page.getByLabel('Transcript origin')).toHaveValue('archived_research');
+
+  await page.goto('/?section=research#access=obsolete-family-key');
+  await expect(page).toHaveURL(/\/research$/);
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('');
+  await expect(page.getByRole('heading', { level: 1, name: 'Research & context', exact: true })).toBeVisible();
 });
 
 test('obsolete #access= fragment is stripped client-side on every page while preserving other fragments and never storing tokens', async ({ page }) => {

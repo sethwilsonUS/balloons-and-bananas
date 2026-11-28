@@ -31,7 +31,7 @@ export default async function SessionsPage({
 
   return (
     <div className="archive-shell">
-      <RouteHeader activeSection="sessions" sessionCount={items.length} />
+      <RouteHeader activeSection="sessions" />
       <main id="main" tabIndex={-1}>
         <section className="sessions-browse-section" aria-labelledby="sessions-page-heading">
           <header className="page-header">

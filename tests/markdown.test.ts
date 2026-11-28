@@ -59,7 +59,6 @@ test('ArchiveMarkdown normalizes container headings (block quotes), closes sourc
     createElement(ArchiveMarkdown, {
       text: quoted,
       baseHeadingLevel: 3,
-      onSession: () => {},
     }),
   );
 
@@ -84,7 +83,6 @@ test('ArchiveMarkdown sets footnote heading level to baseHeadingLevel and preser
       text: withBodyFootnote,
       documentTitle: 'Plain synthetic title',
       baseHeadingLevel: 3,
-      onSession: () => {},
     }),
   );
 
@@ -106,7 +104,6 @@ test('ArchiveMarkdown sets footnote heading level to baseHeadingLevel and preser
       text: withTitleFootnote,
       documentTitle: 'Synthetic titled note',
       baseHeadingLevel: 4,
-      onSession: () => {},
     }),
   );
 
@@ -138,7 +135,6 @@ test('ArchiveMarkdown strips duplicate leading heading, keeps heading hierarchy 
       text: markdown,
       documentTitle: 'Synthetic provenance table guide',
       baseHeadingLevel: 3,
-      onSession: () => {},
     }),
   );
 

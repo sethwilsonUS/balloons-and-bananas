@@ -36,7 +36,7 @@ import {
   serializeSearchUrlParams,
   type SearchUrlState,
 } from '../lib/search-params';
-import { ARCHIVE_NAME, formatDocumentTitle } from '../lib/site';
+import { formatDocumentTitle } from '../lib/site';
 import { positiveThemes, selectableTopicSet } from '../lib/topics';
 import type { ConcordanceResponse, SearchResponse, SearchSort, TranscriptOrigin } from '../lib/types';
 import ArchiveAnalytics from './ArchiveAnalytics';
@@ -44,6 +44,7 @@ import ConcordanceTable from './ConcordanceTable';
 import LinguisticFilters from './LinguisticFilters';
 import RouteHeader from './RouteHeader';
 import SessionResults from './SessionResults';
+import SiteFooter from './SiteFooter';
 import { request, transcriptOriginLabels } from './api';
 
 export interface SearchTopicCount {
@@ -979,9 +980,7 @@ export default function SearchPageClient({
                       view={urlState.view === 'list' ? 'list' : 'details'}
                       firstIndex={(visibleSearch.page - 1) * visibleSearch.pageSize + 1}
                       speaker={visibleSpeaker}
-                      headingLevel={3}
                       returnTo={canonicalHref}
-                      linkPassagesToSessionRoute
                       onBeforeSessionNavigate={flushAnalyticsBeforeNavigate}
                     />
                   )
@@ -1049,16 +1048,7 @@ export default function SearchPageClient({
           )}
         </section>
       </main>
-      <footer className="site-footer">
-        <div>
-          <span className="collection-mark" aria-hidden="true"><span /><span /></span>
-          <p>
-            {ARCHIVE_NAME}<br />
-            <span>An unlisted public archive. Anyone with the link can visit.</span><br />
-            <span>Usage analytics exclude search and transcript text.</span>
-          </p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -57,7 +57,7 @@ async function auditAllThemes(page: Page, label: string) {
 }
 
 test('sessions default to Age, youngest first with labelled inferred ages, support oldest-first and query relevance, and link to the explanation', async ({ page }) => {
-  await page.goto('/?section=sessions');
+  await page.goto('/search');
 
   const sortSelect = page.getByLabel('Sort by');
   await expect(sortSelect).toHaveValue('age-asc');
@@ -69,7 +69,7 @@ test('sessions default to Age, youngest first with labelled inferred ages, suppo
 
   // Default order without a query: youngest first using source-or-inferred age, with no-age last
   // even though Cardboard observatory has a calendar date.
-  const cardHeadings = page.locator('.session-card h4 a');
+  const cardHeadings = page.locator('.session-card h3 a');
   await expect(cardHeadings).toHaveText([
     'Blue locomotive and wooden bridge',
     'Yellow submarine in the courtyard',
@@ -111,11 +111,12 @@ test('sessions default to Age, youngest first with labelled inferred ages, suppo
     'Cardboard observatory without audio',
   ]);
 
-  // Entering a query defaults sort to Relevance; toggling to Age, oldest first reorders query results.
+  // Entering a query defaults sort to Relevance when no explicit sort is set; toggling to Age, oldest first reorders query results.
+  await page.goto('/search');
   const searchInput = page.getByLabel('Search sessions and transcripts');
   await searchInput.fill('locomotive');
-  await expect(sortSelect).toHaveValue('relevance');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
+  await expect(sortSelect).toHaveValue('relevance');
   await expect(cardHeadings).toHaveText([
     'Blue locomotive and wooden bridge',
     'Paper lighthouse and harbor bells',
@@ -149,9 +150,10 @@ test('sessions default to Age, youngest first with labelled inferred ages, suppo
   await expect(page.locator('article.about-page')).toContainText('78 of 78');
   await expect(page.locator('article.about-page')).toContainText('Calendar dates are never inferred.');
 
-  // Browser Back returns to the sessions list cleanly.
+  // Browser Back returns to the search route cleanly.
   await page.goBack();
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
+  await expect(page).toHaveURL(/\/search$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Search the archive' })).toBeVisible();
 });
 
 test('session detail displays inferred age separately from source age, links to /about#inferred-ages, and passes axe in all themes', async ({ page }) => {

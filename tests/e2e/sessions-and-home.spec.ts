@@ -162,7 +162,7 @@ test('functional homepage / renders per request with private headers, search for
   await expect(page.getByRole('heading', { level: 1, name: 'Sessions' })).toBeVisible();
 });
 
-test('legacy query parameters on / permanently redirect while ?section= fallback and empty params stay functional', async ({ page }) => {
+test('legacy query parameters on / permanently redirect while empty params render the homepage', async ({ page }) => {
   // ?entry= permanently redirects to /sessions/<slug>
   await page.goto('/?entry=fixture-010815-locomotive');
   await expect(page).toHaveURL(/\/sessions\/010815$/);
@@ -189,25 +189,20 @@ test('legacy query parameters on / permanently redirect while ?section= fallback
   await expect(page).toHaveURL(/\/search\?marker=repetition$/);
   await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
 
-  // Legacy ?section=sessions / ?section=research fallback still preserves view across reload until Ticket 16
+  // Legacy ?section=sessions|recordings|research redirect permanently to real routes
   await page.goto('/?section=sessions');
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
-  await page.getByLabel('Search sessions and transcripts').fill('submarine');
-  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
-  await page.reload();
-  await expect(page).toHaveURL(/\/\?section=sessions$/);
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
-  await expect(page.getByLabel('Search sessions and transcripts')).toHaveValue('submarine');
-  await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
+  await expect(page).toHaveURL(/\/sessions$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Sessions', exact: true })).toBeVisible();
+
+  await page.goto('/?section=recordings');
+  await expect(page).toHaveURL(/\/sessions$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Sessions', exact: true })).toBeVisible();
 
   await page.goto('/?section=research');
-  await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
-  await page.reload();
-  await expect(page).toHaveURL(/\/\?section=research$/);
-  await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
+  await expect(page).toHaveURL(/\/research$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Research & context', exact: true })).toBeVisible();
 
-  // Empty legacy key (?entry=) and bare / still render the new functional homepage rather than legacy SPA
+  // Empty legacy key (?entry=) and bare / render the homepage directly
   await page.goto('/?entry=');
   await expect(page.locator('.home-search-form')).toHaveAttribute('action', '/search');
   await page.goto('/');
@@ -251,8 +246,16 @@ test('/sessions renders per request with private headers, year-of-age headings i
   await expect(jumpLinks.nth(2)).toHaveAttribute('href', '#age-unrecorded');
   await expect(jumpLinks.nth(2)).toHaveAccessibleName('Age not recorded 1 session');
 
-  // Top navigation count keeps an explicit space so VoiceOver never concatenates "Sessions4"
-  await expect(page.locator('.section-nav a[href="/sessions"]')).toHaveAccessibleName('Sessions 4');
+  // Top navigation keeps stable, identical labels across every route without shifting count badges
+  await expect(page.locator('.section-nav a')).toHaveText([
+    'Overview',
+    'Sessions',
+    'Search',
+    'Research & context',
+    'About & methods',
+  ]);
+  await expect(page.locator('.section-nav a[href="/sessions"]')).toHaveAccessibleName('Sessions');
+  await expect(page.locator('.section-nav .nav-count')).toHaveCount(0);
 
   // Sessions within each year group are youngest-first and link to /sessions/<slug>
   await expect(page.locator('#age-1 h3 a')).toHaveText(['Blue locomotive and wooden bridge']);
@@ -420,6 +423,57 @@ test('/sessions preserves Details/List preference via VIEW_STORAGE_KEY, filters 
 
   expect(consoleErrors, `Unexpected console errors: ${consoleErrors.join('; ')}`).toEqual([]);
   expect(pageErrors, `Unexpected page errors: ${pageErrors.join('; ')}`).toEqual([]);
+});
+
+test('RouteHeader navigation links remain identical in labels and stable in width across every route', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const expectedLabels = ['Overview', 'Sessions', 'Search', 'Research & context', 'About & methods'];
+  const routes = [
+    '/',
+    '/sessions',
+    '/sessions/010815',
+    '/search',
+    '/research',
+    '/research/fixture-provenance-guide',
+    '/about',
+  ];
+
+  let baselineNavWidth: number | null = null;
+  let baselineSessionsWidth: number | null = null;
+
+  for (const route of routes) {
+    await page.goto(route);
+    const navLinks = page.locator('.section-nav a');
+    await expect(navLinks, `${route}: nav link labels`).toHaveText(expectedLabels);
+    await expect(page.locator('.section-nav .nav-count'), `${route}: no shifting nav count`).toHaveCount(0);
+
+    const widths = await page.evaluate(() => {
+      const links = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a')];
+      const sessionsLink = links.find(link => link.getAttribute('href') === '/sessions');
+      if (!sessionsLink) throw new Error('Missing Sessions nav link');
+      const firstRect = links[0].getBoundingClientRect();
+      const lastRect = links[links.length - 1].getBoundingClientRect();
+      return {
+        sessionsWidth: sessionsLink.getBoundingClientRect().width,
+        totalSpan: lastRect.right - firstRect.left,
+      };
+    });
+
+    if (baselineSessionsWidth === null) {
+      baselineSessionsWidth = widths.sessionsWidth;
+      baselineNavWidth = widths.totalSpan;
+    } else {
+      // Allow <= 4px for active-route bolding (`font-weight: 650`) without shifting badges
+      expect(
+        Math.abs(widths.sessionsWidth - baselineSessionsWidth),
+        `${route}: Sessions link width (${widths.sessionsWidth}) drifted from baseline (${baselineSessionsWidth})`,
+      ).toBeLessThanOrEqual(4);
+      expect(
+        Math.abs(widths.totalSpan - baselineNavWidth!),
+        `${route}: navbar total span (${widths.totalSpan}) drifted from baseline (${baselineNavWidth})`,
+      ).toBeLessThanOrEqual(8);
+    }
+  }
 });
 
 test('build-output check proves /, /sessions, and /sessions/[id] are dynamic with zero prerendered HTML or archive leaks', async () => {

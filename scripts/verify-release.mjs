@@ -317,6 +317,21 @@ async function main() {
     '/search?marker=repetition',
     'legacy_marker_default_redirect',
   );
+  await expectLegacyRedirect(
+    '/?section=sessions',
+    '/sessions',
+    'legacy_section_sessions_redirect',
+  );
+  await expectLegacyRedirect(
+    '/?section=recordings',
+    '/sessions',
+    'legacy_section_recordings_redirect',
+  );
+  await expectLegacyRedirect(
+    '/?section=research',
+    '/research',
+    'legacy_section_research_redirect',
+  );
 
   for (const [path, label, titleRe] of [
     ['/?entry=unknown-release-test-session', 'legacy_unknown_entry', /Session not found/i],
@@ -328,7 +343,7 @@ async function main() {
     check(titleRe.test(missingLegacyHtml), `${label}:not_found_title`);
     check(/href="\/search"|\\"href\\":\\"\/search\\"/.test(missingLegacyHtml), `${label}:search_link_present`);
   }
-  counts.legacyRedirectsVerified = 9;
+  counts.legacyRedirectsVerified = 12;
 
   // Production BotID deliberately rejects this non-browser search client.
   // Exercise search semantics locally; verify real browser search separately.
