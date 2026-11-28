@@ -478,6 +478,16 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     setMessage('');
 
     if (isLoadedSelected && recording.id === selected!.id) {
+      if (loading.current && pending.current && pending.current.generation === generation.current) {
+        pending.current = {
+          ...pending.current,
+          at: seconds,
+          play: false,
+          fromScrub: false,
+          toEnd: false,
+          reportSeek: false,
+        };
+      }
       if (!player.paused) {
         player.pause();
         setPlaying(false);
