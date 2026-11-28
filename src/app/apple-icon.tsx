@@ -27,7 +27,7 @@ export default function AppleIcon() {
           viewBox="0 0 64 40"
           fill="none"
         >
-          {renderCassetteTapeArtwork({ ink: '#254c38', labelFill: '#fcfaf5' })}
+          {renderCassetteTapeArtwork({ ink: '#254c38', shellFill: '#fcfaf5' })}
         </svg>
       </div>
     ),

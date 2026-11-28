@@ -4,11 +4,11 @@ import path from 'node:path';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import CassetteReelLogo from '../src/components/CassetteReelLogo';
+import CassetteReelLogo, { renderCassetteTapeArtwork } from '../src/components/CassetteReelLogo';
 import RouteHeader from '../src/components/RouteHeader';
 import SiteFooter from '../src/components/SiteFooter';
 
-test('CassetteReelLogo renders authentic 1980s compact-cassette SVG decoratively beside text and labelled when standalone', () => {
+test('CassetteReelLogo renders simplified iconic 1980s compact-cassette SVG decoratively beside text and labelled when standalone', () => {
   const decorative = renderToStaticMarkup(React.createElement(CassetteReelLogo));
   assert.match(decorative, /<svg[^>]*viewBox="0 0 64 40"/);
   assert.match(decorative, /<svg[^>]*aria-hidden="true"/);
@@ -20,28 +20,46 @@ test('CassetteReelLogo renders authentic 1980s compact-cassette SVG decoratively
   assert.match(decorative, /stroke="currentColor"/);
   assert.doesNotMatch(decorative, /#[0-9a-f]{3,6}\b/i);
 
-  // Outer shell, 4 corner screws, ruled paper label, tape window, 2 hubs with 6 spokes each, bottom trapezoid + 4 holes
-  assert.match(decorative, /<rect[^>]*width="61"[^>]*height="37"[^>]*rx="3\.2"/);
-  assert.match(decorative, /<circle[^>]*cx="5"[^>]*cy="5"/);
-  assert.match(decorative, /<circle[^>]*cx="59"[^>]*cy="5"/);
-  assert.match(decorative, /<circle[^>]*cx="5"[^>]*cy="35"/);
-  assert.match(decorative, /<circle[^>]*cx="59"[^>]*cy="35"/);
-  assert.match(decorative, /M 10\.6 4\.8 H 53\.4/);
-  assert.match(decorative, /<rect[^>]*x="12\.2"[^>]*y="13\.8"[^>]*width="39\.6"[^>]*height="11\.6"/);
-  assert.match(decorative, /<circle[^>]*cx="19\.8"[^>]*cy="19\.6"[^>]*r="4\.3"/);
-  assert.match(decorative, /<circle[^>]*cx="44\.2"[^>]*cy="19\.6"[^>]*r="4\.3"/);
-  assert.match(decorative, /M 14\.0 38\.5 L 17\.2 30\.2 H 46\.8 L 50\.0 38\.5/);
-  assert.match(decorative, /<circle[^>]*cx="22"[^>]*cy="35"/);
-  assert.match(decorative, /<circle[^>]*cx="42"[^>]*cy="35"/);
-  assert.match(decorative, /<circle[^>]*cx="28\.2"[^>]*cy="33\.8"/);
-  assert.match(decorative, /<circle[^>]*cx="35\.8"[^>]*cy="33\.8"/);
+  // Clean iconic geometry: rounded shell, quiet top label band, central tape window, 2 bold spools, bottom trapezoid + 2 minimal dots
+  assert.match(decorative, /<rect[^>]*x="2"[^>]*y="2"[^>]*width="60"[^>]*height="36"[^>]*rx="4"/);
+  assert.match(decorative, /<rect[^>]*x="7"[^>]*y="6"[^>]*width="50"[^>]*height="4"/);
+  assert.match(decorative, /<rect[^>]*x="10\.5"[^>]*y="13\.2"[^>]*width="43"[^>]*height="13\.8"/);
+  assert.match(decorative, /<circle[^>]*cx="21"[^>]*cy="20\.1"[^>]*r="3\.75"/);
+  assert.match(decorative, /<circle[^>]*cx="43"[^>]*cy="20\.1"[^>]*r="3\.75"/);
+  assert.match(decorative, /M 15\.5 38 L 19 30\.4 H 45 L 48\.5 38/);
+  assert.match(decorative, /<circle[^>]*cx="25\.5"[^>]*cy="34\.2"[^>]*r="1\.4"/);
+  assert.match(decorative, /<circle[^>]*cx="38\.5"[^>]*cy="34\.2"[^>]*r="1\.4"/);
 
-  // 2 label ruling lines + 3 center tape-gauge ticks + 12 hub drive spokes (6 per hub) = 17 <line> elements
-  const lineCount = (decorative.match(/<line\b/g) ?? []).length;
-  assert.equal(lineCount, 17);
+  // Simplified iconic discipline: no ruled lines/spokes/gauge ticks (<line>), no screws/double-ring capstans (exactly 4 circles), single trapezoid <path>
+  assert.equal((decorative.match(/<line\b/g) ?? []).length, 0);
+  assert.equal((decorative.match(/<circle\b/g) ?? []).length, 4);
+  assert.equal((decorative.match(/<path\b/g) ?? []).length, 1);
+
+  // Shared Satori helper accepts explicit ink and shellFill for Apple touch icon and Open Graph card
+  const satoriArtwork = renderToStaticMarkup(
+    React.createElement(
+      'svg',
+      { viewBox: '0 0 64 40' },
+      renderCassetteTapeArtwork({ ink: '#254c38', shellFill: '#fcfaf5' }),
+    ),
+  );
+  assert.match(satoriArtwork, /stroke="#254c38"/);
+  assert.match(satoriArtwork, /<rect[^>]*x="2"[^>]*fill="#fcfaf5"/);
+  assert.doesNotMatch(satoriArtwork, /currentColor/);
+
+  // Whitespace-only ink/shellFill fall back safely rather than emitting blank SVG color attributes
+  const blankColorArtwork = renderToStaticMarkup(
+    React.createElement(
+      'svg',
+      { viewBox: '0 0 64 40' },
+      renderCassetteTapeArtwork({ ink: '   ', shellFill: '   ' }),
+    ),
+  );
+  assert.match(blankColorArtwork, /stroke="currentColor"/);
+  assert.match(blankColorArtwork, /<rect[^>]*x="2"[^>]*fill="currentColor"[^>]*fill-opacity="0\.04"/);
 
   const standalone = renderToStaticMarkup(
-    React.createElement(CassetteReelLogo, { label: 'The Seth Tapes' }),
+    React.createElement(CassetteReelLogo, { label: ' The Seth Tapes ' }),
   );
   assert.match(standalone, /role="img"/);
   assert.match(standalone, /aria-label="The Seth Tapes"/);
@@ -102,16 +120,16 @@ test('SiteFooter uses CassetteReelLogo, retains unlisted-access note, and remove
   assert.doesNotMatch(html, /collection-mark/);
 });
 
-test('SVG favicon and globals.css carry the 1980s cassette silhouette and remove legacy circle-mark CSS', async () => {
+test('SVG favicon and globals.css carry the simplified iconic 1980s cassette silhouette and remove legacy circle-mark CSS', async () => {
   const iconSvg = await readFile(path.resolve('src/app/icon.svg'), 'utf8');
   assert.match(iconSvg, /<svg[^>]*viewBox="0 0 32 32"/);
   assert.match(iconSvg, /#f7f4ed/i);
   assert.match(iconSvg, /#254c38/i);
-  assert.match(iconSvg, /<rect[^>]*x="3"[^>]*y="6\.5"[^>]*width="26"[^>]*height="19"/);
-  assert.match(iconSvg, /<line[^>]*y1="10\.2"/);
-  assert.match(iconSvg, /<circle[^>]*cx="11\.2"[^>]*cy="16\.2"/);
-  assert.match(iconSvg, /<circle[^>]*cx="20\.8"[^>]*cy="16\.2"/);
-  assert.match(iconSvg, /<path[^>]*d="M8\.8 25\.5 L10\.8 21\.8 H21\.2 L23\.2 25\.5 Z"/);
+  assert.match(iconSvg, /<rect[^>]*x="3"[^>]*y="7"[^>]*width="26"[^>]*height="18"/);
+  assert.match(iconSvg, /<rect[^>]*x="6"[^>]*y="9\.6"[^>]*width="20"[^>]*height="1\.9"/);
+  assert.match(iconSvg, /<circle[^>]*cx="11\.2"[^>]*cy="16\.4"/);
+  assert.match(iconSvg, /<circle[^>]*cx="20\.8"[^>]*cy="16\.4"/);
+  assert.match(iconSvg, /<path[^>]*d="M 9 25 L 10\.9 21\.5 H 21\.1 L 23 25 Z"/);
 
   const css = await readFile(path.resolve('src/app/globals.css'), 'utf8');
   assert.doesNotMatch(css, /\.collection-mark\b/);
