@@ -1,7 +1,7 @@
 {
   "method": "WCAG relative luminance and contrast ratio, sRGB transfer threshold 0.04045; ratios use unrounded values for pass/fail. Tokens extracted from actual globals.css.",
   "systemDarkMatchesExplicitDark": true,
-  "checks": 138,
+  "checks": 146,
   "failures": [],
   "minimumTextRatio": 4.785,
   "minimumControlOrFocusRatio": 3.533,
@@ -1523,6 +1523,94 @@
       "use": "control boundary",
       "minimum": 3,
       "ratio": 6.167,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "forest",
+      "foreground": "#254c38",
+      "backgroundToken": "forest-soft",
+      "background": "#e6ece1",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 8.043,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "forest",
+      "foreground": "#254c38",
+      "backgroundToken": "paper-light",
+      "background": "#fcfaf5",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 9.279,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "forest",
+      "foreground": "#254c38",
+      "backgroundToken": "paper",
+      "background": "#f7f4ed",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 8.812,
+      "pass": true
+    },
+    {
+      "theme": "light",
+      "foregroundToken": "muted",
+      "foreground": "#60675f",
+      "backgroundToken": "paper-light",
+      "background": "#fcfaf5",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 5.588,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "forest",
+      "foreground": "#b5d8b8",
+      "backgroundToken": "forest-soft",
+      "background": "#28382c",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 7.965,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "forest",
+      "foreground": "#b5d8b8",
+      "backgroundToken": "paper-light",
+      "background": "#222c24",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 9.272,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "forest",
+      "foreground": "#b5d8b8",
+      "backgroundToken": "paper",
+      "background": "#181f1a",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 10.786,
+      "pass": true
+    },
+    {
+      "theme": "dark",
+      "foregroundToken": "muted",
+      "foreground": "#bcc6b6",
+      "backgroundToken": "paper-light",
+      "background": "#222c24",
+      "use": "control boundary",
+      "minimum": 3,
+      "ratio": 8.18,
       "pass": true
     }
   ]

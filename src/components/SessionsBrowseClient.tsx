@@ -199,7 +199,7 @@ export default function SessionsBrowseClient({
               return (
                 <li key={band.key} className="age-band-nav-item">
                   <a
-                    className="age-jump-link age-band-link"
+                    className="button secondary age-jump-link age-band-link"
                     href={`#${band.key}`}
                     aria-current={isCurrent ? 'location' : undefined}
                   >

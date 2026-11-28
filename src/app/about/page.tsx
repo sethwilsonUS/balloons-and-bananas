@@ -38,8 +38,8 @@ export default async function AboutPage() {
     <div className="archive-shell">
       <ArchiveAnalytics ready section="about" sessionId={null} documentId={null} />
       <RouteHeader activeSection="about" showShare sharePath="/about" shareTargetLabel="page" />
-      <main id="main" tabIndex={-1}>
-        <article className="about-page">
+      <main id="main" tabIndex={-1} className="layout-reading">
+        <article className="about-page layout-main">
           <header className="detail-header">
             <p className="eyebrow">Collection guide &amp; methods</p>
             <h1>About &amp; methods</h1>
