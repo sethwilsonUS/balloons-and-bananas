@@ -15,7 +15,6 @@ import {
 } from '../lib/session-reading';
 import { timeLabel, transcriptOriginLabels } from './api';
 import { CitePassageButton } from './CiteControl';
-import RecordingAudio from './RecordingAudio';
 
 function Highlight({ text, query, start = 0, end = text.length }: { text: string; query: string; start?: number; end?: number }) {
   if (!query.trim()) return <>{text.slice(start, end)}</>;
@@ -122,7 +121,10 @@ export function SessionBody({
 
   return <>
     <section id="moments" className="moments-section" aria-labelledby="moments-heading">
-      <div className="section-heading"><div><p className="eyebrow">From the guide</p><h2 id="moments-heading">Moments</h2></div><span className="muted small">{session.moments.length} {session.moments.length === 1 ? 'moment' : 'moments'}</span></div>
+      <div className="section-heading">
+        <h2 id="moments-heading">Moments</h2>
+        <span className="muted small">{session.moments.length} {session.moments.length === 1 ? 'moment' : 'moments'}</span>
+      </div>
       <ol className="moment-list">
         {session.moments.map((moment, index) => <li key={`${index}-${moment.title}`}>
           <div className="moment-marker"><span className="moment-number">{String(index + 1).padStart(2, '0')}</span>{moment.start !== null && <span className="moment-time">{timeLabel(moment.start)}</span>}</div>
@@ -131,7 +133,6 @@ export function SessionBody({
       </ol>
     </section>
     {printCitation}
-    <RecordingAudio sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} headingLevel={2} />
     <Transcript
       session={session}
       jump={jump}
@@ -287,14 +288,28 @@ function Transcript({
     }
   };
 
-  return <section id="transcript" className="transcript-section" aria-labelledby="transcript-heading">
-    <div className="section-heading"><div><p className="eyebrow">The source text</p><h2 id="transcript-heading">Transcript</h2></div><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
-    <p className="small muted">{session.origin === 'archived_research' ? 'A readable view of the archived research transcript. Original notation is retained in the downloadable source files.' : 'Machine-generated draft: words, speakers, and timestamps may be wrong. Check the recording before treating a passage as evidence.'}</p>
+  return <section id="transcript" className="transcript-section" aria-labelledby="transcript-heading" tabIndex={-1}>
+    <div className="section-heading">
+      <h2 id="transcript-heading">Transcript</h2>
+      <div className="transcript-provenance-badges">
+        <span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span>
+        {session.origin !== 'archived_research' && (
+          <a className="small provenance-link" href="/about#transcript-origins">
+            Unreviewed machine transcription
+          </a>
+        )}
+      </div>
+    </div>
+    <p className="small muted">
+      {session.origin === 'archived_research'
+        ? <>Readable view of the archived research transcript; full CHAT notation stays in the downloadable source.{' '}<a href="/about#transcript-origins">Learn more</a></>
+        : <>Unreviewed machine draft — check the recording before treating wording or speakers as evidence.{' '}<a href="/about#transcript-origins">Learn more</a></>}
+    </p>
     {hasChatNotation ? <div className="transcript-view-controls"><label className="follow-control"><input type="checkbox" checked={showNotation} aria-describedby="transcript-notation-help" onChange={event => {
       setShowNotation(event.target.checked);
       trackArchiveEvent('notation_toggle', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
-    }} />Show linguistic notation</label><p id="transcript-notation-help" className="small muted">Off: an easier reading view with research codes and dependent notes hidden. Partial-word spellings and uncertainty remain. On: the notation and notes stored in this reading copy; full analysis tiers are in the downloadable CHAT source. This changes only the display; source files are unchanged.</p>{showNotation && <p className="small muted">Linked repetition, retracing, and pause symbols find matching passages across transcripts, initially including any speaker.</p>}</div> : <p className="small muted transcript-view-controls">This local AI draft has no CHAT notation layer to switch on. Its text is displayed unchanged.</p>}
-    <div className="transcript-search field"><label htmlFor="transcript-query">Find within this transcript</label><div className="search-input"><Search size={18} aria-hidden="true" /><input id="transcript-query" type="search" value={query} onChange={event => { findEdited.current = true; setQuery(event.target.value); }} placeholder="A word, name, or phrase" autoComplete="off" spellCheck={false} aria-describedby="transcript-search-help" /></div><p id="transcript-search-help" className="small muted">Searches the text currently displayed, including speaker labels and visible source notes.</p></div>
+    }} />Show linguistic notation</label><p id="transcript-notation-help" className="small muted">Displays stored CHAT codes and notes without altering source files.</p>{showNotation && <p className="small muted">Linked symbols search matching passages across all transcripts.</p>}</div> : <p className="small muted transcript-view-controls">Local AI draft displayed as generated (no CHAT notation layer).</p>}
+    <div className="transcript-search field"><label htmlFor="transcript-query">Find within this transcript</label><div className="search-input"><Search size={18} aria-hidden="true" /><input id="transcript-query" type="search" value={query} onChange={event => { findEdited.current = true; setQuery(event.target.value); }} placeholder="A word, name, or phrase" autoComplete="off" spellCheck={false} aria-describedby="transcript-search-help" /></div><p id="transcript-search-help" className="small muted">Searches displayed text and speaker labels.</p></div>
     <p className="small muted" role="status">{activeQuery.trim() ? `${results.length.toLocaleString()} matching ${results.length === 1 ? 'passage' : 'passages'}` : `${session.transcript.length.toLocaleString()} transcript ${session.transcript.length === 1 ? 'passage' : 'passages'}`}</p>
     <p className="small muted transcript-live-status" role="status" aria-live="polite" aria-atomic="true">{message}</p>
     <p className="small muted transcript-copy-status" role="status" aria-live="polite" aria-atomic="true">{copyMessage}</p>
@@ -404,7 +419,7 @@ export function SessionSources({ session }: { session: Session }) {
   }, [session.id]);
 
   return <section className="source-section" aria-labelledby="sources-heading">
-    <p className="eyebrow">Keep the evidence in view</p><h2 id="sources-heading">Sources &amp; reading notes</h2>
+    <h2 id="sources-heading">Sources &amp; reading notes</h2>
     {session.limits.length > 0 && <ul className="reading-notes">{session.limits.map((limit, index) => <li key={index}>{limit}</li>)}</ul>}
     <div className="source-downloads">{session.sources.map(source => <a key={source.id} href={`/api/assets/${encodeURIComponent(source.id)}`} className="text-link download-link" download={source.name} referrerPolicy="no-referrer" onClick={() => {
       const format = ['cha', 'txt', 'json', 'vtt', 'md', 'html'].includes(source.format.toLowerCase()) ? source.format.toLowerCase() : 'other';

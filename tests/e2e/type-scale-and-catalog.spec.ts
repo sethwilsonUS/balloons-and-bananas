@@ -242,7 +242,7 @@ test('shared semantic <dl> CatalogRecord renders across session pages, browse ca
   const fullRecord = page.locator('dl.catalog-record.catalog-record--full');
   await expect(fullRecord).toBeVisible();
   const fullDetails = await assertCleanDefinitionListSpacing(fullRecord, '/sessions/010815 full catalog record');
-  expect(fullDetails.dtTexts).toEqual(['Session ID', 'Age', 'Date', 'Transcript origin', 'Recordings', 'Guide', 'Citation']);
+  expect(fullDetails.dtTexts).toEqual(['Session ID', 'Age', 'Date', 'Transcript origin', 'Recordings', 'Guide', 'Cite & share']);
 
   // Reduced badges: .ai-badge has no pill border or filled background; .origin-badge retains semantic colour
   const badgeStyles = await page.evaluate(() => {

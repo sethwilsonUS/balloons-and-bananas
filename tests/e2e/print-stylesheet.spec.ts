@@ -248,6 +248,9 @@ test('Chromium PDF render of fixture sessions contains all required sections in 
     'Previous session',
     'Next session',
     'Play audio',
+    'More audio options',
+    'View transcript',
+    'Share link to session',
   ];
   for (const snippet of forbiddenChrome) {
     expect(pdfText, `Hidden screen chrome "${snippet}" should not appear in printed PDF`).not.toContain(snippet);

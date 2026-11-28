@@ -113,7 +113,7 @@ test('opening a session plays fixture audio without Blob, serves private downloa
 
   await expect(page).toHaveURL(/\/sessions\/010815$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
-  await expect(page.locator('.detail-header')).toContainText('1 year, 8 months, 15 days');
+  await expect(page.locator('dl.catalog-record')).toContainText('1 year, 8 months, 15 days');
   await expect(page.getByRole('heading', { level: 2, name: 'Moments' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 3, name: 'Crossing the cardboard bridge' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 3, name: 'Counting station lanterns' })).toBeVisible();
@@ -171,7 +171,7 @@ test('opening a session plays fixture audio without Blob, serves private downloa
   await page.goto('/?entry=fixture-011103-observatory');
   await expect(page).toHaveURL(/\/sessions\/011103$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Cardboard observatory without audio' })).toBeVisible();
-  await expect(page.getByText('The archive has a transcript for this session, but no corresponding recording.')).toBeVisible();
+  await expect(page.getByText('No recording is associated with this session.')).toBeVisible();
   await auditBothThemes(page, 'session detail without audio');
 });
 
