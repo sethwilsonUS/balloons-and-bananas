@@ -1,7 +1,12 @@
-import type { SearchPageSize, SearchResponse, SearchResult } from './types';
+import type { SearchPageSize, SearchResponse, SearchResult, SearchSort } from './types';
 
 export type SessionView = 'details' | 'list';
 export type SearchBusyKind = null | 'search' | 'view';
+export const SEARCH_SORTS: readonly SearchSort[] = ['age-asc', 'age-desc', 'relevance'];
+
+export function isSearchSort(value: unknown): value is SearchSort {
+  return value === 'age-asc' || value === 'age-desc' || value === 'relevance';
+}
 
 const foldWords = (text: string) =>
   text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLocaleLowerCase();

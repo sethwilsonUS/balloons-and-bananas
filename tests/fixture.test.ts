@@ -26,9 +26,11 @@ test('invented fixture archive is valid v1 stored archive covering all required 
   const origins = new Set(data.sessions.map(session => session.origin));
   assert.deepEqual(origins, new Set(['archived_research', 'talkbank_ai_draft', 'local_ai_draft']));
 
-  // Sessions with and without a source age
-  assert.ok(data.sessions.some(session => session.ages.length > 0), 'Expected a session with a source age');
-  assert.ok(data.sessions.some(session => session.ages.length === 0), 'Expected a session without a source age');
+  // Sessions with source age, inferred age (without source age), and no age
+  assert.ok(data.sessions.some(session => session.ages.length > 0 && session.inferredAge === null), 'Expected a session with a source age');
+  assert.ok(data.sessions.some(session => session.ages.length === 0 && typeof session.inferredAge === 'string'), 'Expected a session with an inferred age');
+  assert.ok(data.sessions.some(session => session.ages.length === 0 && session.inferredAge === null), 'Expected a session without any age');
+  assert.ok(data.documents.some(doc => doc.id === 'methods-and-audit'), 'Expected a methods-and-audit explanation document');
 
   // Moments with and without times
   const moments = data.sessions.flatMap(session => session.moments);

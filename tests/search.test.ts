@@ -1,15 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSearchPageSize, makeSearch } from '../src/lib/search';
+import { isSearchPageSize, isSearchSort, makeSearch } from '../src/lib/search';
 import type { ArchiveData, Session } from '../src/lib/types';
 
 function mockSession(id: string, changes: Partial<Session>): Session {
-  return { id, sourceName: id + '.txt', title: 'An everyday conversation', overview: 'A short conversation.', origin: 'archived_research', topics: [], dates: [], ages: [], recordings: [], preferredRecordingId: null, sources: [], moments: [], limits: [], transcript: [], sourceSha256: '', association: '', ...changes };
+  return { id, sourceName: id + '.txt', title: 'An everyday conversation', overview: 'A short conversation.', origin: 'archived_research', topics: [], dates: [], ages: [], inferredAge: null, recordings: [], preferredRecordingId: null, sources: [], moments: [], limits: [], transcript: [], sourceSha256: '', association: '', ...changes };
 }
 const data: ArchiveData = { version: 1, generatedAt: '', assets: {}, documents: [], sessions: [
-  mockSession('research', { title: 'Café and model trains', topics: ['Play'], dates: ['1983-01-02'], overview: 'Building a station together.', transcript: [{ text: 'Before lunch they ask about the blue locomotive and discuss where it should stop. Later they make lunch.' }] }),
-  mockSession('ai', { origin: 'local_ai_draft', title: 'A walk in the garden', topics: ['Outdoors'], transcript: [{ text: 'They wonder whether the locomotive could carry flowers, then return to counting petals.' }] }),
-  mockSession('orphan', { title: 'A missing recording', topics: ['Play'], dates: ['1982-01-02'], overview: 'The transcript mentions an imaginary submarine.', transcript: [{ text: 'A submarine travels under the garden.' }] }),
+  mockSession('research', { sourceName: 'transcripts/020102.cha', title: 'Café and model trains', topics: ['Play'], dates: ['1983-01-02'], ages: ['2;01.02'], overview: 'Building a station together.', transcript: [{ text: 'Before lunch they ask about the blue locomotive and discuss where it should stop. Later they make lunch.' }] }),
+  mockSession('ai', { sourceName: 'transcripts-ai/020604.json', origin: 'local_ai_draft', title: 'A walk in the garden', topics: ['Outdoors'], inferredAge: '2;06.04', transcript: [{ text: 'They wonder whether the locomotive could carry flowers, then return to counting petals.' }] }),
+  mockSession('orphan', { sourceName: 'transcripts/010912.cha', title: 'A missing recording', topics: ['Play'], dates: ['1982-01-02'], ages: ['1;09.12'], overview: 'The transcript mentions an imaginary submarine.', transcript: [{ text: 'A submarine travels under the garden.' }] }),
+  mockSession('undated', { sourceName: 'transcripts/notes.cha', title: 'Unaged notes', topics: ['Outdoors'], dates: ['1981-05-01'], overview: 'A short unaged recording.', transcript: [{ text: 'Some unaged remark.' }] }),
 ] };
 
 test('finds transcript-only words and returns surrounding source text', () => {
@@ -28,17 +29,43 @@ test('searches title, guide and transcript with accent and prefix matching', () 
 test('combines origin and topic filters without dropping transcript-only sessions', () => {
   const search = makeSearch(data);
   assert.deepEqual(search({ query: 'locomotive', origin: 'local_ai_draft' }).results.map(r => r.session.id), ['ai']);
-  const play = search({ topic: 'Play', sort: 'oldest' });
+  const play = search({ topic: 'Play', sort: 'age-asc' });
   assert.deepEqual(play.results.map(r => r.session.id), ['orphan', 'research']);
   assert.equal(play.results[0].session.recordings.length, 0);
 });
-test('unknown dates sort last in both chronological directions and page bounds are safe', () => {
+test('defaults to age youngest-first without a query, uses source-or-inferred age, puts unaged sessions last, and validates sort', () => {
   const search = makeSearch(data);
-  assert.deepEqual(search({ sort: 'oldest' }).results.map(r => r.session.id), ['orphan', 'research', 'ai']);
-  assert.deepEqual(search({ sort: 'newest' }).results.map(r => r.session.id), ['research', 'orphan', 'ai']);
+  // Default without query is age-asc; sessions with no age sort last even if they have a date.
+  assert.deepEqual(search({}).results.map(r => r.session.id), ['orphan', 'research', 'ai', 'undated']);
+  assert.deepEqual(search({ sort: 'age-asc' }).results.map(r => r.session.id), ['orphan', 'research', 'ai', 'undated']);
+  assert.deepEqual(search({ sort: 'age-desc' }).results.map(r => r.session.id), ['ai', 'research', 'orphan', 'undated']);
+  // Card projection preserves source age and inferredAge separately.
+  const aiCard = search({ sort: 'age-desc' }).results[0].session;
+  assert.deepEqual(aiCard.ages, []);
+  assert.equal(aiCard.inferredAge, '2;06.04');
+  // With a query, age-desc overrides default relevance cleanly.
+  assert.deepEqual(search({ query: 'locomotive', sort: 'age-desc' }).results.map(r => r.session.id), ['ai', 'research']);
+  assert.deepEqual(search({ query: 'locomotive', sort: 'age-asc' }).results.map(r => r.session.id), ['research', 'ai']);
   assert.equal(search({ page: -9 }).page, 1);
   assert.equal(search({ page: 1000 }).page, 1);
   assert.equal(search({ query: 'xyzzzznosuchword' }).total, 0);
+
+  // Tie-breaking by filename stem regardless of directory prefix.
+  const tiedData: ArchiveData = {
+    ...data,
+    sessions: [
+      mockSession('late-dir-stem-a', { sourceName: 'transcripts-ai/0extra/83/020319a.json', inferredAge: '2;03.19' }),
+      mockSession('early-dir-stem-b', { sourceName: 'transcripts/020319b.cha', ages: ['2;03.19'] }),
+      mockSession('younger', { sourceName: 'transcripts/011000.cha', ages: ['1;10.00'] }),
+    ],
+  };
+  const tiedSearch = makeSearch(tiedData);
+  assert.deepEqual(tiedSearch({ sort: 'age-asc' }).results.map(r => r.session.id), ['younger', 'late-dir-stem-a', 'early-dir-stem-b']);
+  assert.deepEqual(tiedSearch({ sort: 'age-desc' }).results.map(r => r.session.id), ['late-dir-stem-a', 'early-dir-stem-b', 'younger']);
+
+  // Sort allowlist validation.
+  for (const valid of ['age-asc', 'age-desc', 'relevance']) assert.equal(isSearchSort(valid), true);
+  for (const invalid of ['oldest', 'newest', '', null, undefined, 123, 'age', 'AGE-ASC']) assert.equal(isSearchSort(invalid), false);
 });
 
 test('linguistic evidence filters transcript speech while retaining session-level query/topic/origin semantics', () => {

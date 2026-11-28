@@ -41,8 +41,20 @@ test('parseStoredArchiveData maps unchanged stored archive.json v1 keys into glo
   assert.ok(submarine);
   assert.equal(submarine.recordings.length, 2);
   assert.equal(submarine.preferredRecordingId, 'fixture-audio-submarine-mp3');
+  assert.deepEqual(submarine.ages, ['2;01.10']);
+  assert.equal(submarine.inferredAge, null);
   assert.equal('audio' in (submarine as unknown as Record<string, unknown>), false);
   assert.equal('preferredAudioId' in (submarine as unknown as Record<string, unknown>), false);
+
+  const lighthouse = data.sessions.find(session => session.id === 'fixture-020604-lighthouse');
+  assert.ok(lighthouse);
+  assert.deepEqual(lighthouse.ages, []);
+  assert.equal(lighthouse.inferredAge, '2;06.04');
+
+  const observatory = data.sessions.find(session => session.id === 'fixture-011103-observatory');
+  assert.ok(observatory);
+  assert.deepEqual(observatory.ages, []);
+  assert.equal(observatory.inferredAge, null);
 
   const summary = buildCatalog(data);
   assert.deepEqual(summary.counts, {
@@ -53,6 +65,28 @@ test('parseStoredArchiveData maps unchanged stored archive.json v1 keys into glo
     talkbankAi: 1,
     localAi: 1,
   });
+});
+
+test('parseStoredArchiveData stays backward compatible with v1 blobs lacking inferredAge and separates source ages', () => {
+  const legacyEntry = validStoredSession({ ages: [] });
+  assert.equal('inferredAge' in legacyEntry, false);
+  const inferredEntry = validStoredSession({ id: 'fixture-inferred', ages: [], inferredAge: '2;03.19' });
+  const bothEntry = validStoredSession({ id: 'fixture-both', ages: ['1;08.15'], inferredAge: '2;03.19' });
+
+  const parsed = parseStoredArchiveData({
+    version: 1,
+    generatedAt: '2026-01-01T00:00:00.000Z',
+    entries: [legacyEntry, inferredEntry, bothEntry],
+    documents: [],
+    assets: {},
+  });
+
+  assert.equal(parsed.sessions[0].inferredAge, null);
+  assert.equal(parsed.sessions[1].inferredAge, '2;03.19');
+  assert.deepEqual(parsed.sessions[1].ages, []);
+  // Source age and inferred age never populate together on a loaded session.
+  assert.deepEqual(parsed.sessions[2].ages, ['1;08.15']);
+  assert.equal(parsed.sessions[2].inferredAge, null);
 });
 
 test('parseStoredArchiveData rejects malformed stored payloads and incomplete session entries', () => {
@@ -71,6 +105,10 @@ test('parseStoredArchiveData rejects malformed stored payloads and incomplete se
     wrap([validStoredSession({ topics: [123] })]),
     wrap([validStoredSession({ origin: 'unknown_origin' })]),
     wrap([validStoredSession({ preferredAudioId: 42 })]),
+    wrap([validStoredSession({ inferredAge: 20319 })]),
+    wrap([validStoredSession({ inferredAge: '' })]),
+    wrap([validStoredSession({ inferredAge: '   ' })]),
+    wrap([validStoredSession({ inferredAge: ['2;03.19'] })]),
     wrap([validStoredSession({ sources: null })]),
     wrap([validStoredSession({ sourceSha256: undefined })]),
     { version: 1, generatedAt: '', entries: [], documents: [], assets: null },

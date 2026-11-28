@@ -68,30 +68,30 @@ try {
   await response.arrayBuffer();
 
   stage = 'details and list pagination';
-  response = await call({ sort: 'oldest' });
+  response = await call({ sort: 'age-asc' });
   const defaultPage = await response.json();
   verify(response.status === 200 && defaultPage.pageSize === 18, 'default details size unchanged');
   const firstPages = {};
   for (const pageSize of [18, 36]) {
-    response = await call({ pageSize, sort: 'oldest' });
+    response = await call({ pageSize, sort: 'age-asc' });
     const first = await response.json();
     privateHeaders(response);
     verify(response.status === 200 && first.pageSize === pageSize, 'effective page size reported');
     verify(first.total === data.entries.length && first.results.length === pageSize, 'full first page');
     verify(first.pages === Math.ceil(first.total / pageSize) && first.page === 1, 'page count respects size');
     firstPages[pageSize] = first.results.map(row => row.session.id);
-    response = await call({ pageSize, page: 2, sort: 'oldest' });
+    response = await call({ pageSize, page: 2, sort: 'age-asc' });
     const second = await response.json();
     verify(response.status === 200 && second.page === 2 && second.results.length === pageSize, 'second page');
     verify(second.results.every(row => !firstPages[pageSize].includes(row.session.id)), 'adjacent pages do not overlap');
-    response = await call({ pageSize, page: 99999, sort: 'oldest' });
+    response = await call({ pageSize, page: 99999, sort: 'age-asc' });
     const last = await response.json();
     verify(response.status === 200 && last.page === first.pages, 'oversized page clamps to last');
     verify(last.results.length === first.total - (first.pages - 1) * pageSize, 'complete final page');
     verify([...first.results, ...second.results, ...last.results].every(row => !('transcript' in row.session) && byId.get(row.session.id)?.origin === row.session.origin), 'pagination preserves source labels and private projection');
   }
   verify(firstPages[18].every((id, index) => firstPages[36][index] === id), 'switching density preserves ordering');
-  response = await call({ pageSize: 18, page: 2, sort: 'oldest' });
+  response = await call({ pageSize: 18, page: 2, sort: 'age-asc' });
   const secondDetails = await response.json();
   verify(secondDetails.results.every((row, index) => firstPages[36][18 + index] === row.session.id), 'one list page equals two details pages');
 

@@ -5,7 +5,7 @@ import { makeLinguisticSearch, utteranceText } from '../src/lib/linguistic-searc
 import type { Passage, Session } from '../src/lib/types';
 
 function mockSession(id: string, transcript: Passage[], changes: Partial<Session> = {}): Session {
-  return { id, sourceName: `${id}.txt`, title: 'A session', overview: 'An AI-written guide.', origin: 'archived_research', topics: [], dates: [], ages: [], recordings: [], preferredRecordingId: null, sources: [], moments: [], limits: [], transcript, sourceSha256: '', association: '', ...changes };
+  return { id, sourceName: `${id}.txt`, title: 'A session', overview: 'An AI-written guide.', origin: 'archived_research', topics: [], dates: [], ages: [], inferredAge: null, recordings: [], preferredRecordingId: null, sources: [], moments: [], limits: [], transcript, sourceSha256: '', association: '', ...changes };
 }
 const child = (text: string, changes: Partial<Passage> = {}): Passage => ({ text, speaker: 'Seth (CHI, target child)', ...changes });
 
