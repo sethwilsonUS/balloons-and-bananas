@@ -21,6 +21,7 @@ export interface CatalogRecordProps {
   momentsCount?: number;
   citation?: CitationSessionInput;
   ariaLabel?: string;
+  showAgeSource?: boolean;
 }
 
 export function formatRecordingEntry(recording: Recording): string {
@@ -61,6 +62,7 @@ export default function CatalogRecord({
   momentsCount,
   citation,
   ariaLabel,
+  showAgeSource = false,
 }: CatalogRecordProps) {
   const isFull = variant === 'full';
   const hasAge = ages.length > 0 || Boolean(inferredAge);
@@ -86,7 +88,13 @@ export default function CatalogRecord({
         {' '}
         <dd>
           {hasAge ? (
-            <SessionAge ages={ages} inferredAge={inferredAge} showPrefix={false} showChatCode={isFull} />
+            <SessionAge
+              ages={ages}
+              inferredAge={inferredAge}
+              showPrefix={false}
+              showChatCode={isFull}
+              showSourceLabel={showAgeSource}
+            />
           ) : (
             <span className="muted">Not recorded</span>
           )}

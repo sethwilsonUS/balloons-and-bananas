@@ -1,4 +1,4 @@
-import { compareSessionsByAge, effectiveSessionAge } from './age';
+import { compareSessionsByAge, effectiveSessionAge, type ParsedChatAge } from './age';
 import type { SessionView } from './results-view';
 import type { Recording, Session, TranscriptOrigin } from './types';
 
@@ -86,39 +86,101 @@ export function toSessionBrowseItem(session: Session): SessionBrowseItem {
   };
 }
 
-export interface AgeYearGroup<T> {
+export interface AgeBandDescriptor {
+  /** Predictable linkable HTML anchor ID (e.g. `age-1-0`, `age-2-6`, `age-unknown`). */
   key: string;
-  year: number | null;
+  /** Canonical six-month band label (e.g. `1;0–1;5`, `1;6–1;11`, `Age unknown`). */
   label: string;
+  /** Plain-English reading gloss for family and researchers (e.g. `2 years, 0 to 5 months`). */
+  proseRange: string;
+  /** Lower bound in total months (inclusive), or `null` for `Age unknown`. */
+  startMonths: number | null;
+  /** Upper bound in total months (inclusive), or `null` for `Age unknown`. */
+  endMonths: number | null;
+}
+
+export interface AgeBandGroup<T> extends AgeBandDescriptor {
   sessions: T[];
   startIndex: number;
 }
 
+const AGE_BAND_HASH_RE = /^age-(?:unknown|\d+-[06])$/;
+
+/**
+ * Map a parsed CHAT age onto its fixed six-month longitudinal age band
+ * (`0;0–0;5`, `0;6–0;11`, `1;0–1;5`, `1;6–1;11`, `2;0–2;5`, …) or `Age unknown`.
+ *
+ * Sessions with year-only CHAT precision (`months === undefined`) are placed in
+ * the first six-month band of that year (`Y;0–Y;5`), matching `compareParsedAges`
+ * order while keeping their rendered source age unpadded.
+ */
+export function ageBandForParsedAge(parsed: ParsedChatAge | null): AgeBandDescriptor {
+  if (
+    !parsed
+    || !Number.isSafeInteger(parsed.years)
+    || parsed.years < 0
+    || (parsed.months !== undefined && (!Number.isSafeInteger(parsed.months) || parsed.months < 0 || parsed.months > 11))
+  ) {
+    return {
+      key: 'age-unknown',
+      label: 'Age unknown',
+      proseRange: 'No source or filename-inferred age',
+      startMonths: null,
+      endMonths: null,
+    };
+  }
+
+  const { years, months } = parsed;
+  const isSecondHalf = months !== undefined && months >= 6;
+  const startMonth = isSecondHalf ? 6 : 0;
+  const endMonth = isSecondHalf ? 11 : 5;
+  const startMonths = years * 12 + startMonth;
+  const endMonths = years * 12 + endMonth;
+  const monthWords = isSecondHalf ? '6 to 11 months' : '0 to 5 months';
+  const proseRange = years === 0
+    ? monthWords
+    : `${years} ${years === 1 ? 'year' : 'years'}, ${monthWords}`;
+
+  return {
+    key: `age-${years}-${startMonth}`,
+    label: `${years};${startMonth}\u2013${years};${endMonth}`,
+    proseRange,
+    startMonths,
+    endMonths,
+  };
+}
+
+/**
+ * Parse a URL fragment (with or without leading `#`) into a valid age-band
+ * anchor ID (`age-2-0`, `age-2-6`, `age-unknown`), or `''` for anything else.
+ */
+export function parseAgeBandHash(hash: string | null | undefined): string {
+  if (typeof hash !== 'string') return '';
+  const trimmed = hash.trim().replace(/^#/, '');
+  return AGE_BAND_HASH_RE.test(trimmed) ? trimmed : '';
+}
+
 /**
  * Sort sessions youngest-first using canonical age order (source age, else
- * filename-inferred age; unaged last) and group them under year-of-age headings.
+ * filename-inferred age; unaged last) and group them into fixed six-month
+ * longitudinal age bands with an `Age unknown` band at the end.
  */
-export function groupSessionsByAgeYear<
+export function groupSessionsByAgeBand<
   T extends { id: string; sourceName: string; ages: string[]; inferredAge?: string | null },
->(sessions: readonly T[]): AgeYearGroup<T>[] {
+>(sessions: readonly T[]): AgeBandGroup<T>[] {
   if (sessions.length === 0) return [];
   const sorted = [...sessions].sort((a, b) => compareSessionsByAge(a, b, 'asc'));
-  const groups: AgeYearGroup<T>[] = [];
+  const groups: AgeBandGroup<T>[] = [];
   let runningIndex = 1;
 
   for (const session of sorted) {
-    const parsed = effectiveSessionAge(session);
-    const year = parsed ? parsed.years : null;
-    const key = year === null ? 'age-unrecorded' : `age-${year}`;
-    const label = year === null ? 'Age not recorded' : year === 0 ? 'Under age 1' : `Age ${year}`;
+    const band = ageBandForParsedAge(effectiveSessionAge(session));
     const last = groups[groups.length - 1];
-    if (last && last.key === key) {
+    if (last && last.key === band.key) {
       last.sessions.push(session);
     } else {
       groups.push({
-        key,
-        year,
-        label,
+        ...band,
         sessions: [session],
         startIndex: runningIndex,
       });
@@ -151,8 +213,21 @@ export function countSessionsByOrigin(
   return counts;
 }
 
-export function buildSessionsUrl(origin: TranscriptOrigin | ''): string {
-  return origin ? `/sessions?origin=${encodeURIComponent(origin)}` : '/sessions';
+export function buildSessionsUrl(origin: TranscriptOrigin | '', bandKey?: string): string {
+  const base = origin ? `/sessions?origin=${encodeURIComponent(origin)}` : '/sessions';
+  const validBand = parseAgeBandHash(bandKey);
+  return validBand ? `${base}#${validBand}` : base;
+}
+
+/**
+ * Compute a proportional width percentage (8..100, or 0 for empty bands) for
+ * the decorative CSS hairline bar inside the age-band timeline navigator.
+ */
+export function computeBandBarPercent(count: number, maxCount: number): number {
+  if (!Number.isFinite(count) || !Number.isFinite(maxCount) || count <= 0 || maxCount <= 0) {
+    return 0;
+  }
+  return Math.max(8, Math.min(100, Math.round((count / maxCount) * 100)));
 }
 
 const ORIGIN_STATUS_LABELS: Record<TranscriptOrigin, string> = {
@@ -164,7 +239,7 @@ const ORIGIN_STATUS_LABELS: Record<TranscriptOrigin, string> = {
 export function formatSessionsBrowseStatus(
   filteredCount: number,
   totalCount: number,
-  groupCount: number,
+  bandCount: number,
   origin: TranscriptOrigin | '',
 ): string {
   if (filteredCount === 0) {
@@ -173,9 +248,9 @@ export function formatSessionsBrowseStatus(
       : '0 sessions in the collection';
   }
   const sessionWord = filteredCount === 1 ? 'session' : 'sessions';
-  const groupWord = groupCount === 1 ? 'age group' : 'age groups';
+  const bandWord = bandCount === 1 ? 'age band' : 'age bands';
   if (origin) {
-    return `Showing ${filteredCount.toLocaleString()} of ${totalCount.toLocaleString()} sessions (${ORIGIN_STATUS_LABELS[origin]}) across ${groupCount} ${groupWord}, youngest first`;
+    return `Showing ${filteredCount.toLocaleString()} of ${totalCount.toLocaleString()} sessions (${ORIGIN_STATUS_LABELS[origin]}) across ${bandCount} ${bandWord}, youngest first`;
   }
-  return `Showing all ${filteredCount.toLocaleString()} ${sessionWord} across ${groupCount} ${groupWord}, youngest first`;
+  return `Showing all ${filteredCount.toLocaleString()} ${sessionWord} across ${bandCount} ${bandWord}, youngest first`;
 }

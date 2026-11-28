@@ -5,11 +5,18 @@ import { formatAge, INFERRED_AGE_EXPLANATION_HREF } from '../lib/age';
  * ages visually and semantically distinct. Inferred ages always carry a visible
  * italicized label linking to `/about#inferred-ages`.
  */
-export default function SessionAge({ ages, inferredAge, showPrefix = true, showChatCode = false }: {
+export default function SessionAge({
+  ages,
+  inferredAge,
+  showPrefix = true,
+  showChatCode = false,
+  showSourceLabel = false,
+}: {
   ages: string[];
   inferredAge: string | null;
   showPrefix?: boolean;
   showChatCode?: boolean;
+  showSourceLabel?: boolean;
 }) {
   const prefix = showPrefix ? 'Age ' : '';
   if (ages.length > 0) {
@@ -18,7 +25,11 @@ export default function SessionAge({ ages, inferredAge, showPrefix = true, showC
       <span>
         {prefix}
         {formatted}
-        {showChatCode && <span className="age-notation">{` (${ages.join(' / ')} · source age)`}</span>}
+        {showChatCode ? (
+          <span className="age-notation">{` (${ages.join(' / ')} · source age)`}</span>
+        ) : showSourceLabel ? (
+          <span className="age-notation">{' (source age)'}</span>
+        ) : null}
       </span>
     );
   }

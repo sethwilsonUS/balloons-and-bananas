@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: formatDocumentTitle({ kind: 'sessions', hasFilters: false }),
-  description: `Browse all sessions in ${ARCHIVE_NAME} in chronological order by age.`,
+  description: `Browse all sessions in ${ARCHIVE_NAME} across six-month age bands in chronological order by age.`,
 };
 
 export default async function SessionsPage({
@@ -38,7 +38,7 @@ export default async function SessionsPage({
             <p className="eyebrow">Browse by age</p>
             <h1 id="sessions-page-heading">Sessions</h1>
             <p className="section-intro">
-              Every session in {ARCHIVE_NAME}, ordered from youngest to oldest by source or filename-inferred age. For full-text, theme, or linguistic search, open <a href="/search">Search</a>.
+              Every session in {ARCHIVE_NAME}, organized from youngest to oldest in six-month age bands by source or filename-inferred age. For full-text, theme, or linguistic search, open <a href="/search">Search</a>.
             </p>
           </header>
           <SessionsBrowseClient sessions={items} initialOrigin={initialOrigin} />
