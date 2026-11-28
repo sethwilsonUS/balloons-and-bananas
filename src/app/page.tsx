@@ -160,69 +160,71 @@ export default async function HomePage({
           <section className="home-entry-section" aria-labelledby="home-entry-heading">
             <h2 id="home-entry-heading">Explore the collection</h2>
             <div className="home-entry-grid">
-              <article className="entry-point-card entry-point-card--row" aria-labelledby="entry-browse-age">
-                <div className="entry-point-lead">
-                  <p className="eyebrow">
-                    <CalendarRange size={14} aria-hidden="true" />
-                    {' '}
-                    {formatCount(summary.counts.sessions, 'session', 'sessions')}
-                  </p>
+              <article className="home-entry-row" aria-labelledby="entry-browse-age">
+                <div className="home-entry-lead">
                   <h3 id="entry-browse-age">
                     <a href="/sessions">
                       Browse by age
                       <ArrowRight size={19} aria-hidden="true" />
                     </a>
                   </h3>
+                  <p className="home-entry-count">
+                    <CalendarRange size={15} aria-hidden="true" />
+                    {' '}
+                    {formatCount(summary.counts.sessions, 'session', 'sessions')}
+                  </p>
                 </div>
-                <p className="entry-point-description">{browseByAgeDescription}</p>
+                <p className="home-entry-description">{browseByAgeDescription}</p>
               </article>
 
               <article
-                className="entry-point-card entry-point-card--themes theme-discovery"
+                className="home-entry-row home-entry-row--themes theme-discovery"
                 aria-labelledby="entry-themes"
               >
-                <div className="entry-point-themes-header">
-                  <p className="eyebrow">
-                    <Bookmark size={14} aria-hidden="true" />
+                <div className="home-entry-lead">
+                  <h3 id="entry-themes">Themes</h3>
+                  <p className="home-entry-count">
+                    <Bookmark size={15} aria-hidden="true" />
                     {' '}
                     {availableThemeCount > 0
                       ? formatCount(availableThemeCount, 'curated theme', 'curated themes')
                       : 'Curated themes'}
                   </p>
-                  <h3 id="entry-themes">Themes</h3>
                 </div>
-                {availableThemeCount > 0 ? (
-                  <>
-                    <ThemeShortcutLinks topics={summary.topics} />
+                <div className="home-entry-themes-body">
+                  {availableThemeCount > 0 ? (
+                    <>
+                      <ThemeShortcutLinks topics={summary.topics} />
+                      <p className="theme-help">
+                        Curated from AI-written guides; each session links back to its source transcript.
+                      </p>
+                    </>
+                  ) : (
                     <p className="theme-help">
-                      Curated from the AI-written guides; each session links back to its source transcript.
+                      Theme shortcuts appear as guide topics are indexed, or open{' '}
+                      <a href="/search">Search</a> to browse all sessions.
                     </p>
-                  </>
-                ) : (
-                  <p className="theme-help">
-                    Theme shortcuts appear as guide topics are indexed. Open{' '}
-                    <a href="/search">Search</a> to browse all sessions and filters.
-                  </p>
-                )}
+                  )}
+                </div>
               </article>
 
-              <article className="entry-point-card entry-point-card--row" aria-labelledby="entry-research">
-                <div className="entry-point-lead">
-                  <p className="eyebrow">
-                    <BookOpen size={14} aria-hidden="true" />
-                    {' '}
-                    {researchDocumentCount > 0
-                      ? formatCount(researchDocumentCount, 'research document', 'research documents')
-                      : 'Corpus & methods'}
-                  </p>
+              <article className="home-entry-row" aria-labelledby="entry-research">
+                <div className="home-entry-lead">
                   <h3 id="entry-research">
                     <a href="/research">
                       Research &amp; methods
                       <ArrowRight size={19} aria-hidden="true" />
                     </a>
                   </h3>
+                  <p className="home-entry-count">
+                    <BookOpen size={15} aria-hidden="true" />
+                    {' '}
+                    {researchDocumentCount > 0
+                      ? formatCount(researchDocumentCount, 'research document', 'research documents')
+                      : 'Corpus & methods'}
+                  </p>
                 </div>
-                <p className="entry-point-description">
+                <p className="home-entry-description">
                   Read background on the Peters/Wilson corpus, annotation provenance, and downloadable research guides, or review{' '}
                   <a href="/about">sources, methods, and citation guidance</a>.
                 </p>

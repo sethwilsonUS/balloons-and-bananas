@@ -721,7 +721,7 @@ export default function SearchPageClient({
             <p className="eyebrow">Collection search</p>
             <h1 id="search-heading">Search the archive</h1>
             <p className="section-intro">
-              Search session guides and transcripts across {totalSessions.toLocaleString()} {totalSessions === 1 ? 'session' : 'sessions'}, or browse by theme, transcript origin, child age range, and linguistic notation. Every filter stays in the page URL so links can be bookmarked and shared.
+              Search guides and transcripts across {totalSessions.toLocaleString()} {totalSessions === 1 ? 'session' : 'sessions'}, or narrow by theme, transcript origin, age range, and linguistic notation.
             </p>
           </header>
 
@@ -807,12 +807,12 @@ export default function SearchPageClient({
 
                 {isConcordance && (
                   <p id="concordance-speaker-help" className="small muted concordance-speaker-note">
-                    Concordance rows are ordered by child age, youngest first. “Seth (CHI) only” uses explicit CHI labels in archived research transcripts and never infers speaker identity in AI drafts.
+                    Youngest first; “Seth (CHI) only” uses explicit CHI labels and never infers speakers.
                   </p>
                 )}
 
                 <fieldset className="age-filter-fieldset">
-                  <legend>Child age range</legend>
+                  <legend className="sr-only">Child age range</legend>
                   <div className="age-filter-row">
                     <div className="field">
                       <label htmlFor="age-min-filter">From age</label>
@@ -846,7 +846,7 @@ export default function SearchPageClient({
                     </div>
                   </div>
                   <p id="age-filter-help" className="small muted age-filter-note">
-                    Matches source age, or filename-inferred age where source age is not recorded. Sessions with no age are omitted while an age range is selected.
+                    Matches source or inferred age; unaged sessions are omitted while a range is set.
                   </p>
                 </fieldset>
 
@@ -864,8 +864,8 @@ export default function SearchPageClient({
               {urlState.marker && (
                 <p className="small muted linguistic-intersection-note">
                   {isConcordance
-                    ? 'Each concordance row is a transcript passage that matches both your exact query and the selected linguistic marker in the chosen speaker scope. Passage counts are not normalized frequencies.'
-                    : 'Each result has matching transcript passages. Text search, theme, age range, and transcript origin filters narrow the same session; their matches may occur elsewhere in it. Passage counts are not normalized frequencies.'}
+                    ? 'Rows match both your exact query and the selected marker within the chosen speaker scope; counts are raw passage totals.'
+                    : 'Results contain passages matching the selected marker alongside any active session filters; counts are raw passage totals.'}
                 </p>
               )}
 
@@ -883,7 +883,7 @@ export default function SearchPageClient({
                   <span className="small muted">View</span>
                   <button
                     type="button"
-                    className="button secondary theme-shortcut"
+                    className="button secondary"
                     aria-pressed={urlState.view === 'details'}
                     aria-describedby="session-view-help"
                     onClick={() => handleViewChange('details')}
@@ -892,7 +892,7 @@ export default function SearchPageClient({
                   </button>
                   <button
                     type="button"
-                    className="button secondary theme-shortcut"
+                    className="button secondary"
                     aria-pressed={urlState.view === 'list'}
                     aria-describedby="session-view-help"
                     onClick={() => handleViewChange('list')}
@@ -901,7 +901,7 @@ export default function SearchPageClient({
                   </button>
                   <button
                     type="button"
-                    className="button secondary theme-shortcut"
+                    className="button secondary"
                     aria-pressed={urlState.view === 'concordance'}
                     aria-describedby="session-view-help"
                     onClick={() => handleViewChange('concordance')}
@@ -916,13 +916,24 @@ export default function SearchPageClient({
                 </p>
               </div>
 
-              <p id="session-view-help" className="small muted results-reading-note">
-                {urlState.view === 'concordance'
-                  ? 'Concordance lists up to 50 exact transcript passage matches per page, ordered by child age (youngest first). Guide prose and meaning-based hits never appear; labels identify the transcript origin and mark machine drafts as unreviewed.'
-                  : urlState.view === 'list'
-                    ? 'List shows up to 36 sessions per page; expand a match to see source excerpts. Session guides are AI-written; labels identify the transcript origin.'
-                    : 'Details shows up to 18 sessions per page with guide overviews and source excerpts. Session guides are AI-written; labels identify the transcript origin.'}
+              <p className="small muted results-reading-note">
+                {urlState.view === 'concordance' ? (
+                  <>
+                    Exact transcript passages only (no guides), youngest first; origins and unreviewed drafts labelled (<a href="/about">About</a>).
+                  </>
+                ) : (
+                  <>
+                    AI-written guides; transcript origins, unreviewed drafts, and inferred ages labelled (<a href="/about">About</a>).
+                  </>
+                )}
               </p>
+              <span id="session-view-help" className="sr-only">
+                {urlState.view === 'concordance'
+                  ? 'Concordance lists up to 50 exact transcript passage matches per page, ordered by child age.'
+                  : urlState.view === 'list'
+                    ? 'List shows up to 36 condensed sessions per page; expand matches to see source excerpts.'
+                    : 'Details shows up to 18 sessions per page with guide overviews and source excerpts.'}
+              </span>
 
               {searchError && (
                 <div className="error-panel" role="alert">
@@ -940,7 +951,7 @@ export default function SearchPageClient({
                       <Search size={28} aria-hidden="true" />
                       <h3>Enter an exact search query for a concordance</h3>
                       <p>
-                        A concordance aligns every matching transcript passage around your exact word, phrase, or CHAT notation, ordered by child age. It contains exact transcript matches only—guide summaries and meaning-based matches are excluded, so it requires a search query.
+                        A concordance aligns every exact matching transcript passage ordered by child age, excluding guide summaries and meaning-based hits.
                       </p>
                       <div className="concordance-empty-actions">
                         <button
@@ -992,7 +1003,7 @@ export default function SearchPageClient({
                   <Search size={28} aria-hidden="true" />
                   <h3>No exact transcript matches found</h3>
                   <p>
-                    Concordance checks spoken transcript passages only (not AI-written session guides or titles) for your exact word, phrase, or notation. Try a different spelling, switch to Any speaker / unidentified, loosen your age or origin filters, or check guide matches in Details view.
+                    Concordance searches spoken transcript passages only—try another spelling, switch to Any speaker / unidentified, loosen filters, or check guide matches in Details view.
                   </p>
                   <div className="concordance-empty-actions">
                     <button
@@ -1012,8 +1023,8 @@ export default function SearchPageClient({
                   <h3>No sessions found</h3>
                   <p>
                     {urlState.marker
-                      ? 'Try Any speaker / unidentified, a wider age range, a different transcript origin, or fewer filters. Source notation and explicit CHI labels are sparse in some materials; no matches do not indicate an absent linguistic ability.'
-                      : 'Try a shorter phrase, a wider age range, a different spelling, or fewer filters. AI transcript drafts sometimes spell names unexpectedly.'}
+                      ? 'Try Any speaker / unidentified, a wider age range, or fewer filters; source notation is sparse in some materials and does not show absent ability.'
+                      : 'Try a shorter phrase, another spelling, or fewer filters; AI drafts sometimes spell names unexpectedly.'}
                   </p>
                 </div>
               )}

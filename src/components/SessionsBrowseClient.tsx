@@ -154,7 +154,7 @@ export default function SessionsBrowseClient({
           <span className="small muted">View</span>
           <button
             type="button"
-            className="button secondary theme-shortcut"
+            className="button secondary"
             aria-pressed={view === 'details'}
             aria-describedby="sessions-view-help"
             onClick={() => handleViewChange('details')}
@@ -163,7 +163,7 @@ export default function SessionsBrowseClient({
           </button>
           <button
             type="button"
-            className="button secondary theme-shortcut"
+            className="button secondary"
             aria-pressed={view === 'list'}
             aria-describedby="sessions-view-help"
             onClick={() => handleViewChange('list')}
@@ -173,20 +173,24 @@ export default function SessionsBrowseClient({
         </div>
       </div>
 
-      <p className="small muted sessions-browse-status" role="status">
-        {statusText}
-      </p>
-      <p id="sessions-view-help" className="small muted results-reading-note">
-        {view === 'list'
-          ? 'List shows condensed session summaries for faster scanning.'
-          : 'Details shows full guide overviews, audio availability, and themes.'}{' '}
-        Session guides are AI-written; labels identify the transcript origin, mark machine drafts as unreviewed, and distinguish source ages from filename-inferred ages.
-      </p>
+      <div className="sessions-browse-meta">
+        <p className="small muted sessions-browse-status" role="status">
+          {statusText}
+        </p>
+        <p className="small muted results-reading-note">
+          AI-written guides; transcript origins, unreviewed drafts, and inferred ages labelled (<a href="/about">About</a>).
+        </p>
+        <span id="sessions-view-help" className="sr-only">
+          {view === 'list'
+            ? 'List shows condensed session summaries for faster scanning.'
+            : 'Details shows full guide overviews, audio availability, and themes.'}
+        </span>
+      </div>
 
       {ageBands.length > 0 && (
         <nav className="age-jump-nav age-band-nav" aria-label="Jump to age band">
           <div className="age-band-nav-header">
-            <span className="eyebrow age-jump-label">Age-band timeline</span>
+            <span className="age-jump-label">Age-band timeline</span>
             <span className="small muted age-band-nav-hint">
               Six-month spans, youngest to oldest
             </span>

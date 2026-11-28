@@ -90,23 +90,25 @@ test('homepage presents masthead, single search box above the three entry points
   await expect(page.locator('main form[role="search"]')).toHaveAttribute('method', 'get');
 
   // Exact three entry points in canonical order: Browse by age, Themes, Research & methods
-  const entryCards = page.locator('.home-entry-grid > article.entry-point-card');
-  await expect(entryCards).toHaveCount(3);
-  await expect(entryCards.locator('h3')).toHaveText(['Browse by age', 'Themes', 'Research & methods']);
+  const entryRows = page.locator('.home-entry-grid > article.home-entry-row');
+  await expect(entryRows).toHaveCount(3);
+  await expect(entryRows.locator('h3')).toHaveText(['Browse by age', 'Themes', 'Research & methods']);
+  // No all-caps section eyebrows on the homepage
+  await expect(page.locator('main .eyebrow')).toHaveCount(0);
 
   // Browse by age shows live count and explicit source/inferred age span
-  await expect(entryCards.nth(0)).toContainText('4 sessions');
-  await expect(entryCards.nth(0)).toContainText('source and filename-inferred ages (1 year, 8 months to 2 years, 6 months)');
-  await expect(entryCards.nth(0).getByRole('link', { name: /Browse by age/i })).toHaveAttribute('href', '/sessions');
+  await expect(entryRows.nth(0)).toContainText('4 sessions');
+  await expect(entryRows.nth(0)).toContainText('source and filename-inferred ages (1 year, 8 months to 2 years, 6 months)');
+  await expect(entryRows.nth(0).getByRole('link', { name: /Browse by age/i })).toHaveAttribute('href', '/sessions');
 
-  // Themes shows balanced curated theme shortcuts linking to /search?topic=...
-  await expect(entryCards.nth(1)).toContainText('8 curated themes');
-  await expect(entryCards.nth(1).locator('.theme-shortcuts a')).toHaveCount(8);
+  // Themes shows balanced curated theme soft chips linking to /search?topic=...
+  await expect(entryRows.nth(1)).toContainText('8 curated themes');
+  await expect(entryRows.nth(1).locator('.theme-shortcuts a.theme-chip')).toHaveCount(8);
 
   // Research & methods links cleanly to both /research and /about
-  await expect(entryCards.nth(2)).toContainText('3 research documents');
-  await expect(entryCards.nth(2).getByRole('link', { name: /Research & methods/i })).toHaveAttribute('href', '/research');
-  await expect(entryCards.nth(2).getByRole('link', { name: /sources, methods, and citation guidance/i })).toHaveAttribute('href', '/about');
+  await expect(entryRows.nth(2)).toContainText('3 research documents');
+  await expect(entryRows.nth(2).getByRole('link', { name: /Research & methods/i })).toHaveAttribute('href', '/research');
+  await expect(entryRows.nth(2).getByRole('link', { name: /sources, methods, and citation guidance/i })).toHaveAttribute('href', '/about');
 
   // Provenance is summarised in exactly one plain paragraph capped at 68ch and linking to /about
   const provenanceParagraphs = page.locator('.home-provenance > p');
@@ -122,11 +124,19 @@ test('homepage presents masthead, single search box above the three entry points
   await expect(provenanceParagraphs.first()).toContainText('calendar dates are never inferred');
   await expect(provenanceParagraphs.first().getByRole('link', { name: 'About sources, methods, and privacy' })).toHaveAttribute('href', '/about');
 
-  // Verify visual top-to-bottom order and comfortable provenance line measure on desktop
+  // Verify visual top-to-bottom order, full browsing frame width, hairline rows (not boxed cards), and comfortable provenance measure
   const geometry = await page.evaluate(() => {
+    const header = document.querySelector('header.site-header')!.getBoundingClientRect();
+    const frontDoor = document.querySelector('.home-front-door')!.getBoundingClientRect();
     const masthead = document.querySelector('.home-masthead')!.getBoundingClientRect();
     const search = document.querySelector('.home-search-section')!.getBoundingClientRect();
-    const entries = [...document.querySelectorAll('.home-entry-grid > article.entry-point-card')].map(el => el.getBoundingClientRect());
+    const entryEls = [...document.querySelectorAll<HTMLElement>('.home-entry-grid > article.home-entry-row')];
+    const entries = entryEls.map(el => el.getBoundingClientRect());
+    const entryStyles = entryEls.map(el => {
+      const cs = getComputedStyle(el);
+      return { bg: cs.backgroundColor, leftBorder: cs.borderLeftWidth, rightBorder: cs.borderRightWidth };
+    });
+    const chipStyle = getComputedStyle(document.querySelector('.theme-shortcuts a.theme-chip')!);
     const provenance = document.querySelector('.home-provenance')!.getBoundingClientRect();
     const provP = document.querySelector('.home-provenance > p')!;
     const provRect = provP.getBoundingClientRect();
@@ -134,11 +144,18 @@ test('homepage presents masthead, single search box above the three entry points
     const nestedInteractive = document.querySelectorAll('a a, button a, a button').length;
     const overflowX = document.documentElement.scrollWidth - document.documentElement.clientWidth;
     return {
+      headerLeft: header.left,
+      headerRight: header.right,
+      frontDoorLeft: frontDoor.left,
+      frontDoorRight: frontDoor.right,
       mastheadBottom: masthead.bottom,
       searchTop: search.top,
       searchBottom: search.bottom,
       entryTops: entries.map(r => r.top),
       entryBottoms: entries.map(r => r.bottom),
+      entryStyles,
+      chipBg: chipStyle.backgroundColor,
+      chipBorderColor: chipStyle.borderTopColor,
       provenanceTop: provenance.top,
       provWidth: provRect.width,
       provMaxWidth,
@@ -147,6 +164,15 @@ test('homepage presents masthead, single search box above the three entry points
     };
   });
 
+  expect(Math.abs(geometry.frontDoorLeft - geometry.headerLeft)).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry.frontDoorRight - geometry.headerRight)).toBeLessThanOrEqual(1);
+  for (const style of geometry.entryStyles) {
+    expect(style.bg).toBe('rgba(0, 0, 0, 0)');
+    expect(style.leftBorder).toBe('0px');
+    expect(style.rightBorder).toBe('0px');
+  }
+  expect(geometry.chipBg).not.toBe('rgba(0, 0, 0, 0)');
+  expect(geometry.chipBorderColor).toBe('rgba(0, 0, 0, 0)');
   expect(geometry.mastheadBottom).toBeLessThanOrEqual(geometry.searchTop + 1);
   expect(geometry.searchBottom).toBeLessThanOrEqual(geometry.entryTops[0] + 1);
   expect(geometry.entryBottoms[0]).toBeLessThanOrEqual(geometry.entryTops[1] + 1);
@@ -158,7 +184,7 @@ test('homepage presents masthead, single search box above the three entry points
   expect(geometry.overflowX).toBeLessThanOrEqual(0);
 
   // Follow Research & methods -> /research and About link -> /about
-  await entryCards.nth(2).getByRole('link', { name: /Research & methods/i }).click();
+  await entryRows.nth(2).getByRole('link', { name: /Research & methods/i }).click();
   await expect(page).toHaveURL(/\/research$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Research & context' })).toBeVisible();
 
