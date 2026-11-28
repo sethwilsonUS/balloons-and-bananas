@@ -478,7 +478,7 @@ export default function RecordingAudio({ sessionId, origin, recordings, preferre
 
   if (!recordings.length) {
     return (
-      <section id="recording" className="audio-panel audio-panel--empty" aria-labelledby="recording-heading">
+      <section id="recording" className="audio-panel" aria-labelledby="recording-heading">
         <Heading id="recording-heading" className="sr-only">Recording</Heading>
         <div className="audio-empty-row">
           <p className="small muted audio-empty-note">No recording is associated with this session.</p>

@@ -225,7 +225,7 @@ export function CitationPanel({
               aria-selected={selected}
               aria-controls={`${idPrefix}-panel-${format}`}
               tabIndex={selected ? 0 : -1}
-              className={`button secondary cite-tab${selected ? ' is-active' : ''}`}
+              className="button secondary cite-tab"
               onClick={() => selectFormat(format)}
               onKeyDown={event => handleTabKeyDown(event, index)}
             >
@@ -260,7 +260,7 @@ export function CitationPanel({
               <button
                 ref={node => { copyButtonRefs.current[format] = node; }}
                 type="button"
-                className={`button primary cite-copy-button${isCopied ? ' is-copied' : ''}`}
+                className="button primary cite-copy-button"
                 onClick={() => void copyCitation(format)}
               >
                 {isCopied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
@@ -411,16 +411,11 @@ function CiteDialog({
     >
       <div className="cite-dialog-surface">
         <div className="cite-dialog-header">
-          <div>
-            <p className="eyebrow">
-              {passageNumber === null ? 'Cite this session' : `Cite passage ${passageNumber}`}
-            </p>
-            <h2 id={headingId} ref={headingRef} tabIndex={-1}>
-              {passageNumber === null
-                ? `Cite session ${session.slug}`
-                : `Cite session ${session.slug}, passage ${passageNumber}`}
-            </h2>
-          </div>
+          <h2 id={headingId} ref={headingRef} tabIndex={-1}>
+            {passageNumber === null
+              ? `Cite session ${session.slug}`
+              : `Cite session ${session.slug}, passage ${passageNumber}`}
+          </h2>
           <button
             type="button"
             className="button secondary cite-dialog-close"

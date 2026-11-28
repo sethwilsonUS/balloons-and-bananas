@@ -369,7 +369,7 @@ function Transcript({
             <div className="passage-actions">
               <button
                 type="button"
-                className={`text-button passage-copy-button${isCopied ? ' is-copied' : ''}`}
+                className="text-button passage-copy-button"
                 onClick={() => void copyPassageLink(passageNumber)}
                 aria-label={isCopied ? `Copied link to passage ${passageNumber}` : `Copy link to passage ${passageNumber}`}
               >

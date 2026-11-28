@@ -8,11 +8,11 @@ export default function NotFound() {
     <div className="archive-shell">
       <RouteHeader />
       <main id="main" tabIndex={-1} className="reading-layout">
-        <section className="session-not-found reading-column" aria-labelledby="not-found-heading">
+        <section className="not-found-page reading-column" aria-labelledby="not-found-heading">
           <p className="eyebrow">404 · Not found</p>
           <h1 id="not-found-heading">This archive link could not be found</h1>
           <p className="section-intro">
-            No session, research document, or page in {ARCHIVE_NAME} matches this URL. Search the collection to find what you are looking for, or browse the research reading list.
+            No session, research document, or page in {ARCHIVE_NAME} matches this URL; search the collection or browse the research reading list.
           </p>
           <div className="not-found-actions">
             <a className="button primary" href="/search">
