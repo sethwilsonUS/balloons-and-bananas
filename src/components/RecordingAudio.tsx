@@ -440,22 +440,28 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     }
     const player = audio.current;
     const isLoadedSelected = hasLoadedSelected(player);
-    const loadedDuration = isLoadedSelected && Number.isFinite(player.duration) && player.duration > 0
-      ? player.duration
-      : null;
-    const maxKnownDuration = Math.max(
-      loadedDuration ?? 0,
-      ...available.map(item => (Number.isFinite(item.duration) && item.duration > 0 ? item.duration : 0)),
+    const hasSelectedMedia = Boolean(
+      selected?.available
+      && source?.recordingId === selected.id
+      && player
+      && player.readyState >= 1
+      && !failed,
     );
+    const loadedDuration = hasSelectedMedia && Number.isFinite(player!.duration) && player!.duration > 0
+      ? player!.duration
+      : selectedMediaDuration;
+    const effectiveRecordingDuration = (item: Recording) => {
+      if (item.id === selected?.id && loadedDuration !== null && Number.isFinite(loadedDuration) && loadedDuration > 0) {
+        return loadedDuration;
+      }
+      return Number.isFinite(item.duration) && item.duration > 0 ? item.duration : 0;
+    };
+    const maxKnownDuration = Math.max(0, ...available.map(effectiveRecordingDuration));
     if (!Number.isFinite(seconds) || seconds < 0) {
       return { status: 'out-of-range', duration: maxKnownDuration };
     }
 
-    const effectiveRecordingDuration = (item: Recording) =>
-      isLoadedSelected && item.id === selected?.id && loadedDuration !== null
-        ? loadedDuration
-        : item.duration;
-    const selectedDuration = loadedDuration ?? (selected?.duration || 0);
+    const selectedDuration = selected ? effectiveRecordingDuration(selected) : 0;
     let recording = selected;
     if (!recording?.available || (selectedDuration > 0 && seconds >= selectedDuration)) {
       recording = available.find(item => {
@@ -474,6 +480,8 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     if (isLoadedSelected && recording.id === selected!.id) {
       if (!player.paused) {
         player.pause();
+        setPlaying(false);
+        onPlaying(false);
       }
       telemetry.current.tracker.suspend();
       programmedSeek.current = { generation: generation.current, target: seconds, when: performance.now() };
@@ -499,9 +507,18 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       return { status: 'ready', seconds };
     }
 
-    if (recording.id !== selected?.id) {
+    const switchingRecording = recording.id !== selected?.id;
+    const hasStaleOrActiveMedia = Boolean(
+      source
+      || loading.current
+      || failed
+      || (player && !player.paused),
+    );
+    if (switchingRecording || hasStaleOrActiveMedia) {
       telemetry.current.tracker.suspend();
-      selectTelemetry(recording.id);
+      if (switchingRecording) {
+        selectTelemetry(recording.id);
+      }
       if (seekTimer.current) {
         clearTimeout(seekTimer.current);
         seekTimer.current = null;
@@ -513,9 +530,11 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
       releaseMedia(audio.current);
       setPlaying(false);
       onPlaying(false);
-      setSelectedId(recording.id);
+      if (switchingRecording) {
+        setSelectedId(recording.id);
+        setMediaDuration(null);
+      }
       setSource(null);
-      setMediaDuration(null);
       setBusy(false);
       setFailed(false);
     }
@@ -524,7 +543,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     setPosition(seconds);
     onTime(seconds);
     return { status: 'ready', seconds };
-  }, [available, hasLoadedSelected, onPlaying, onTime, selectTelemetry, selected]);
+  }, [available, failed, hasLoadedSelected, onPlaying, onTime, selectTelemetry, selected, selectedMediaDuration, source]);
 
   useImperativeHandle(
     ref,
