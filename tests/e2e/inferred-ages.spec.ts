@@ -83,12 +83,12 @@ test('sessions default to Age, youngest first with labelled inferred ages, suppo
   await expect(locomotiveMeta).toContainText('Age 1 year, 8 months, 15 days');
   await expect(locomotiveMeta).not.toContainText('inferred from filename');
 
-  // Inferred age renders with italicized "(inferred from filename)" link and no nested interactive links.
+  // Inferred age renders with italicized "(inferred from filename)" link to /about#inferred-ages and no nested interactive links.
   const lighthouseMeta = page.locator('.session-card').nth(2).locator('.session-meta');
   await expect(lighthouseMeta).toContainText('Age 2 years, 6 months, 4 days (inferred from filename)');
   const inferredLink = lighthouseMeta.getByRole('link', { name: /\(inferred from filename\)/i });
   await expect(inferredLink).toBeVisible();
-  await expect(inferredLink).toHaveAttribute('href', '/?document=methods-and-audit');
+  await expect(inferredLink).toHaveAttribute('href', '/about#inferred-ages');
   await expect(inferredLink.locator('em')).toHaveText('(inferred from filename)');
 
   const nestedLinks = await page.evaluate(() => document.querySelectorAll('a a, button a, a button').length);
@@ -138,30 +138,31 @@ test('sessions default to Age, youngest first with labelled inferred ages, suppo
     'Cardboard observatory without audio',
   ]);
 
-  // Activating the "(inferred from filename)" link via keyboard opens the Sources and methods explanation.
+  // Activating the "(inferred from filename)" link via keyboard opens /about#inferred-ages.
   const resultsInferredLink = page.locator('.session-card').nth(2).getByRole('link', { name: /\(inferred from filename\)/i });
   await resultsInferredLink.focus();
   await expect(resultsInferredLink).toBeFocused();
   await page.keyboard.press('Enter');
 
-  const docHeading = page.locator('article.document-detail > h2');
-  await expect(docHeading).toHaveText('Sources and methods');
-  await expect(docHeading).toBeFocused();
-  await expect(page.locator('article.document-detail')).toContainText('Dates are never inferred');
+  await expect(page).toHaveURL(/\/about#inferred-ages$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'About & methods' })).toBeVisible();
+  await expect(page.locator('#inferred-ages')).toBeVisible();
+  await expect(page.locator('article.about-page')).toContainText('78 of 78');
+  await expect(page.locator('article.about-page')).toContainText('Calendar dates are never inferred.');
 
   // Browser Back returns to the sessions list cleanly.
   await page.goBack();
   await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
 });
 
-test('session detail displays inferred age separately from source age, links to the explanation, and passes axe in all themes', async ({ page }) => {
+test('session detail displays inferred age separately from source age, links to /about#inferred-ages, and passes axe in all themes', async ({ page }) => {
   await page.goto('/?entry=fixture-020604-lighthouse');
 
   await expect(page.getByRole('heading', { level: 2, name: 'Paper lighthouse and harbor bells' })).toBeVisible();
   const detailMeta = page.locator('.detail-header .session-meta');
   await expect(detailMeta).toContainText('Age 2 years, 6 months, 4 days (inferred from filename)');
   const detailLink = detailMeta.getByRole('link', { name: /\(inferred from filename\)/i });
-  await expect(detailLink).toHaveAttribute('href', '/?document=methods-and-audit');
+  await expect(detailLink).toHaveAttribute('href', '/about#inferred-ages');
   await expect(detailLink.locator('em')).toHaveText('(inferred from filename)');
 
   // Source identification keeps inferred age notation clearly labelled and separate from CHAT source age.
@@ -172,11 +173,11 @@ test('session detail displays inferred age separately from source age, links to 
 
   await auditAllThemes(page, 'session detail with inferred age');
 
-  // Following the link opens the explanation document.
+  // Following the link opens the /about#inferred-ages methods section.
   await detailLink.click();
-  const docHeading = page.locator('article.document-detail > h2');
-  await expect(docHeading).toHaveText('Sources and methods');
-  await expect(docHeading).toBeFocused();
+  await expect(page).toHaveURL(/\/about#inferred-ages$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'About & methods' })).toBeVisible();
+  await expect(page.locator('#inferred-ages')).toBeVisible();
 });
 
 test('/api/search rejects legacy and invalid sort values with 400', async ({ request, baseURL }) => {

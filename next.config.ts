@@ -17,6 +17,12 @@ const csp = [
   "form-action 'self'",
 ].join('; ');
 
+const privateNoStoreHeaders = [
+  { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+  { key: 'CDN-Cache-Control', value: 'no-store' },
+  { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
+];
+
 const config: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
@@ -35,11 +41,19 @@ const config: NextConfig = {
       },
       {
         source: '/sessions/:path*',
-        headers: [
-          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
-          { key: 'CDN-Cache-Control', value: 'no-store' },
-          { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
-        ],
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: '/research',
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: '/research/:path*',
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: '/about',
+        headers: privateNoStoreHeaders,
       },
     ];
   },

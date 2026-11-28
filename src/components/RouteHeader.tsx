@@ -19,10 +19,12 @@ export default function RouteHeader({
   activeSection,
   showShare = false,
   sharePath,
+  shareTargetLabel = 'session',
 }: {
-  activeSection?: 'overview' | 'sessions' | 'research';
+  activeSection?: 'overview' | 'sessions' | 'research' | 'about';
   showShare?: boolean;
   sharePath?: string;
+  shareTargetLabel?: string;
 }) {
   const [shareState, setShareState] = useState<'idle' | 'busy' | 'copied' | 'manual' | 'error'>('idle');
   const [shareUrl, setShareUrl] = useState('');
@@ -87,7 +89,7 @@ export default function RouteHeader({
         {showShare && (
           <div className="share-feedback" role="status">
             {shareState === 'copied'
-              ? 'Link copied. Anyone can open this session at its URL.'
+              ? `Link copied. Anyone can open this ${shareTargetLabel} at its URL.`
               : shareState === 'error'
                 ? 'That action could not be completed. Please try again.'
                 : ''}
@@ -95,7 +97,7 @@ export default function RouteHeader({
         )}
         {showShare && shareState === 'manual' && (
           <div className="manual-share">
-            <label htmlFor="share-link">Copy this session link</label>
+            <label htmlFor="share-link">Copy this {shareTargetLabel} link</label>
             <div>
               <input ref={shareInput} id="share-link" value={shareUrl} readOnly />
               <button
@@ -106,13 +108,14 @@ export default function RouteHeader({
                 <X size={16} aria-hidden="true" />Close
               </button>
             </div>
-            <p className="small muted">Anyone can open this session at its URL.</p>
+            <p className="small muted">Anyone can open this {shareTargetLabel} at its URL.</p>
           </div>
         )}
         <nav className="section-nav" aria-label="Collection sections">
           <a href="/" aria-current={activeSection === 'overview' ? 'page' : undefined}>Overview</a>
           <a href="/?section=sessions" aria-current={activeSection === 'sessions' ? 'page' : undefined}>Sessions</a>
-          <a href="/?section=research" aria-current={activeSection === 'research' ? 'page' : undefined}>Research &amp; context</a>
+          <a href="/research" aria-current={activeSection === 'research' ? 'page' : undefined}>Research &amp; context</a>
+          <a href="/about" aria-current={activeSection === 'about' ? 'page' : undefined}>About &amp; methods</a>
         </nav>
       </header>
     </>

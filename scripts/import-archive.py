@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from collections.abc import Collection
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
@@ -19,7 +20,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 
 SCRIPT = Path(__file__).resolve()
@@ -114,7 +115,7 @@ Archived CHAT files and canonical transcript companions are preserved as downloa
 
 The import checks all 1,082 canonical transcript-file hashes and all 477 original audio-file hashes against their saved inventories, checks transcript utterance or segment counts, and preserves the 391 recording guides and their source associations. Audio files are provided without transcoding or editing. These checks establish file identity and conversion coverage; they do not establish the accuracy of automatic transcription or timing. Reader-document downloads are separate web copies with links adapted for this collection.
 
-See [annotation provenance](/?document=annotation-provenance), [transcript associations and coverage](/?document=transcript-associations), and [the available evidence about transcript coverage](/?document=transcript-coverage-explanation) for details.
+See [annotation provenance](/research/annotation-provenance), [transcript associations and coverage](/research/transcript-associations), and [the available evidence about transcript coverage](/research/transcript-coverage-explanation) for details.
 
 ## Corpus acknowledgment
 
@@ -124,7 +125,7 @@ Peters, Ann M. (1987). *The role of imitation in the developing syntax of a blin
 
 Wilson, Bob, and Ann M. Peters (1988). *What are you cookin’ on a hot?: Movement constraints in the speech of a three-year-old blind child*. Language, 64(2), 249–273. [Publisher record](https://doi.org/10.2307/415434).
 
-The [research reading list](/?document=research) links to Wilson's dissertation and later academic work. Publications remain at their university or publisher sources.
+The [research reading list](/research/research) links to Wilson's dissertation and later academic work. Publications remain at their university or publisher sources.
 '''
 
 
@@ -345,6 +346,100 @@ def locator_text(locators: list[dict]) -> str:
     return '; '.join(parts)
 
 
+def rewrite_document_markdown(
+    text: str,
+    source: Path,
+    *,
+    library: Path,
+    workspace: Path,
+    paths_to_external: dict[str, str],
+    paths_to_entries: dict[str, str],
+    paths_to_assets: dict[str, str],
+    paths_to_documents: dict[str, str],
+    audio_reference_paths: set[str] | None = None,
+    rewritten_link_counts: Counter | None = None,
+    dropped_local_links: list[dict] | None = None,
+) -> str:
+    audio_paths = audio_reference_paths or set()
+
+    def rewrite(match):
+        label, url = match.group(1), match.group(2).strip('<>')
+        split = urlsplit(url)
+        if split.scheme in ('http', 'https', 'mailto') or url.startswith('#'):
+            return match.group(0)
+        if split.scheme and split.scheme != 'file':
+            if rewritten_link_counts is not None:
+                rewritten_link_counts['unsupported_scheme_removed'] += 1
+            return label
+        target = unquote(split.path)
+        target = re.sub(r':\d+(?:-\d+)?$', '', target)
+        path = Path(target)
+        if not path.is_absolute():
+            path = source.parent / path
+        resolved = str(path.resolve())
+        if resolved in paths_to_external:
+            if rewritten_link_counts is not None:
+                rewritten_link_counts['external_research_reference'] += 1
+            return f'[{label}]({paths_to_external[resolved]})'
+        if resolved in paths_to_entries:
+            if rewritten_link_counts is not None:
+                rewritten_link_counts['entry'] += 1
+                if resolved in audio_paths:
+                    rewritten_link_counts['hosted_audio_entry'] += 1
+            return f'[{label}](/?entry={paths_to_entries[resolved]})'
+        if resolved in paths_to_assets:
+            if rewritten_link_counts is not None:
+                rewritten_link_counts['asset'] += 1
+            return f'[{label}](/api/assets/{paths_to_assets[resolved]})'
+        if resolved in paths_to_documents:
+            if rewritten_link_counts is not None:
+                rewritten_link_counts['document'] += 1
+            fragment = f'#{split.fragment}' if split.fragment else ''
+            return f'[{label}](/research/{quote(paths_to_documents[resolved], safe="")}{fragment})'
+        if rewritten_link_counts is not None:
+            rewritten_link_counts['local_audit_link_removed'] += 1
+        if dropped_local_links is not None:
+            dropped_local_links.append({'document': source.name, 'label': label, 'targetBasename': path.name})
+        return label
+
+    text = LINK_RE.sub(rewrite, text)
+    # Use canonical publication records for the two formerly downloaded
+    # article links, including bare URLs in the historical sources note.
+    for origin in ['https://talkbank.org', 'https://childes.talkbank.org']:
+        text = text.replace(origin + '/childes/access/Eng-NA/0docs/Wilson1988.pdf', 'https://doi.org/10.2307/415434')
+        text = text.replace(origin + '/childes/access/Eng-NA/0docs/peters1987.pdf', 'https://doi.org/10.1515/text.1.1987.7.3.289')
+    # Narrative code snippets occasionally name local directories. Remove
+    # machine-specific roots while retaining meaningful archive-relative names.
+    for prefix in [str(library) + '/', str(workspace) + '/']:
+        text = text.replace(prefix, '')
+    text = text.replace(str(library), 'the local archive').replace(str(workspace), 'the local workspace')
+    text = re.sub(r'file://[^\s<>`]+', '[local file]', text)
+    text = re.sub(r'/Users/[^\s<>`\])]+', '[local path]', text)
+    return text
+
+
+def validate_reader_document_href(
+    href: str,
+    *,
+    entry_ids: Collection[str],
+    document_ids: Collection[str],
+    asset_ids: Collection[str],
+) -> bool:
+    """Validate that reader-document links point to canonical routes, known assets, or official external hosts."""
+    if href.startswith('/?entry='):
+        return href.split('=', 1)[1] in entry_ids
+    if href.startswith('/?document='):
+        return False
+    if href == '/research' or href == '/about' or href.startswith('/about#'):
+        return True
+    if href.startswith('/research/'):
+        target = href.removeprefix('/research/').split('#', 1)[0]
+        return bool(target) and '/' not in target and '?' not in target and unquote(target) in document_ids
+    if href.startswith('/api/assets/'):
+        return href.rsplit('/', 1)[1] in asset_ids
+    return href.startswith('#') or (urlsplit(href).scheme in {'http', 'https'} and urlsplit(href).hostname in OFFICIAL_LINK_HOSTS)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--library', type=Path, default=Path('/Users/sethwilson/dev/sethlang'))
@@ -459,51 +554,19 @@ def main() -> None:
         paths_to_external[str(alias.resolve())] = 'https://hdl.handle.net/10125/9926'
 
     def rewrite_markdown(text: str, source: Path) -> str:
-        def rewrite(match):
-            label, url = match.group(1), match.group(2).strip('<>')
-            split = urlsplit(url)
-            if split.scheme in ('http', 'https', 'mailto') or url.startswith('#'):
-                return match.group(0)
-            if split.scheme and split.scheme != 'file':
-                rewritten_link_counts['unsupported_scheme_removed'] += 1
-                return label
-            target = unquote(split.path)
-            target = re.sub(r':\d+(?:-\d+)?$', '', target)
-            path = Path(target)
-            if not path.is_absolute():
-                path = source.parent / path
-            resolved = str(path.resolve())
-            if resolved in paths_to_external:
-                rewritten_link_counts['external_research_reference'] += 1
-                return f'[{label}]({paths_to_external[resolved]})'
-            if resolved in paths_to_entries:
-                rewritten_link_counts['entry'] += 1
-                if resolved in audio_reference_paths:
-                    rewritten_link_counts['hosted_audio_entry'] += 1
-                return f'[{label}](/?entry={paths_to_entries[resolved]})'
-            if resolved in paths_to_assets:
-                rewritten_link_counts['asset'] += 1
-                return f'[{label}](/api/assets/{paths_to_assets[resolved]})'
-            if resolved in paths_to_documents:
-                rewritten_link_counts['document'] += 1
-                return f'[{label}](/?document={paths_to_documents[resolved]})'
-            rewritten_link_counts['local_audit_link_removed'] += 1
-            dropped_local_links.append({'document': source.name, 'label': label, 'targetBasename': path.name})
-            return label
-        text = LINK_RE.sub(rewrite, text)
-        # Use canonical publication records for the two formerly downloaded
-        # article links, including bare URLs in the historical sources note.
-        for origin in ['https://talkbank.org', 'https://childes.talkbank.org']:
-            text = text.replace(origin + '/childes/access/Eng-NA/0docs/Wilson1988.pdf', 'https://doi.org/10.2307/415434')
-            text = text.replace(origin + '/childes/access/Eng-NA/0docs/peters1987.pdf', 'https://doi.org/10.1515/text.1.1987.7.3.289')
-        # Narrative code snippets occasionally name local directories. Remove
-        # machine-specific roots while retaining meaningful archive-relative names.
-        for prefix in [str(library) + '/', str(workspace) + '/']:
-            text = text.replace(prefix, '')
-        text = text.replace(str(library), 'the local archive').replace(str(workspace), 'the local workspace')
-        text = re.sub(r'file://[^\s<>`]+', '[local file]', text)
-        text = re.sub(r'/Users/[^\s<>`\])]+', '[local path]', text)
-        return text
+        return rewrite_document_markdown(
+            text,
+            source,
+            library=library,
+            workspace=workspace,
+            paths_to_external=paths_to_external,
+            paths_to_entries=paths_to_entries,
+            paths_to_assets=paths_to_assets,
+            paths_to_documents=paths_to_documents,
+            audio_reference_paths=audio_reference_paths,
+            rewritten_link_counts=rewritten_link_counts,
+            dropped_local_links=dropped_local_links,
+        )
 
     def source_file(asset_id: str, label: str) -> dict:
         asset = pending[asset_id]
@@ -713,15 +776,7 @@ def main() -> None:
     for document in documents:
         for match in LINK_RE.finditer(document['markdown']):
             href = match.group(2).strip('<>')
-            if href.startswith('/?entry='):
-                valid = href.split('=', 1)[1] in ids
-            elif href.startswith('/?document='):
-                valid = href.split('=', 1)[1] in document_ids
-            elif href.startswith('/api/assets/'):
-                valid = href.rsplit('/', 1)[1] in assets
-            else:
-                valid = href.startswith('#') or (urlsplit(href).scheme in {'http', 'https'} and urlsplit(href).hostname in OFFICIAL_LINK_HOSTS)
-            if not valid:
+            if not validate_reader_document_href(href, entry_ids=ids, document_ids=document_ids, asset_ids=assets.keys()):
                 raise ValueError(f'Unresolved reader-document link in {document["id"]}')
     # Every text asset that will be downloadable must also avoid machine paths.
     for asset in pending.values():

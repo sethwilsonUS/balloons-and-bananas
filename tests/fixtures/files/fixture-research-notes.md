@@ -1,6 +1,6 @@
 # Fixture research reading list
 
-This invented research document accompanies the automated test suite and links to the [annotation provenance guide](/?document=fixture-provenance-guide).
+This invented research document accompanies the automated test suite and links to the [annotation provenance guide](/research/fixture-provenance-guide).
 
 | Session | Transcript origin | Audio availability |
 | --- | --- | --- |

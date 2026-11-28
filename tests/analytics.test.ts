@@ -74,6 +74,7 @@ test('virtual page sanitizer never retains unrecognized paths, query strings or 
     assert.equal(sanitizeAnalyticsUrl(url), `${ANALYTICS_ORIGIN}/overview`);
   }
   assert.equal(sanitizeAnalyticsUrl(`${ANALYTICS_ORIGIN}/research?secret=1#access=secret`), `${ANALYTICS_ORIGIN}/research`);
+  assert.equal(sanitizeAnalyticsUrl(`${ANALYTICS_ORIGIN}/about?secret=1#inferred-ages`), `${ANALYTICS_ORIGIN}/about`);
 });
 
 test('public relay blocks foreign requests, bounds bodies and forwards only clean context', async () => {

@@ -21,6 +21,12 @@ export function formatSessionPageTitle(session: {
   return `Session ${session.slug} · ${ARCHIVE_NAME}`;
 }
 
+/** Format the document `<title>` for `/research/[doc]`. */
+export function formatResearchDocumentPageTitle(title?: string | null): string {
+  const trimmed = title?.trim();
+  return `${trimmed || 'Document not found'} · Research · ${ARCHIVE_NAME}`;
+}
+
 export type DocumentTitleState =
   | { kind: 'loading' }
   | { kind: 'error' }
@@ -28,7 +34,8 @@ export type DocumentTitleState =
   | { kind: 'sessions'; hasFilters: boolean }
   | { kind: 'session'; title?: string | null; notFound?: boolean }
   | { kind: 'research' }
-  | { kind: 'document'; title?: string | null };
+  | { kind: 'document'; title?: string | null }
+  | { kind: 'about' };
 
 export function formatDocumentTitle(state: DocumentTitleState): string {
   switch (state.kind) {
@@ -51,5 +58,7 @@ export function formatDocumentTitle(state: DocumentTitleState): string {
       const trimmed = state.title?.trim();
       return `${trimmed || 'Document not found'} · ${ARCHIVE_NAME}`;
     }
+    case 'about':
+      return `About & methods · ${ARCHIVE_NAME}`;
   }
 }

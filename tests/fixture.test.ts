@@ -63,11 +63,19 @@ test('invented fixture archive is valid v1 stored archive covering all required 
   assert.ok(getNotationLinks(passage3, locomotive.origin).length > 0, 'Passage 3 should carry inspectable CHAT notation');
   assert.notEqual(readingText(passage3, locomotive.origin), passage3.text, 'Passage 3 should differ between simpler reading and notation view');
 
-  // Research document containing a markdown table and downloadable assets
+  // Research document containing a markdown table, /research/<doc> links, and downloadable assets
   const researchDocs = data.documents.filter(doc => doc.category !== 'overview');
   assert.ok(
     researchDocs.some(doc => Boolean(doc.markdown && /\|.+\|\n\|\s*---/.test(doc.markdown))),
     'Expected a research/guide document containing a markdown table',
+  );
+  assert.ok(
+    data.documents.some(doc => Boolean(doc.markdown && doc.markdown.includes('](/research/fixture-provenance-guide)'))),
+    'Expected internal document links to use /research/<doc> routes',
+  );
+  assert.ok(
+    data.documents.every(doc => !doc.markdown || !doc.markdown.includes('/?document=')),
+    'Fixture documents should not emit legacy /?document= links',
   );
   assert.ok(
     researchDocs.some(doc => doc.assets.length > 0),

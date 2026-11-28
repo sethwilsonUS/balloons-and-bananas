@@ -1,14 +1,13 @@
 'use client';
 
-import { formatAge, INFERRED_AGE_EXPLANATION_DOC_ID } from '../lib/age';
-import { trackArchiveEvent } from '../lib/analytics';
+import { formatAge, INFERRED_AGE_EXPLANATION_HREF } from '../lib/age';
 
 /**
  * Display a session's age metadata, keeping source ages and filename-inferred
  * ages visually and semantically distinct. Inferred ages always carry a visible
- * italicized label linking to the explanation document.
+ * italicized label linking to `/about#inferred-ages`.
  */
-export default function SessionAge({ ages, inferredAge, onDocument, showPrefix = true, showChatCode = false }: {
+export default function SessionAge({ ages, inferredAge, showPrefix = true, showChatCode = false }: {
   ages: string[];
   inferredAge: string | null;
   onDocument?: (id: string) => void;
@@ -34,20 +33,7 @@ export default function SessionAge({ ages, inferredAge, onDocument, showPrefix =
       {showChatCode && <span className="age-notation">{` (${inferredAge})`}</span>}{' '}
       <a
         className="inferred-age-link"
-        href={`/?document=${encodeURIComponent(INFERRED_AGE_EXPLANATION_DOC_ID)}`}
-        onClick={event => {
-          trackArchiveEvent('research_open', { documentId: INFERRED_AGE_EXPLANATION_DOC_ID, action: 'read' });
-          if (!onDocument || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
-            return;
-          }
-          event.preventDefault();
-          onDocument(INFERRED_AGE_EXPLANATION_DOC_ID);
-        }}
-        onAuxClick={event => {
-          if (event.button === 1) {
-            trackArchiveEvent('research_open', { documentId: INFERRED_AGE_EXPLANATION_DOC_ID, action: 'read' });
-          }
-        }}
+        href={INFERRED_AGE_EXPLANATION_HREF}
       >
         <em>(inferred from filename)</em>
         <span className="sr-only"> — learn how ages are inferred</span>

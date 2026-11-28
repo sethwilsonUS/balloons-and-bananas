@@ -334,7 +334,7 @@
       "title": "About this invented fixture collection",
       "description": "Overview note for the synthetic E2E test fixture.",
       "category": "overview",
-      "markdown": "# About this invented fixture collection\n\nThis small synthetic collection exercises the reader end to end without any real archive text. Start with [Blue locomotive and wooden bridge](/?entry=fixture-010815-locomotive) or review the [fixture annotation provenance guide](/?document=fixture-provenance-guide).\n",
+      "markdown": "# About this invented fixture collection\n\nThis small synthetic collection exercises the reader end to end without any real archive text. Start with [Blue locomotive and wooden bridge](/?entry=fixture-010815-locomotive) or review the [fixture annotation provenance guide](/research/fixture-provenance-guide).\n",
       "assets": [
         {
           "id": "fixture-doc-overview-md",
@@ -364,7 +364,7 @@
       "title": "Fixture research reading list",
       "description": "Invented corpus inventory table and research background for browser verification.",
       "category": "research",
-      "markdown": "# Fixture research reading list\n\nThis invented research document accompanies the automated test suite and links to the [annotation provenance guide](/?document=fixture-provenance-guide).\n\n| Session | Transcript origin | Audio availability |\n| --- | --- | --- |\n| `010815.cha` | Archived research | Original synthetic MP3 |\n| `020110-tb.cha` | TalkBank AI draft | Synthetic WAV + MP3 listening copy |\n| `020604-local.json` | Local AI draft | Original synthetic MP3 |\n| `011103.cha` | Archived research | Transcript only (no audio) |\n",
+      "markdown": "# Fixture research reading list\n\nThis invented research document accompanies the automated test suite and links to the [annotation provenance guide](/research/fixture-provenance-guide).\n\n| Session | Transcript origin | Audio availability |\n| --- | --- | --- |\n| `010815.cha` | Archived research | Original synthetic MP3 |\n| `020110-tb.cha` | TalkBank AI draft | Synthetic WAV + MP3 listening copy |\n| `020604-local.json` | Local AI draft | Original synthetic MP3 |\n| `011103.cha` | Archived research | Transcript only (no audio) |\n",
       "assets": [
         {
           "id": "fixture-doc-research-md",
@@ -458,8 +458,8 @@
       "pathname": "archive/v1/files/fixture-overview-note.md",
       "name": "fixture-overview-note.md",
       "contentType": "text/markdown; charset=utf-8",
-      "bytes": 309,
-      "sha256": "9eaef805490d08b3359e601a2ce588da1cdae5cd66fa98f0877a6f75f135610f"
+      "bytes": 308,
+      "sha256": "1908c4665229aba90bc8a007c9d31fd0357fe5544030da43cbeea9bbed861886"
     },
     "fixture-doc-provenance-md": {
       "pathname": "archive/v1/files/fixture-provenance-guide.md",
@@ -472,8 +472,8 @@
       "pathname": "archive/v1/files/fixture-research-notes.md",
       "name": "fixture-research-notes.md",
       "contentType": "text/markdown; charset=utf-8",
-      "bytes": 532,
-      "sha256": "6e0e549b34c4e71dc445383a1a181aecdf9e3493fb6f4a49ff5c6f2c7df91fa6"
+      "bytes": 531,
+      "sha256": "a3fb7e70b9ab6a21f11d69932a1eef4ab8d33367eeb3d339ae8fa05381ac316d"
     },
     "fixture-doc-methods-md": {
       "pathname": "archive/v1/files/fixture-methods-and-audit.md",

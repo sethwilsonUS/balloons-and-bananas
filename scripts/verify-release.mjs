@@ -195,6 +195,48 @@ async function main() {
   check(/Session not found/i.test(missingSessionHtml), 'unknown_session_page:helpful_message');
   counts.sessionRoutesVerified = 4;
 
+  // Verify per-request `/research`, `/research/[doc]` (200 & 404), and `/about` SSR pages and private headers.
+  const researchIndexResponse = await call('/research', 'research_page');
+  await expectStatus(researchIndexResponse, 200, 'research_page');
+  const researchIndexHtml = await researchIndexResponse.text();
+  check(/<title>\s*Research &(?:amp;)? context · The Seth Tapes\s*<\/title>/.test(researchIndexHtml), 'research_page:title_format');
+  check((researchIndexResponse.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'research_page:frame_protection');
+  const researchDocs = data.documents.filter(doc => doc.category !== 'overview');
+  check(researchDocs.every(doc => researchIndexHtml.includes(`/research/${encodeURIComponent(doc.id)}`)), 'research_page:lists_all_documents');
+  check(excluded.every(id => !researchIndexHtml.includes(id)), 'research_page:personal_briefs_excluded');
+
+  const representativeDoc = researchDocs.find(doc => doc.id === 'annotation-provenance') || researchDocs[0];
+  check(Boolean(representativeDoc), 'local_research_document_available');
+  const researchDocResponse = await call(`/research/${encodeURIComponent(representativeDoc.id)}`, 'research_doc_page');
+  await expectStatus(researchDocResponse, 200, 'research_doc_page');
+  const researchDocHtml = await researchDocResponse.text();
+  check(researchDocHtml.includes('· Research · The Seth Tapes</title>'), 'research_doc_page:title_format');
+  check(/<h1[\s>]/i.test(researchDocHtml), 'research_doc_page:heading_present');
+  check((researchDocResponse.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'research_doc_page:frame_protection');
+  check(excluded.every(id => !researchDocHtml.includes(id)), 'research_doc_page:personal_briefs_excluded');
+
+  const missingDocResponse = await call('/research/unknown-release-test-document', 'unknown_research_doc_page');
+  await expectStatus(missingDocResponse, 404, 'unknown_research_doc_page');
+  const missingDocHtml = await missingDocResponse.text();
+  check(/Document not found/i.test(missingDocHtml), 'unknown_research_doc_page:helpful_message');
+
+  const aboutResponse = await call('/about', 'about_page');
+  await expectStatus(aboutResponse, 200, 'about_page');
+  const aboutHtml = await aboutResponse.text();
+  check(/<title>\s*About &(?:amp;)? methods · The Seth Tapes\s*<\/title>/.test(aboutHtml), 'about_page:title_format');
+  check((aboutResponse.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'about_page:frame_protection');
+  check(aboutHtml.includes('id="inferred-ages"'), 'about_page:inferred_ages_anchor');
+  check(aboutHtml.includes('78 of 78'), 'about_page:78_of_78_evidence');
+  check(
+    aboutHtml.includes(`${expected.sessions.toLocaleString()} sessions`)
+      && aboutHtml.includes(`${expected.recordings.toLocaleString()} original recordings`)
+      && aboutHtml.includes(`${expected.original.toLocaleString()} archived research`)
+      && aboutHtml.includes(`${expected.talkbankAi.toLocaleString()} TalkBank AI`)
+      && aboutHtml.includes(`${expected.localAi.toLocaleString()} local AI`),
+    'about_page:live_origin_counts',
+  );
+  counts.researchAndAboutRoutesVerified = 4;
+
   // Production BotID deliberately rejects this non-browser search client.
   // Exercise search semantics locally; verify real browser search separately.
   if (!local) {

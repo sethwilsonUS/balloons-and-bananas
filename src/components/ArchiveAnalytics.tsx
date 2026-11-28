@@ -6,7 +6,7 @@ import type { AnalyticsPath } from '../lib/analytics-policy';
 
 export default function ArchiveAnalytics({ ready, section, sessionId, documentId }: {
   ready: boolean;
-  section: 'overview' | 'sessions' | 'research';
+  section: 'overview' | 'sessions' | 'research' | 'about';
   sessionId: string | null;
   documentId: string | null;
 }) {
