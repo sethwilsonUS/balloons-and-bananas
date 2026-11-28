@@ -7,8 +7,8 @@ export default function NotFound() {
   return (
     <div className="archive-shell">
       <RouteHeader />
-      <main id="main" tabIndex={-1} className="layout-reading">
-        <section className="session-not-found layout-main" aria-labelledby="not-found-heading">
+      <main id="main" tabIndex={-1} className="reading-layout">
+        <section className="session-not-found reading-column" aria-labelledby="not-found-heading">
           <p className="eyebrow">404 · Not found</p>
           <h1 id="not-found-heading">This archive link could not be found</h1>
           <p className="section-intro">

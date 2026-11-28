@@ -113,7 +113,7 @@ export default async function HomePage({
     <div className="archive-shell">
       <ArchiveAnalytics ready section="overview" sessionId={null} documentId={null} />
       <RouteHeader activeSection="overview" />
-      <main id="main" tabIndex={-1} className="layout-browsing">
+      <main id="main" tabIndex={-1} className="browsing-layout">
         <div className="home-front-door">
           <header className="masthead home-masthead">
             <h1>{ARCHIVE_NAME}</h1>

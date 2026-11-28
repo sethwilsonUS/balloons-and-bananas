@@ -715,7 +715,7 @@ export default function SearchPageClient({
     <div className="archive-shell">
       <ArchiveAnalytics ready={!loadError} section="search" sessionId={null} documentId={null} />
       <RouteHeader activeSection="search" showShare sharePath={canonicalHref} shareTargetLabel="search" />
-      <main id="main" tabIndex={-1} className="layout-browsing">
+      <main id="main" tabIndex={-1} className="browsing-layout">
         <section className="browse-section search-route" aria-labelledby="search-heading">
           <header className="route-page-header">
             <p className="eyebrow">Collection search</p>

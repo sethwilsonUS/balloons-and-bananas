@@ -70,7 +70,7 @@
   /* Page frame: one maximum width and one horizontal gutter for every route. */
   --frame-max: 80rem;
   --frame-gutter: var(--space-8);
-  --sidebar-width: 18rem;
+  --reading-sidebar-width: 18rem;
 
   /* Control kit: shared geometry for buttons, selects and text fields. */
   --control-height: 2.75rem;
@@ -235,12 +235,12 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 /* Page frame layouts. Every route's main content starts at the same left edge as the header brand.
    Reading layout: main column capped at the reading measure, optional sidebar beside it on wide screens
    (below the main content on narrow screens). Browsing layout: the full frame width. */
-.layout-browsing { width: 100%; }
-.layout-reading { display: grid; grid-template-columns: minmax(0, var(--measure-reading)); column-gap: var(--space-8); row-gap: var(--space-7); align-items: start; }
-.layout-reading > .layout-main { min-width: 0; }
-.layout-reading > .layout-sidebar { min-width: 0; }
+.browsing-layout { width: 100%; }
+.reading-layout { display: grid; grid-template-columns: minmax(0, var(--measure-reading)); column-gap: var(--space-8); row-gap: var(--space-7); align-items: start; }
+.reading-layout > .reading-column { min-width: 0; }
+.reading-layout > .reading-sidebar { min-width: 0; }
 @media (min-width: 1001px) {
-  .layout-reading:has(> .layout-sidebar) { grid-template-columns: minmax(0, var(--measure-reading)) minmax(0, var(--sidebar-width)); }
+  .reading-layout:has(> .reading-sidebar) { grid-template-columns: minmax(0, var(--measure-reading)) minmax(0, var(--reading-sidebar-width)); }
 }
 .top-bar { min-height: 82px; display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--line); }
 .brand-button { display: inline-flex; align-items: center; gap: var(--space-3); border: 0; padding: var(--space-2) 0; min-height: var(--control-height); background: none; font-size: var(--text-base); font-weight: 600; color: var(--ink); text-decoration: none; }
@@ -961,7 +961,7 @@ input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { backgro
 
   .archive-shell { max-width: none; padding: 0; margin: 0; }
   main { min-height: 0; }
-  .layout-reading { display: block; }
+  .reading-layout { display: block; }
 
   .print-only { display: block; }
   span.print-only { display: inline; }
