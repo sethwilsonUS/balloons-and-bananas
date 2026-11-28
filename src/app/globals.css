@@ -797,14 +797,13 @@ input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { backgro
 .cite-tab:hover { background: var(--forest-soft); border-color: var(--forest); color: var(--forest); }
 .cite-tab[aria-selected='true'],
 .cite-tab[aria-selected='true']:hover { background: var(--primary-bg); border-color: var(--primary-bg); color: var(--on-primary); }
-.cite-tabpanel { display: flex; flex-direction: column; gap: 14px; }
+.cite-tabpanel { display: flex; flex-direction: column; gap: 14px; border-radius: 5px; }
 .cite-tabpanel[hidden] { display: none; }
 .cite-preview-text { margin: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font-size: .94rem; line-height: 1.65; overflow-wrap: anywhere; }
 .cite-preview-code { margin: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font-size: .82rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cite-panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .cite-bibtex-key code { color: var(--ink); }
 .cite-live-status { margin: 0; }
-.cite-live-status:empty { display: none; }
 .cite-manual-copy { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--control-line); border-radius: 5px; background: var(--subtle-bg); }
 .cite-manual-copy label { font-size: .84rem; font-weight: 600; color: var(--ink); }
 .cite-manual-copy textarea { width: 100%; min-width: 0; border: 1px solid var(--control-line); border-radius: 4px; background: var(--paper-light); color: var(--ink); padding: 10px 12px; font-size: .85rem; line-height: 1.5; resize: vertical; }

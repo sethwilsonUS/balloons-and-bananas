@@ -129,7 +129,7 @@ test('TalkBank AI draft citations state TalkBank AI draft and include "(machine 
   });
 
   assert.equal(result.isAiDraft, true);
-  assert.equal(result.bibtexKey, 'sethtapes_020110_tb_p2');
+  assert.equal(result.bibtexKey, 'sethtapes_020110-tb_p2');
   assert.equal(result.url, 'https://thesethtapes.example/sessions/020110-tb#p2');
 
   for (const text of [result.chicago, result.apa, result.bibtex]) {
@@ -154,7 +154,7 @@ test('local AI draft citations label inferred ages explicitly, omit unknown date
   assert.equal(result.isAiDraft, true);
   assert.equal(result.ageLabel, 'inferred age 2;06.04');
   assert.equal(result.ageIsInferred, true);
-  assert.equal(result.bibtexKey, 'sethtapes_020604_local_p3');
+  assert.equal(result.bibtexKey, 'sethtapes_020604-local_p3');
 
   assert.equal(
     result.chicago,
@@ -194,7 +194,7 @@ test('source age takes precedence over inferredAge when both are present, and mi
     origin: SITE_ORIGIN,
     accessDate: ACCESS_DATE,
   });
-  assert.equal(neither.bibtexKey, 'sethtapes_011119d_82_supp');
+  assert.equal(neither.bibtexKey, 'sethtapes_011119d-82-supp');
   assert.ok(neither.chicago.includes('"Session 011119d-82-supp." Archived research transcript.'));
   assert.ok(neither.apa.includes('(n.d.). Session 011119d-82-supp [Archived research transcript].'));
   assert.ok(neither.bibtex.includes('note         = {Archived research transcript; accessed November 27, 2026}'));
@@ -233,12 +233,37 @@ test('handles multiple dates, bare years, and invalid calendar date strings with
   assert.ok(!invalidIsoDate.chicago.includes('March'));
 });
 
-test('escapeBibtexValue and BibTeX generation escape LaTeX/BibTeX special characters safely in a single pass', () => {
+test('escapeBibtexValue and BibTeX generation escape LaTeX/BibTeX special characters and unmatched braces safely without altering brace depth', () => {
   assert.equal(
     escapeBibtexValue('a\\b {c} & % $ # _ ^ ~'),
-    'a\\textbackslash{}b \\{c\\} \\& \\% \\$ \\# \\_ \\textasciicircum{} \\textasciitilde{}',
+    'a\\textbackslash{}b \\textbraceleft{}c\\textbraceright{} \\& \\% \\$ \\# \\_ \\textasciicircum{} \\textasciitilde{}',
   );
   assert.equal(escapeBibtexValue('line 1\n\tline 2\r\nline 3'), 'line 1 line 2 line 3');
+
+  // Unmatched opening and closing braces must preserve balanced BibTeX brace depth independently
+  const assertBalancedBraces = (bibtex: string) => {
+    let depth = 0;
+    for (const ch of bibtex) {
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+      assert.ok(depth >= 0, `Negative brace depth in BibTeX:\n${bibtex}`);
+    }
+    assert.equal(depth, 0, `Unbalanced final brace depth (${depth}) in BibTeX:\n${bibtex}`);
+  };
+
+  const unmatchedOpen = buildSessionCitations(
+    { ...archivedSession, ages: ['1;06{26'] },
+    { origin: SITE_ORIGIN, accessDate: ACCESS_DATE },
+  );
+  assert.ok(unmatchedOpen.bibtex.includes('age 1;06\\textbraceleft{}26'));
+  assertBalancedBraces(unmatchedOpen.bibtex);
+
+  const unmatchedClose = buildSessionCitations(
+    { ...archivedSession, ages: ['1;06}26'] },
+    { origin: SITE_ORIGIN, accessDate: ACCESS_DATE },
+  );
+  assert.ok(unmatchedClose.bibtex.includes('age 1;06\\textbraceright{}26'));
+  assertBalancedBraces(unmatchedClose.bibtex);
 
   const tricky = buildSessionCitations(
     {
@@ -250,12 +275,13 @@ test('escapeBibtexValue and BibTeX generation escape LaTeX/BibTeX special charac
     },
     { passageNumber: 7, origin: SITE_ORIGIN, accessDate: ACCESS_DATE },
   );
-  assert.equal(tricky.bibtexKey, 'sethtapes_01_06_26_test_p7');
+  assert.equal(tricky.bibtexKey, 'sethtapes_01-06-26-test_p7');
   assert.ok(tricky.bibtex.includes('title        = {{Session 01\\_06\\&26\\%test, passage 7}},'));
-  assert.ok(tricky.bibtex.includes('age 1;06.26\\_a; recorded Summer \\& Fall \\{1983\\};'));
+  assert.ok(tricky.bibtex.includes('age 1;06.26\\_a; recorded Summer \\& Fall \\textbraceleft{}1983\\textbraceright{};'));
+  assertBalancedBraces(tricky.bibtex);
 });
 
-test('URL builder, BibTeX key, and validation handle origins and reject invalid inputs cleanly', () => {
+test('URL builder, BibTeX key collision freedom, and validation handle origins and reject invalid slugs cleanly', () => {
   assert.equal(formatCanonicalCitationUrl('010815'), '/sessions/010815');
   assert.equal(formatCanonicalCitationUrl('010815', 42), '/sessions/010815#p42');
   assert.equal(
@@ -266,8 +292,26 @@ test('URL builder, BibTeX key, and validation handle origins and reject invalid 
   assert.equal(formatCanonicalCitationUrl('010815', 3, 'javascript:alert(1)'), '/sessions/010815#p3');
   assert.equal(formatCanonicalCitationUrl('010815', 3, 'not a url'), '/sessions/010815#p3');
 
+  // Dot-segment slugs must be rejected so URL resolution never escapes /sessions/
+  for (const dotSlug of ['.', '..', ' . ', ' .. ']) {
+    assert.throws(
+      () => formatCanonicalCitationUrl(dotSlug, 2, 'https://example.org'),
+      RangeError,
+      `Expected RangeError for dot slug "${dotSlug}"`,
+    );
+    assert.throws(
+      () => buildSessionCitations({ ...archivedSession, slug: dotSlug }, { accessDate: ACCESS_DATE }),
+      RangeError,
+      `Expected RangeError for dot slug "${dotSlug}"`,
+    );
+  }
+
+  // Session slug ending in -p42 must NEVER collide with passage 42 of session 010626
   assert.equal(formatBibtexKey('010626'), 'sethtapes_010626');
   assert.equal(formatBibtexKey('010626', 42), 'sethtapes_010626_p42');
+  assert.equal(formatBibtexKey('010626-p42'), 'sethtapes_010626-p42');
+  assert.notEqual(formatBibtexKey('010626-p42'), formatBibtexKey('010626', 42));
+  assert.notEqual(formatBibtexKey('010626_p42'), formatBibtexKey('010626', 42));
   assert.equal(formatBibtexKey('---'), 'sethtapes_session');
 
   // Negative boundary tests for invalid slugs, passage numbers, and access dates

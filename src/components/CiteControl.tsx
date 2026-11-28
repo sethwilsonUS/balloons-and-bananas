@@ -64,6 +64,7 @@ export function CitationPanel({
     targetKey: string;
     format: CitationFormat;
     text: string;
+    focusOnOpen: boolean;
   } | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -80,6 +81,7 @@ export function CitationPanel({
   const manualTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyRequestIdRef = useRef(0);
+  const clipboardQueueRef = useRef<Promise<void>>(Promise.resolve());
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -111,11 +113,11 @@ export function CitationPanel({
     && manualCopy.format === activeFormat;
 
   useEffect(() => {
-    if (showManualCopy) {
+    if (showManualCopy && manualCopy?.focusOnOpen) {
       manualTextareaRef.current?.focus();
       manualTextareaRef.current?.select();
     }
-  }, [showManualCopy]);
+  }, [showManualCopy, manualCopy]);
 
   const selectFormat = useCallback((nextFormat: CitationFormat, focusTab = false) => {
     if (nextFormat !== activeFormat) {
@@ -156,6 +158,7 @@ export function CitationPanel({
     const labelSnapshot = CITATION_FORMAT_LABELS[formatSnapshot];
     const textSnapshot = citations[formatSnapshot];
 
+    setCopied(null);
     setManualCopy(null);
     setStatusMessage('');
     if (copyTimerRef.current) {
@@ -163,7 +166,12 @@ export function CitationPanel({
       copyTimerRef.current = null;
     }
 
-    try {
+    // Serialize clipboard writes so overlapping copy requests never write an older
+    // format after a newer format and leave the clipboard out of sync with the UI.
+    const executeWrite = async (): Promise<'written' | 'superseded'> => {
+      if (!mountedRef.current || copyRequestIdRef.current !== requestId) {
+        return 'superseded';
+      }
       if (
         typeof navigator === 'undefined'
         || !navigator.clipboard
@@ -172,7 +180,15 @@ export function CitationPanel({
         throw new Error('Clipboard unavailable');
       }
       await navigator.clipboard.writeText(textSnapshot);
-      if (!mountedRef.current || copyRequestIdRef.current !== requestId) return;
+      return 'written';
+    };
+
+    const queuedWrite = clipboardQueueRef.current.then(executeWrite, executeWrite);
+    clipboardQueueRef.current = queuedWrite.then(() => undefined, () => undefined);
+
+    try {
+      const outcome = await queuedWrite;
+      if (outcome !== 'written' || !mountedRef.current || copyRequestIdRef.current !== requestId) return;
 
       setCopied({ targetKey: targetSnapshot, format: formatSnapshot });
       setStatusMessage(`Copied ${labelSnapshot} citation for ${subjectPhrase}.`);
@@ -184,8 +200,12 @@ export function CitationPanel({
       }, 4000);
     } catch {
       if (!mountedRef.current || copyRequestIdRef.current !== requestId) return;
+      const initiatingButton = copyButtonRefs.current[formatSnapshot];
+      const focusOnOpen = typeof document !== 'undefined'
+        && initiatingButton !== null
+        && document.activeElement === initiatingButton;
       setCopied(null);
-      setManualCopy({ targetKey: targetSnapshot, format: formatSnapshot, text: textSnapshot });
+      setManualCopy({ targetKey: targetSnapshot, format: formatSnapshot, text: textSnapshot, focusOnOpen });
       setStatusMessage(`Could not copy automatically. Select and copy the ${labelSnapshot} citation below.`);
     }
   };
@@ -226,6 +246,7 @@ export function CitationPanel({
             role="tabpanel"
             id={`${idPrefix}-panel-${format}`}
             aria-labelledby={`${idPrefix}-tab-${format}`}
+            tabIndex={0}
             hidden={!isActive}
             className="cite-tabpanel"
           >
@@ -259,13 +280,18 @@ export function CitationPanel({
       })}
 
       <p
-        className="small muted cite-live-status"
+        className="sr-only"
         role="status"
         aria-live="polite"
         aria-atomic="true"
       >
         {statusMessage}
       </p>
+      {statusMessage && (
+        <p className="small muted cite-live-status" aria-hidden="true">
+          {statusMessage}
+        </p>
+      )}
 
       {showManualCopy && manualCopy && (
         <div className="cite-manual-copy">
@@ -353,12 +379,10 @@ function CiteDialog({
       }
     }
     headingRef.current?.focus();
-    return () => {
-      if (dialog.open) {
-        closingRef.current = true;
-        dialog.close();
-      }
-    };
+    // Do not call dialog.close() in mount-effect cleanup: in React Strict Mode,
+    // a cleanup close queues a native `close` event after the second setup reopens
+    // the dialog, which would immediately dismiss it. Real unmounts remove the
+    // `<dialog>` element from the DOM and top layer automatically.
   }, []);
 
   const handleBackdropClick = (event: MouseEvent<HTMLDialogElement>) => {
@@ -378,9 +402,10 @@ function CiteDialog({
         closeDialog();
       }}
       onClose={() => {
-        if (!closingRef.current) {
-          onClose();
+        if (closingRef.current || dialogRef.current?.open) {
+          return;
         }
+        onClose();
       }}
       onClick={handleBackdropClick}
     >

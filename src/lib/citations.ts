@@ -184,8 +184,8 @@ function resolveAccessDate(input?: Date | string): CalendarDate {
 
 function assertValidSlug(slug: string): string {
   const trimmed = slug.trim();
-  if (!trimmed) {
-    throw new RangeError('Citation session slug must be a non-empty string.');
+  if (!trimmed || trimmed === '.' || trimmed === '..') {
+    throw new RangeError('Citation session slug must be a valid non-empty session identifier.');
   }
   return trimmed;
 }
@@ -228,14 +228,16 @@ export function formatCanonicalCitationUrl(
 /**
  * Build a deterministic, BibTeX-safe citation key:
  * `sethtapes_<sanitizedSlug>` or `sethtapes_<sanitizedSlug>_p<N>` (e.g. `sethtapes_010626_p42`).
+ * Slug punctuation maps to hyphens (`-`) while `_p<N>` is reserved for the passage
+ * suffix so no session slug (such as `010626-p42`) can collide with a passage key.
  */
 export function formatBibtexKey(slug: string, passageNumber?: number | null): string {
   const cleanSlug = assertValidSlug(slug);
   const validPassage = normalizePassageNumber(passageNumber);
   const sanitized = cleanSlug
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'session';
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'session';
   return validPassage === null
     ? `sethtapes_${sanitized}`
     : `sethtapes_${sanitized}_p${validPassage}`;
@@ -243,8 +245,8 @@ export function formatBibtexKey(slug: string, passageNumber?: number | null): st
 
 const BIBTEX_ESCAPE_MAP: Record<string, string> = {
   '\\': '\\textbackslash{}',
-  '{': '\\{',
-  '}': '\\}',
+  '{': '\\textbraceleft{}',
+  '}': '\\textbraceright{}',
   '&': '\\&',
   '%': '\\%',
   '$': '\\$',

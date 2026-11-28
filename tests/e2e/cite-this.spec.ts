@@ -118,10 +118,20 @@ test('session Cite controls in catalog record and sticky nav open lazily, copy C
   expect(chicagoPreview.toLowerCase()).not.toContain('inferred');
   expect(chicagoPreview).not.toContain('Blue locomotive and wooden bridge');
 
-  // Copy Chicago citation via keyboard
+  // Live status region is exposed in the accessibility tree (not display:none) even before first copy
+  const liveStatus = dialog.locator('[role="status"]');
+  await expect(liveStatus).toHaveCount(1);
+  expect(await liveStatus.evaluate(el => getComputedStyle(el).display)).not.toBe('none');
+
+  // Keyboard Tab from active format tab stops on the focusable citation preview tabpanel before Copy
+  await chicagoTab.focus();
+  await page.keyboard.press('Tab');
+  await expect(chicagoPanel).toBeFocused();
+  await page.keyboard.press('Tab');
   const copyChicago = chicagoPanel.getByRole('button', { name: 'Copy Chicago citation' });
-  await copyChicago.focus();
+  await expect(copyChicago).toBeFocused();
   await page.keyboard.press('Enter');
+  await expect(liveStatus).toHaveText('Copied Chicago citation for session 010815.');
   await expect(dialog.locator('.cite-live-status')).toHaveText('Copied Chicago citation for session 010815.');
   await expect(chicagoPanel.getByRole('button', { name: 'Copied Chicago citation' })).toBeVisible();
 
@@ -263,7 +273,7 @@ test('passage Cite button copies #pN citations via keyboard across archived rese
     expect(text.toLowerCase()).not.toContain('inferred');
     expect(text).not.toContain('Yellow submarine in the courtyard');
   }
-  expect(tbBibtex).toContain('@misc{sethtapes_020110_tb_p2,');
+  expect(tbBibtex).toContain('@misc{sethtapes_020110-tb_p2,');
   await page.keyboard.press('Escape');
   await expect(tbP2Cite).toBeFocused();
 
@@ -296,7 +306,7 @@ test('passage Cite button copies #pN citations via keyboard across archived rese
   }
   expect(localChicago).not.toContain('recorded ');
   expect(localApa).toContain('(n.d.)');
-  expect(localBibtex).toContain('@misc{sethtapes_020604_local_p2,');
+  expect(localBibtex).toContain('@misc{sethtapes_020604-local_p2,');
   expect(localBibtex).not.toContain('year         =');
   await page.keyboard.press('Escape');
   await expect(localP2Cite).toBeFocused();
@@ -482,4 +492,117 @@ test('/about renders How to cite section using the shared citation module with k
 
   expect(consoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
+});
+
+test('overlapping clipboard writes serialize so the latest requested format wins, re-copy clears stale Copied state, and pending failures do not steal moved focus', async ({ page }) => {
+  await page.addInitScript(() => {
+    interface PendingWrite {
+      text: string;
+      resolve: () => void;
+      reject: (error: Error) => void;
+    }
+    const win = window as unknown as {
+      __clipboardValue: string;
+      __clipboardHistory: string[];
+      __pendingWrites: PendingWrite[];
+      __deferNextWrite: boolean;
+    };
+    win.__clipboardValue = '';
+    win.__clipboardHistory = [];
+    win.__pendingWrites = [];
+    win.__deferNextWrite = false;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          if (win.__deferNextWrite) {
+            win.__deferNextWrite = false;
+            return new Promise<void>((resolve, reject) => {
+              win.__pendingWrites.push({
+                text,
+                resolve: () => {
+                  win.__clipboardValue = text;
+                  win.__clipboardHistory.push(text);
+                  resolve();
+                },
+                reject: (err: Error) => reject(err),
+              });
+            });
+          }
+          win.__clipboardValue = text;
+          win.__clipboardHistory.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+
+  await page.goto('/sessions/010815');
+  await page.locator('dl.catalog-record').getByRole('button', { name: 'Cite this session' }).click();
+  const dialog = page.getByRole('dialog');
+
+  // 1. Overlapping format writes: hold Chicago write pending, switch to APA and copy,
+  //    then settle Chicago first -> serialized queue ensures APA writes LAST to clipboard.
+  const chicagoText = await dialog.getByRole('tabpanel', { name: 'Chicago' }).locator('.cite-preview-text').innerText();
+  await page.evaluate(() => { (window as unknown as { __deferNextWrite: boolean }).__deferNextWrite = true; });
+  await dialog.getByRole('tabpanel', { name: 'Chicago' }).getByRole('button', { name: 'Copy Chicago citation' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __pendingWrites: unknown[] }).__pendingWrites.length)).toBe(1);
+
+  await dialog.getByRole('tab', { name: 'APA' }).click();
+  const apaPanel = dialog.getByRole('tabpanel', { name: 'APA' });
+  const apaText = await apaPanel.locator('.cite-preview-text').innerText();
+  await apaPanel.getByRole('button', { name: 'Copy APA citation' }).click();
+
+  // Resolve the held Chicago write now; APA should execute after it and end up in the clipboard
+  await page.evaluate(() => {
+    const writes = (window as unknown as { __pendingWrites: Array<{ resolve: () => void }> }).__pendingWrites;
+    writes.shift()?.resolve();
+  });
+
+  await expect(dialog.locator('[role="status"]')).toHaveText('Copied APA citation for session 010815.');
+  const finalClipboard = await page.evaluate(() => ({
+    value: (window as unknown as { __clipboardValue: string }).__clipboardValue,
+    history: (window as unknown as { __clipboardHistory: string[] }).__clipboardHistory,
+  }));
+  expect(finalClipboard.value).toBe(apaText);
+  expect(finalClipboard.history).toEqual([chicagoText, apaText]);
+
+  // 2. Clicking Copy again while "Copied APA citation" is active clears Copied immediately while pending
+  await expect(apaPanel.getByRole('button', { name: 'Copied APA citation' })).toBeVisible();
+  await page.evaluate(() => { (window as unknown as { __deferNextWrite: boolean }).__deferNextWrite = true; });
+  await apaPanel.getByRole('button', { name: 'Copied APA citation' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __pendingWrites: unknown[] }).__pendingWrites.length)).toBe(1);
+  await expect(apaPanel.getByRole('button', { name: 'Copy APA citation' })).toBeVisible();
+  await page.evaluate(() => {
+    const writes = (window as unknown as { __pendingWrites: Array<{ resolve: () => void }> }).__pendingWrites;
+    writes.shift()?.resolve();
+  });
+  await expect(apaPanel.getByRole('button', { name: 'Copied APA citation' })).toBeVisible();
+
+  await page.keyboard.press('Escape');
+
+  // 3. On /about, if the reader moves focus away while Copy is pending and the write fails,
+  //    the manual fallback appears visibly without stealing focus back to the textarea.
+  await page.goto('/about#how-to-cite');
+  const section = page.locator('#how-to-cite');
+  const copyAboutBtn = section.getByRole('tabpanel', { name: 'Chicago' }).getByRole('button', { name: 'Copy Chicago citation' });
+  const researchLink = section.getByRole('link', { name: 'Research & context' });
+
+  await page.evaluate(() => { (window as unknown as { __deferNextWrite: boolean }).__deferNextWrite = true; });
+  await copyAboutBtn.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __pendingWrites: unknown[] }).__pendingWrites.length)).toBe(1);
+
+  await researchLink.focus();
+  await expect(researchLink).toBeFocused();
+
+  await page.evaluate(() => {
+    const writes = (window as unknown as { __pendingWrites: Array<{ reject: (err: Error) => void }> }).__pendingWrites;
+    writes.shift()?.reject(new Error('Clipboard denied'));
+  });
+
+  const fallbackTextarea = section.getByRole('textbox', { name: 'Chicago citation (select and copy)' });
+  await expect(fallbackTextarea).toBeVisible();
+  await expect(researchLink).toBeFocused();
+  await expect(fallbackTextarea).not.toBeFocused();
 });
