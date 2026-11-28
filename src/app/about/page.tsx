@@ -38,30 +38,35 @@ export default async function AboutPage() {
     <div className="archive-shell">
       <ArchiveAnalytics ready section="about" sessionId={null} documentId={null} />
       <RouteHeader activeSection="about" />
-      <main id="main" tabIndex={-1} className="reading-layout">
-        <article className="about-page reading-column">
-          <header className="detail-header">
-            <p className="eyebrow">Collection guide &amp; methods</p>
-            <h1>About &amp; methods</h1>
-            <p className="section-intro">
-              {ARCHIVE_NAME} is a childhood-language archive from the Peters/Wilson corpus — an unlisted special-collections reader for family members and researchers alike. This page explains where every transcript, guide, age, and recording comes from, and how to verify and cite what you read.
-            </p>
-          </header>
+      <main id="main" tabIndex={-1}>
+        <article className="about-page reading-layout">
+          <div className="reading-header">
+            <header className="detail-header">
+              <p className="eyebrow">Collection guide &amp; methods</p>
+              <h1>About &amp; methods</h1>
+              <p className="section-intro">
+                How {ARCHIVE_NAME} organizes the Peters/Wilson childhood-language corpus, where each transcript, guide, age, and recording comes from, and how to verify and cite what you read.
+              </p>
+            </header>
+          </div>
 
-          <nav className="about-toc" aria-label="On this page">
-            <p className="eyebrow">On this page</p>
-            <ul>
-              <li><a href="#transcript-origins">Transcript origins</a></li>
-              <li><a href="#ai-guides">AI-written guides</a></li>
-              <li><a href="#inferred-ages">Inferred ages and dates</a></li>
-              <li><a href="#timestamps">Approximate timestamps</a></li>
-              <li><a href="#access-and-analytics">Unlisted access and analytics</a></li>
-              <li><a href="#search-privacy">Search privacy</a></li>
-              <li><a href="#how-to-cite">How to cite</a></li>
-            </ul>
-          </nav>
+          <div className="reading-sidebar">
+            <nav className="reading-toc" aria-labelledby="about-toc-heading">
+              <p id="about-toc-heading" className="reading-sidebar-heading">On this page</p>
+              <ul className="reading-toc-list">
+                <li className="reading-toc-item"><a href="#transcript-origins">Transcript origins</a></li>
+                <li className="reading-toc-item"><a href="#ai-guides">AI-written guides</a></li>
+                <li className="reading-toc-item"><a href="#inferred-ages">Inferred ages and dates</a></li>
+                <li className="reading-toc-item"><a href="#timestamps">Approximate timestamps</a></li>
+                <li className="reading-toc-item"><a href="#access-and-analytics">Unlisted access and analytics</a></li>
+                <li className="reading-toc-item"><a href="#search-privacy">Search privacy</a></li>
+                <li className="reading-toc-item"><a href="#how-to-cite">How to cite</a></li>
+              </ul>
+            </nav>
+          </div>
 
-          <section className="about-section" aria-labelledby="transcript-origins">
+          <div className="reading-column">
+            <section className="about-section" aria-labelledby="transcript-origins">
             <h2 id="transcript-origins">What is in the collection &amp; the three transcript origins</h2>
             <p>
               This collection currently holds <strong>{plural(stats.sessions, 'session', 'sessions')}</strong> paired with{' '}
@@ -199,6 +204,7 @@ export default async function AboutPage() {
           </section>
 
           <HowToCiteSection origin={requestOrigin} accessDate={accessDate} />
+          </div>
         </article>
       </main>
       <SiteFooter />

@@ -122,9 +122,13 @@ test('/research renders per-request SSR reading list with collapsed cards, priva
     },
   ];
 
+  await expect(page.locator('.eyebrow')).toHaveCount(1);
+  const researchIntro = (await page.locator('.research-page .section-intro').innerText()).trim();
+  expect(researchIntro.split(/(?<=[.!?])\s+/).filter(Boolean)).toHaveLength(1);
+
   for (const [index, expected] of expectedCards.entries()) {
     const card = cards.nth(index);
-    await expect(card.locator('.eyebrow')).toHaveText(expected.category);
+    await expect(card.locator('.research-document-category')).toHaveText(expected.category);
     const titleLink = card.locator('h2 a');
     await expect(titleLink).toHaveText(expected.title);
     await expect(titleLink).toHaveAttribute('href', `/research/${expected.id}`);
@@ -385,4 +389,283 @@ test('build-output check proves /research, /research/[doc], and /about are dynam
   expect(parsed.filesScanned).toBeGreaterThan(0);
   expect(parsed.phrasesChecked).toBeGreaterThanOrEqual(15);
   expect(parsed.leaks).toEqual([]);
+});
+
+test('reading layout puts sidebar beside 68ch column on desktop and below title on narrow screens for research documents and About, with On this page links, scroll-margin-top, Share action, copy trim, and clean print layout', async ({ page, baseURL }) => {
+  await page.addInitScript(() => {
+    interface PendingWrite {
+      text: string;
+      resolve: () => void;
+      reject: (error: Error) => void;
+    }
+    const win = window as unknown as {
+      __copiedUrls: string[];
+      __failClipboard: boolean;
+      __deferNextWrite: boolean;
+      __pendingWrites: PendingWrite[];
+    };
+    win.__copiedUrls = [];
+    win.__failClipboard = false;
+    win.__deferNextWrite = false;
+    win.__pendingWrites = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          if (win.__deferNextWrite) {
+            win.__deferNextWrite = false;
+            return new Promise<void>((resolve, reject) => {
+              win.__pendingWrites.push({
+                text,
+                resolve: () => {
+                  win.__copiedUrls.push(text);
+                  resolve();
+                },
+                reject: (err: Error) => reject(err),
+              });
+            });
+          }
+          if (win.__failClipboard) {
+            return Promise.reject(new Error('Clipboard denied'));
+          }
+          win.__copiedUrls.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+
+  // 1. Research document with headings: /research/fixture-provenance-guide
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/research/fixture-provenance-guide');
+
+  // Strictly one eyebrow at top of page; single-sentence intro
+  await expect(page.locator('.eyebrow')).toHaveCount(1);
+  const docIntro = (await page.locator('.reading-header .section-intro').innerText()).trim();
+  expect(docIntro.split(/(?<=[.!?])\s+/).filter(Boolean)).toHaveLength(1);
+
+  // Desktop geometry: reading-column <= 68ch, sidebar sits to the right, left edge aligns with header brand
+  const docDesktopGeo = await page.evaluate(() => {
+    const brand = document.querySelector('.brand-button')!.getBoundingClientRect();
+    const h1 = document.querySelector('article.document-detail h1')!.getBoundingClientRect();
+    const column = document.querySelector('article.document-detail > .reading-column')!.getBoundingClientRect();
+    const sidebar = document.querySelector('article.document-detail > .reading-sidebar')!.getBoundingClientRect();
+    return {
+      brandLeft: brand.left,
+      h1Left: h1.left,
+      columnLeft: column.left,
+      columnRight: column.right,
+      columnWidth: column.width,
+      sidebarLeft: sidebar.left,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(Math.abs(docDesktopGeo.h1Left - docDesktopGeo.brandLeft)).toBeLessThanOrEqual(1);
+  expect(Math.abs(docDesktopGeo.columnLeft - docDesktopGeo.brandLeft)).toBeLessThanOrEqual(1);
+  expect(docDesktopGeo.columnWidth).toBeLessThanOrEqual(760);
+  expect(docDesktopGeo.sidebarLeft).toBeGreaterThanOrEqual(docDesktopGeo.columnRight - 1);
+  expect(docDesktopGeo.overflow).toBeLessThanOrEqual(0);
+
+  // Breakpoint boundary (1001px): zero horizontal overflow
+  await page.setViewportSize({ width: 1001, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  // Sidebar holds labelled "On this page" nav with real <ul> of links matching rendered heading IDs
+  const docTocNav = page.getByRole('navigation', { name: 'On this page' });
+  await expect(docTocNav).toBeVisible();
+  const docTocLinks = docTocNav.locator('ul li a');
+  await expect(docTocLinks).toHaveText(['Transcript layers', 'Editorial markers']);
+  await expect(docTocLinks.nth(0)).toHaveAttribute('href', '#transcript-layers');
+  await expect(docTocLinks.nth(1)).toHaveAttribute('href', '#editorial-markers');
+  await expect(page.locator('#transcript-layers')).toHaveText('Transcript layers');
+  await expect(page.locator('#editorial-markers')).toHaveText('Editorial markers');
+
+  // Clicking an "On this page" link jumps cleanly to the target without clipping under any sticky element
+  await docTocLinks.nth(1).click();
+  await expect(page).toHaveURL(/\/research\/fixture-provenance-guide#editorial-markers$/);
+  const targetMetrics = await page.locator('#editorial-markers').evaluate(el => ({
+    top: el.getBoundingClientRect().top,
+    scrollMarginTop: Number.parseFloat(getComputedStyle(el).scrollMarginTop),
+  }));
+  expect(targetMetrics.top).toBeGreaterThanOrEqual(0);
+  expect(targetMetrics.scrollMarginTop).toBeGreaterThanOrEqual(24);
+
+  // Downloads and Share live inside the sidebar
+  const docSidebar = page.locator('article.document-detail > .reading-sidebar');
+  await expect(docSidebar.locator('.document-downloads a')).toHaveAttribute('href', '/api/assets/fixture-doc-provenance-md');
+
+  const shareButton = docSidebar.getByRole('button', { name: 'Share' });
+  const shareLiveStatus = docSidebar.locator('.document-share [role="status"]');
+  await expect(shareButton).toBeVisible();
+  await expect(shareLiveStatus).toHaveCount(1);
+  await shareButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(docSidebar.getByRole('button', { name: 'Link copied' })).toBeVisible();
+  await expect(shareLiveStatus).toContainText('Link copied');
+  const copied = await page.evaluate(() => (window as unknown as { __copiedUrls: string[] }).__copiedUrls);
+  expect(copied).toEqual([`${baseURL}/research/fixture-provenance-guide`]);
+
+  // Share clipboard failure renders manual fallback focused with exact URL; Dismiss restores focus
+  await page.evaluate(() => { (window as unknown as { __failClipboard: boolean }).__failClipboard = true; });
+  const shareTriggerAgain = docSidebar.locator('.document-share-button');
+  await shareTriggerAgain.focus();
+  await page.keyboard.press('Enter');
+  const manualInput = docSidebar.getByRole('textbox', { name: 'Copy this document link' });
+  await expect(manualInput).toBeVisible();
+  await expect(manualInput).toBeFocused();
+  await expect(manualInput).toHaveValue(`${baseURL}/research/fixture-provenance-guide`);
+  await expect(shareLiveStatus).toContainText('Could not copy automatically');
+  await docSidebar.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(manualInput).toHaveCount(0);
+  await expect(shareTriggerAgain).toBeFocused();
+
+  // Pending clipboard failure does not steal focus if reader moved focus away
+  await page.evaluate(() => {
+    const win = window as unknown as { __failClipboard: boolean; __deferNextWrite: boolean };
+    win.__failClipboard = false;
+    win.__deferNextWrite = true;
+  });
+  await shareTriggerAgain.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __pendingWrites: unknown[] }).__pendingWrites.length)).toBe(1);
+  const backLink = page.locator('a.back-button');
+  await backLink.focus();
+  await expect(backLink).toBeFocused();
+  await page.evaluate(() => {
+    const writes = (window as unknown as { __pendingWrites: Array<{ reject: (err: Error) => void }> }).__pendingWrites;
+    writes.shift()?.reject(new Error('Clipboard denied'));
+  });
+  await expect(manualInput).toBeVisible();
+  await expect(backLink).toBeFocused();
+  await expect(manualInput).not.toBeFocused();
+
+  // Narrow screens (390px and 768px): sidebar moves below the title and above the reading body
+  for (const width of [390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    const narrowGeo = await page.evaluate(() => {
+      const header = document.querySelector('article.document-detail > .reading-header')!.getBoundingClientRect();
+      const sidebar = document.querySelector('article.document-detail > .reading-sidebar')!.getBoundingClientRect();
+      const column = document.querySelector('article.document-detail > .reading-column')!.getBoundingClientRect();
+      return {
+        headerBottom: header.bottom,
+        sidebarTop: sidebar.top,
+        sidebarBottom: sidebar.bottom,
+        columnTop: column.top,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    expect(narrowGeo.sidebarTop, `${width}px doc: sidebar below title`).toBeGreaterThanOrEqual(narrowGeo.headerBottom - 1);
+    expect(narrowGeo.columnTop, `${width}px doc: body below sidebar`).toBeGreaterThanOrEqual(narrowGeo.sidebarBottom - 1);
+    expect(narrowGeo.overflow, `${width}px doc: zero overflow`).toBeLessThanOrEqual(0);
+  }
+
+  // Print media on research document: reading-layout is display:block and sidebar chrome is hidden
+  await page.setViewportSize({ width: 691, height: 960 });
+  await page.emulateMedia({ media: 'print' });
+  const docPrint = await page.evaluate(() => {
+    const article = document.querySelector('article.document-detail')!;
+    const sidebar = document.querySelector('article.document-detail > .reading-sidebar')!;
+    const column = document.querySelector('article.document-detail > .reading-column')!;
+    return {
+      layoutDisplay: getComputedStyle(article).display,
+      sidebarDisplay: getComputedStyle(sidebar).display,
+      columnWidth: column.getBoundingClientRect().width,
+      clientWidth: document.documentElement.clientWidth,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(docPrint.layoutDisplay).toBe('block');
+  expect(docPrint.sidebarDisplay).toBe('none');
+  expect(docPrint.columnWidth).toBeGreaterThanOrEqual(docPrint.clientWidth - 2);
+  expect(docPrint.overflow).toBeLessThanOrEqual(0);
+  await page.emulateMedia({ media: 'screen' });
+
+  // 2. Research document with zero section headings (/research/fixture-research-notes): omits empty On this page nav, keeps Downloads & Share
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/research/fixture-research-notes');
+  await expect(page.getByRole('navigation', { name: 'On this page' })).toHaveCount(0);
+  await expect(page.locator('article.document-detail > .reading-sidebar .document-downloads a')).toHaveCount(1);
+  await expect(page.locator('article.document-detail > .reading-sidebar').getByRole('button', { name: 'Share' })).toBeVisible();
+
+  // 3. About & methods (/about): reading layout, single eyebrow, single-sentence intro, sidebar On this page, anchors unobstructed
+  await page.goto('/about');
+  await expect(page.locator('.eyebrow')).toHaveCount(1);
+  const aboutIntro = (await page.locator('.reading-header .section-intro').innerText()).trim();
+  expect(aboutIntro.split(/(?<=[.!?])\s+/).filter(Boolean)).toHaveLength(1);
+
+  const aboutDesktopGeo = await page.evaluate(() => {
+    const brand = document.querySelector('.brand-button')!.getBoundingClientRect();
+    const h1 = document.querySelector('article.about-page h1')!.getBoundingClientRect();
+    const column = document.querySelector('article.about-page > .reading-column')!.getBoundingClientRect();
+    const sidebar = document.querySelector('article.about-page > .reading-sidebar')!.getBoundingClientRect();
+    return {
+      brandLeft: brand.left,
+      h1Left: h1.left,
+      columnWidth: column.width,
+      columnRight: column.right,
+      sidebarLeft: sidebar.left,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(Math.abs(aboutDesktopGeo.h1Left - aboutDesktopGeo.brandLeft)).toBeLessThanOrEqual(1);
+  expect(aboutDesktopGeo.columnWidth).toBeLessThanOrEqual(760);
+  expect(aboutDesktopGeo.sidebarLeft).toBeGreaterThanOrEqual(aboutDesktopGeo.columnRight - 1);
+  expect(aboutDesktopGeo.overflow).toBeLessThanOrEqual(0);
+
+  const aboutTocNav = page.locator('article.about-page > .reading-sidebar').getByRole('navigation', { name: 'On this page' });
+  await expect(aboutTocNav).toBeVisible();
+  await expect(aboutTocNav.locator('ul li a')).toHaveCount(7);
+
+  // Clicking #inferred-ages and #how-to-cite scrolls cleanly into view with scroll-margin-top
+  for (const anchor of ['#inferred-ages', '#how-to-cite']) {
+    await aboutTocNav.locator(`a[href="${anchor}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/about${anchor}$`));
+    const metrics = await page.locator(anchor).evaluate(el => ({
+      top: el.getBoundingClientRect().top,
+      scrollMarginTop: Number.parseFloat(getComputedStyle(el).scrollMarginTop),
+    }));
+    expect(metrics.top, `/about${anchor} should not be hidden above viewport`).toBeGreaterThanOrEqual(0);
+    expect(metrics.scrollMarginTop, `/about${anchor} scroll-margin-top`).toBeGreaterThanOrEqual(24);
+  }
+
+  // Narrow viewport (390px) on /about: sidebar sits below title and above first section with zero overflow
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/about');
+  const aboutNarrowGeo = await page.evaluate(() => {
+    const header = document.querySelector('article.about-page > .reading-header')!.getBoundingClientRect();
+    const sidebar = document.querySelector('article.about-page > .reading-sidebar')!.getBoundingClientRect();
+    const column = document.querySelector('article.about-page > .reading-column')!.getBoundingClientRect();
+    return {
+      headerBottom: header.bottom,
+      sidebarTop: sidebar.top,
+      sidebarBottom: sidebar.bottom,
+      columnTop: column.top,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(aboutNarrowGeo.sidebarTop).toBeGreaterThanOrEqual(aboutNarrowGeo.headerBottom - 1);
+  expect(aboutNarrowGeo.columnTop).toBeGreaterThanOrEqual(aboutNarrowGeo.sidebarBottom - 1);
+  expect(aboutNarrowGeo.overflow).toBeLessThanOrEqual(0);
+
+  // Print media on /about: reading-layout is display:block and sidebar is hidden
+  await page.setViewportSize({ width: 691, height: 960 });
+  await page.emulateMedia({ media: 'print' });
+  const aboutPrint = await page.evaluate(() => {
+    const article = document.querySelector('article.about-page')!;
+    const sidebar = document.querySelector('article.about-page > .reading-sidebar')!;
+    const column = document.querySelector('article.about-page > .reading-column')!;
+    return {
+      layoutDisplay: getComputedStyle(article).display,
+      sidebarDisplay: getComputedStyle(sidebar).display,
+      columnWidth: column.getBoundingClientRect().width,
+      clientWidth: document.documentElement.clientWidth,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(aboutPrint.layoutDisplay).toBe('block');
+  expect(aboutPrint.sidebarDisplay).toBe('none');
+  expect(aboutPrint.columnWidth).toBeGreaterThanOrEqual(aboutPrint.clientWidth - 2);
+  expect(aboutPrint.overflow).toBeLessThanOrEqual(0);
+  await page.emulateMedia({ media: 'screen' });
 });

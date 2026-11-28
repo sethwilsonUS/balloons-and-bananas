@@ -19,7 +19,7 @@ export default function ResearchDocumentCard({
 
   return (
     <article className="research-document" aria-labelledby={headingId}>
-      <p className="eyebrow">{formatDocumentCategory(document.category)}</p>
+      <p className="research-document-category small muted">{formatDocumentCategory(document.category)}</p>
       <h2 id={headingId}>
         <a
           href={docHref}
@@ -40,7 +40,7 @@ export default function ResearchDocumentCard({
               key={asset.id}
               aria-describedby={headingId}
               href={`/api/assets/${encodeURIComponent(asset.id)}`}
-              className="button secondary"
+              className="text-link"
               download={asset.name}
               referrerPolicy="no-referrer"
               onClick={() => trackArchiveEvent('research_open', { documentId: document.id, action: 'download', assetId: asset.id })}

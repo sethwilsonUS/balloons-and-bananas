@@ -2,7 +2,6 @@ import { cache } from 'react';
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { connection } from 'next/server';
-import { ArrowLeft } from 'lucide-react';
 import { archive } from '@/lib/archive';
 import {
   extractReferencedSessionSlugs,
@@ -64,26 +63,12 @@ export default async function ResearchDocumentPage({
   return (
     <div className="archive-shell">
       <RouteHeader activeSection="research" />
-      <main id="main" tabIndex={-1} className="reading-layout">
-        <article className="document-detail document-page reading-column">
-          <a className="text-link back-button" href="/research">
-            <ArrowLeft size={17} aria-hidden="true" />
-            Back to research &amp; context
-          </a>
-          <header className="detail-header">
-            <p className="eyebrow">{formatDocumentCategory(document.category)}</p>
-            <h1>{document.title}</h1>
-            <p className="section-intro">{document.description}</p>
-          </header>
-          <ResearchDocumentClient document={document} sessionSlugs={sessionSlugs} />
-          <nav className="document-footer-nav" aria-label="Related archive pages">
-            <a className="text-link" href="/research">
-              <ArrowLeft size={16} aria-hidden="true" />
-              All research &amp; context documents
-            </a>
-            <a className="text-link" href="/about">About &amp; methods</a>
-          </nav>
-        </article>
+      <main id="main" tabIndex={-1}>
+        <ResearchDocumentClient
+          document={document}
+          categoryLabel={formatDocumentCategory(document.category)}
+          sessionSlugs={sessionSlugs}
+        />
       </main>
       <SiteFooter />
     </div>

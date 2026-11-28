@@ -43,7 +43,7 @@ export default async function ResearchPage() {
               <BookOpen size={30} strokeWidth={1.3} aria-hidden="true" />
             </div>
             <p className="section-intro">
-              Background on the dissertation, the archive, and how to read the material. Document descriptions identify the source; new summaries remain distinct from the original research. For an overview of transcript origins, inferred ages, and site methods, see <a href="/about">About &amp; methods</a>.
+              Archival notes, provenance guides, and background scholarship for this collection; see <a href="/about">About &amp; methods</a> for transcript origins, inferred ages, and site methods.
             </p>
           </header>
           <div className="research-documents">

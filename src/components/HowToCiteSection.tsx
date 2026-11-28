@@ -86,7 +86,6 @@ export default function HowToCiteSection({
 
   return (
     <section id="how-to-cite" className="how-to-cite-section" aria-labelledby="how-to-cite-heading">
-      <p className="eyebrow">Citing the collection</p>
       <Heading id="how-to-cite-heading">How to cite</Heading>
       <p>
         This collection draws on the <strong>Peters/Wilson corpus in CHILDES</strong>, part of

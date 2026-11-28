@@ -60,9 +60,11 @@ test('research documents start collapsed, display each title once with category,
     },
   ];
 
+  await expect(page.locator('.eyebrow')).toHaveCount(1);
+
   for (const [index, expected] of expectedCards.entries()) {
     const card = cards.nth(index);
-    await expect(card.locator('.eyebrow')).toHaveText(expected.category);
+    await expect(card.locator('.research-document-category')).toHaveText(expected.category);
     await expect(card.locator('h2')).toHaveText(expected.title);
     await expect(card).toContainText(expected.description);
     await expect(card.locator('.document-downloads a')).toContainText(expected.downloadLabel);
