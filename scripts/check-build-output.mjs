@@ -3,10 +3,11 @@
  * Verify that `npm run build` never embeds archive text anywhere in `.next/`.
  *
  * Extracts distinctive synthetic phrases from `tests/fixtures/archive.json`,
- * confirms `.next/` contains the built dynamic routes (`/sessions/[id]`,
- * `/search`, `/research`, `/research/[doc]`, `/about`) without prerendered HTML,
- * and scans every file under `.next/` to prove none of those phrases appear in
- * server output, static assets, manifests, or source maps.
+ * confirms `.next/` contains the built dynamic routes (`/`, `/sessions`,
+ * `/sessions/[id]`, `/search`, `/research`, `/research/[doc]`, `/about`)
+ * without prerendered HTML, and scans every file under `.next/` to prove none
+ * of those phrases appear in server output, static assets, manifests, or
+ * source maps.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -37,23 +38,6 @@ async function collectFiles(dir) {
   return files;
 }
 
-async function findPrerenderedHtmlForRoute(routeName) {
-  const appServerDir = path.join(nextDir, 'server', 'app');
-  const found = [];
-  const directHtml = path.join(appServerDir, `${routeName}.html`);
-  if (await exists(directHtml)) {
-    found.push(path.relative(process.cwd(), directHtml));
-  }
-  const routeDir = path.join(appServerDir, routeName);
-  if (await exists(routeDir)) {
-    const nested = (await collectFiles(routeDir))
-      .filter(filePath => filePath.toLowerCase().endsWith('.html'))
-      .map(filePath => path.relative(process.cwd(), filePath));
-    found.push(...nested);
-  }
-  return found;
-}
-
 async function main() {
   if (!(await exists(path.join(nextDir, 'BUILD_ID')))) {
     throw new Error('Missing .next/BUILD_ID — run `npm run build` before checking build output.');
@@ -62,6 +46,8 @@ async function main() {
   const appPathsManifestPath = path.join(nextDir, 'server', 'app-paths-manifest.json');
   const appPathsManifest = JSON.parse(await readFile(appPathsManifestPath, 'utf8'));
   const requiredDynamicRoutes = [
+    '/page',
+    '/sessions/page',
     '/sessions/[id]/page',
     '/search/page',
     '/research/page',
@@ -74,22 +60,52 @@ async function main() {
     }
   }
 
-  const prerenderedSessionHtmlFiles = await findPrerenderedHtmlForRoute('sessions');
-  const prerenderedSearchHtmlFiles = await findPrerenderedHtmlForRoute('search');
-  const prerenderedResearchHtmlFiles = await findPrerenderedHtmlForRoute('research');
-  const prerenderedAboutHtmlFiles = await findPrerenderedHtmlForRoute('about');
+  const appServerDir = path.join(nextDir, 'server', 'app');
+  const allServerAppHtmlFiles = (await exists(appServerDir))
+    ? (await collectFiles(appServerDir))
+      .filter(filePath => filePath.toLowerCase().endsWith('.html'))
+      .map(filePath => path.relative(appServerDir, filePath).split(path.sep).join('/'))
+    : [];
+
+  const prerenderedRootHtmlFiles = allServerAppHtmlFiles.filter(
+    rel => rel === 'index.html' || rel === 'page.html',
+  );
+  const prerenderedSessionsBrowseHtmlFiles = allServerAppHtmlFiles.filter(
+    rel => rel === 'sessions.html' || rel === 'sessions/index.html' || rel === 'sessions/page.html',
+  );
+  const prerenderedSessionHtmlFiles = allServerAppHtmlFiles.filter(
+    rel =>
+      rel.startsWith('sessions/')
+      && rel !== 'sessions/index.html'
+      && rel !== 'sessions/page.html',
+  );
+  const prerenderedSearchHtmlFiles = allServerAppHtmlFiles.filter(
+    rel => rel === 'search.html' || rel.startsWith('search/'),
+  );
+  const prerenderedResearchHtmlFiles = allServerAppHtmlFiles.filter(
+    rel => rel === 'research.html' || rel.startsWith('research/'),
+  );
+  const prerenderedAboutHtmlFiles = allServerAppHtmlFiles.filter(
+    rel => rel === 'about.html' || rel.startsWith('about/'),
+  );
   const prerenderedDynamicHtmlFiles = [
+    ...prerenderedRootHtmlFiles,
+    ...prerenderedSessionsBrowseHtmlFiles,
     ...prerenderedSessionHtmlFiles,
     ...prerenderedSearchHtmlFiles,
     ...prerenderedResearchHtmlFiles,
     ...prerenderedAboutHtmlFiles,
   ];
+
+  const prerenderedRootHtmlPresent = prerenderedRootHtmlFiles.length > 0;
+  const prerenderedSessionsBrowseHtmlPresent = prerenderedSessionsBrowseHtmlFiles.length > 0;
   const prerenderedSessionHtmlPresent = prerenderedSessionHtmlFiles.length > 0;
   const prerenderedSearchHtmlPresent = prerenderedSearchHtmlFiles.length > 0;
   const prerenderedDynamicHtmlPresent = prerenderedDynamicHtmlFiles.length > 0;
+
   if (prerenderedDynamicHtmlPresent) {
     throw new Error(
-      `Dynamic archive routes must never be prerendered to static HTML (found: ${prerenderedDynamicHtmlFiles.join(', ')}).`,
+      `Dynamic archive routes must never be prerendered to static HTML (found: ${prerenderedDynamicHtmlFiles.map(rel => path.join('.next/server/app', rel)).join(', ')}).`,
     );
   }
 
@@ -146,6 +162,8 @@ async function main() {
     ok: true,
     routeBuilt: '/sessions/[id]/page',
     routesBuilt: requiredDynamicRoutes,
+    prerenderedRootHtmlPresent,
+    prerenderedSessionsBrowseHtmlPresent,
     prerenderedSessionHtmlPresent,
     prerenderedSearchHtmlPresent,
     prerenderedDynamicHtmlPresent,

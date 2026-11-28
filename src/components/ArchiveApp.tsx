@@ -6,6 +6,7 @@ import type { Catalog, SearchResponse, SearchSort, TranscriptOrigin } from '../l
 import { trackArchiveEvent } from '../lib/analytics';
 import { isLinguisticMarkerId, isLinguisticSpeaker, type LinguisticMarkerId, type LinguisticSpeaker } from '../lib/linguistic-markers';
 import { adaptSearchForView, formatSearchStatus, isSearchSort, pageSizeForView, type SearchBusyKind, type SessionView } from '../lib/results-view';
+import { VIEW_STORAGE_KEY } from '../lib/sessions-browse';
 import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle } from '../lib/site';
 import ArchiveMarkdown from './ArchiveMarkdown';
 import ArchiveAnalytics from './ArchiveAnalytics';
@@ -19,8 +20,6 @@ import { request, transcriptOriginLabels } from './api';
 type Section = 'overview' | 'sessions' | 'research';
 type LoadState = 'loading' | 'ready' | 'error';
 type SearchFilters = { query: string; topic: string; origin: TranscriptOrigin | ''; marker: LinguisticMarkerId | ''; speaker: LinguisticSpeaker; sort: SearchSort; page: number; linguisticsOpen: boolean; view?: SessionView };
-// Keep the existing localStorage key so returning readers preserve their saved Details/List preference.
-const VIEW_STORAGE_KEY = 'balloons-and-bananas:recordings-view';
 
 function analyticsSection(section: Section): 'overview' | 'recordings' | 'research' {
   // Analytics wire values stay unchanged ('recordings') per the telemetry contract.
@@ -221,12 +220,21 @@ export default function ArchiveApp() {
   }, [restoreFilters]);
 
   // Keep public marker links current, while text/theme filters stay in this
-  // browser's history state rather than being exposed in the URL.
+  // browser's history state rather than being exposed in the URL. Keep the
+  // legacy `section=sessions` selector when no marker param is present so
+  // reloads continue routing back to ArchiveApp with saved history filters.
   useEffect(() => {
     if (loadState !== 'ready' || section !== 'sessions' || sessionId || documentId) return;
     const url = new URL(window.location.href);
-    if (marker) { url.searchParams.set('marker', marker); url.searchParams.set('speaker', speaker); }
-    else { url.searchParams.delete('marker'); url.searchParams.delete('speaker'); }
+    if (marker) {
+      url.searchParams.set('marker', marker);
+      url.searchParams.set('speaker', speaker);
+      url.searchParams.delete('section');
+    } else {
+      url.searchParams.delete('marker');
+      url.searchParams.delete('speaker');
+      url.searchParams.set('section', 'sessions');
+    }
     const archiveFilters: SearchFilters = { query, topic, origin, marker, speaker, sort, page, linguisticsOpen, view: sessionView };
     window.history.replaceState({ ...window.history.state, archiveSection: 'sessions', archiveFilters }, '', url.pathname + url.search + url.hash);
   }, [loadState, documentId, sessionId, linguisticsOpen, marker, origin, page, query, sessionView, section, sort, speaker, topic]);
@@ -326,11 +334,19 @@ export default function ArchiveApp() {
     }
     if (!id && !doc && (next !== section || sessionId || documentId)) trackArchiveEvent('section_view', { section: analyticsSection(next) });
     const url = new URL(window.location.href);
-    url.searchParams.delete('section');
     if (id) url.searchParams.set('entry', id); else url.searchParams.delete('entry');
     if (doc) url.searchParams.set('document', doc); else url.searchParams.delete('document');
-    if (nextMarker && next === 'sessions' && !id && !doc) { url.searchParams.set('marker', nextMarker); url.searchParams.set('speaker', 'any'); }
+    const hasMarkerLink = Boolean(nextMarker && next === 'sessions' && !id && !doc);
+    if (hasMarkerLink) { url.searchParams.set('marker', nextMarker); url.searchParams.set('speaker', 'any'); }
     else { url.searchParams.delete('marker'); url.searchParams.delete('speaker'); }
+    // Keep `?section=sessions|research` when navigating to a legacy section without
+    // entry/document/marker params so reloads still route to ArchiveApp; bare `/`
+    // continues to serve the new functional homepage.
+    if (!id && !doc && !hasMarkerLink && next !== 'overview') {
+      url.searchParams.set('section', next);
+    } else {
+      url.searchParams.delete('section');
+    }
     const targetPassage = id && nextPassage !== null && Number.isSafeInteger(nextPassage) && nextPassage > 0 ? nextPassage : null;
     if (targetPassage !== null) url.searchParams.set('passage', String(targetPassage)); else url.searchParams.delete('passage');
     window.history.pushState({ ...window.history.state, archiveSection: next }, '', url.pathname + url.search + url.hash);
@@ -378,8 +394,15 @@ export default function ArchiveApp() {
   const prepareSessionNavigation = useCallback(() => {
     pendingSearchAnalytics.current?.flush();
     const url = new URL(window.location.href);
-    if (marker) { url.searchParams.set('marker', marker); url.searchParams.set('speaker', speaker); }
-    else { url.searchParams.delete('marker'); url.searchParams.delete('speaker'); }
+    if (marker) {
+      url.searchParams.set('marker', marker);
+      url.searchParams.set('speaker', speaker);
+      url.searchParams.delete('section');
+    } else {
+      url.searchParams.delete('marker');
+      url.searchParams.delete('speaker');
+      url.searchParams.set('section', 'sessions');
+    }
     const archiveFilters: SearchFilters = { query, topic, origin, marker, speaker, sort, page, linguisticsOpen, view: sessionView };
     window.history.replaceState({ ...window.history.state, archiveSection: 'sessions', archiveFilters }, '', url.pathname + url.search + url.hash);
   }, [linguisticsOpen, marker, origin, page, query, sessionView, sort, speaker, topic]);

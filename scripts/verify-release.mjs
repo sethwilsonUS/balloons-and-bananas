@@ -120,13 +120,12 @@ async function main() {
   }
 
   const root = await call('/', 'public_root');
-  await expectStatus(root, 200, 'public_root', false);
-  check(/\bnoindex\b/i.test(root.headers.get('x-robots-tag') || ''), 'public_root:noindex');
-  check(root.headers.get('referrer-policy') === 'no-referrer', 'public_root:no_referrer');
+  await expectStatus(root, 200, 'public_root', true);
   const html = await root.text();
   const markers = ['Seth Wilson', 'An unlisted collection', data.entries[0].title, data.entries[0].sourceName, data.entries[0].overview].filter(Boolean);
   check(markers.every(marker => !html.includes(marker)), 'public_root:no_static_archive');
   check(/<title>\s*The Seth Tapes\s*<\/title>/.test(html), 'public_root:archive_title');
+  check(html.includes('action="/search"') && html.includes('href="/sessions"') && html.includes('href="/research"') && html.includes('href="/about"'), 'public_root:entry_points');
   check((root.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'public_root:frame_protection');
   if (!local) check(!(root.headers.get('content-security-policy') || '').includes("'unsafe-eval'"), 'production:no_unsafe_eval');
   const robots = await call('/robots.txt', 'robots');
@@ -172,9 +171,17 @@ async function main() {
   check(detail.id === representative.id && detail.transcript.length === representative.transcript.length && detail.moments.length === representative.moments.length, 'entry_detail:content_counts_match');
   check(detail.recordings.length === representative.audio.length && detail.recordings.every(recording => recording.available === true), 'entry_detail:audio_available');
 
-  // Verify per-request `/sessions/[id]` SSR pages, private headers, collision slugs, and 404 headers.
+  // Verify per-request `/sessions` browse page and `/sessions/[id]` SSR pages, private headers, collision slugs, and 404 headers.
+  const sessionsBrowseResponse = await call('/sessions', 'sessions_browse');
+  await expectStatus(sessionsBrowseResponse, 200, 'sessions_browse');
+  const sessionsBrowseHtml = await sessionsBrowseResponse.text();
+  check(/<title>\s*Sessions · The Seth Tapes\s*<\/title>/.test(sessionsBrowseHtml), 'sessions_browse:title_format');
+  check(sessionsBrowseHtml.includes('Age 1') && sessionsBrowseHtml.includes('Age 2'), 'sessions_browse:age_groups');
+  check((sessionsBrowseResponse.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'sessions_browse:frame_protection');
+
   const agedSession = data.entries.find(entry => entry.ages.length > 0) || representative;
   const agedSlug = sessionSlug(agedSession);
+  check(sessionsBrowseHtml.includes(`/sessions/${encodeURIComponent(agedSlug)}`), 'sessions_browse:session_link');
   const sessionPageResponse = await call(`/sessions/${encodeURIComponent(agedSlug)}`, 'session_page');
   await expectStatus(sessionPageResponse, 200, 'session_page');
   const sessionPageHtml = await sessionPageResponse.text();
@@ -193,7 +200,7 @@ async function main() {
   await expectStatus(missingSessionResponse, 404, 'unknown_session_page');
   const missingSessionHtml = await missingSessionResponse.text();
   check(/Session not found/i.test(missingSessionHtml), 'unknown_session_page:helpful_message');
-  counts.sessionRoutesVerified = 4;
+  counts.sessionRoutesVerified = 5;
 
   // Verify per-request `/research`, `/research/[doc]` (200 & 404), and `/about` SSR pages and private headers.
   const researchIndexResponse = await call('/research', 'research_page');

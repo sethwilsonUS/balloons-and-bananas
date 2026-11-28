@@ -204,11 +204,11 @@ test('unknown /sessions/[id] returns HTTP 404 with private headers, helpful sear
 });
 
 test('browse and search cards link to /sessions/<slug>, browser Back restores previous results, and browser storage holds no archive or query text', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?section=sessions');
 
-  // Search from overview -> 2 results for "locomotive"
-  await page.getByRole('searchbox', { name: 'Search the archive' }).fill('locomotive');
-  await page.locator('.home-search-form').getByRole('button', { name: 'Search' }).click();
+  // Search from legacy sessions view -> 2 results for "locomotive"
+  await page.getByLabel('Search sessions and transcripts').fill('locomotive');
+  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
 
   await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
   const firstCardLink = page.getByRole('link', { name: /Blue locomotive and wooden bridge/i });
