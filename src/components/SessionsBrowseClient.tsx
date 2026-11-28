@@ -6,10 +6,12 @@ import { trackArchiveEvent } from '../lib/analytics';
 import { shortOverview, type SessionView } from '../lib/results-view';
 import {
   buildSessionsUrl,
+  computeBandBarPercent,
   countSessionsByOrigin,
   filterBrowseSessions,
   formatSessionsBrowseStatus,
-  groupSessionsByAgeYear,
+  groupSessionsByAgeBand,
+  parseAgeBandHash,
   parseOriginParam,
   parseStoredView,
   VALID_TRANSCRIPT_ORIGINS,
@@ -31,10 +33,12 @@ export default function SessionsBrowseClient({
 }) {
   const [origin, setOrigin] = useState<TranscriptOrigin | ''>(initialOrigin);
   const [view, setView] = useState<SessionView>('details');
+  const [activeBandKey, setActiveBandKey] = useState<string>('');
   const userChangedViewRef = useRef(false);
 
   useEffect(() => {
     setOrigin(initialOrigin);
+    setActiveBandKey(parseAgeBandHash(window.location.hash));
   }, [initialOrigin]);
 
   useEffect(() => {
@@ -51,9 +55,17 @@ export default function SessionsBrowseClient({
     const onPopState = () => {
       const params = new URLSearchParams(window.location.search);
       setOrigin(parseOriginParam(params.get('origin') ?? undefined));
+      setActiveBandKey(parseAgeBandHash(window.location.hash));
+    };
+    const onHashChange = () => {
+      setActiveBandKey(parseAgeBandHash(window.location.hash));
     };
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('hashchange', onHashChange);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('hashchange', onHashChange);
+    };
   }, []);
 
   const originCounts = useMemo(() => countSessionsByOrigin(sessions), [sessions]);
@@ -61,16 +73,32 @@ export default function SessionsBrowseClient({
     () => filterBrowseSessions(sessions, origin),
     [sessions, origin],
   );
-  const ageGroups = useMemo(
-    () => groupSessionsByAgeYear(filteredSessions),
+  const ageBands = useMemo(
+    () => groupSessionsByAgeBand(filteredSessions),
     [filteredSessions],
+  );
+  const maxBandCount = useMemo(
+    () => ageBands.reduce((max, band) => Math.max(max, band.sessions.length), 0),
+    [ageBands],
+  );
+  const effectiveActiveBandKey = useMemo(
+    () => (ageBands.some(band => band.key === activeBandKey) ? activeBandKey : ''),
+    [ageBands, activeBandKey],
   );
 
   const handleOriginChange = (next: TranscriptOrigin | '') => {
     if (next === origin) return;
+    const nextFiltered = filterBrowseSessions(sessions, next);
+    const nextBands = groupSessionsByAgeBand(nextFiltered);
+    const currentHashBand = parseAgeBandHash(window.location.hash);
+    const preservedBand = currentHashBand && nextBands.some(band => band.key === currentHashBand)
+      ? currentHashBand
+      : '';
+
     setOrigin(next);
+    setActiveBandKey(preservedBand);
     trackArchiveEvent('filter_changed', { filter: 'origin', value: next });
-    const nextUrl = buildSessionsUrl(next);
+    const nextUrl = buildSessionsUrl(next, preservedBand);
     window.history.pushState(window.history.state, '', nextUrl);
   };
 
@@ -89,7 +117,7 @@ export default function SessionsBrowseClient({
   const statusText = formatSessionsBrowseStatus(
     filteredSessions.length,
     sessions.length,
-    ageGroups.length,
+    ageBands.length,
     origin,
   );
 
@@ -152,32 +180,55 @@ export default function SessionsBrowseClient({
         {view === 'list'
           ? 'List shows condensed session summaries for faster scanning.'
           : 'Details shows full guide overviews, audio availability, and themes.'}{' '}
-        Session guides are AI-written; labels identify the transcript origin and mark machine drafts as unreviewed.
+        Session guides are AI-written; labels identify the transcript origin, mark machine drafts as unreviewed, and distinguish source ages from filename-inferred ages.
       </p>
 
-      {ageGroups.length >= 2 && (
-        <nav className="age-jump-nav" aria-label="Jump to age">
-          <span className="small muted age-jump-label">Jump to age</span>
-          <ul className="age-jump-list">
-            {ageGroups.map(group => (
-              <li key={group.key}>
-                <a className="button secondary age-jump-link" href={`#${group.key}`}>
-                  <span>{group.label}</span>{' '}
-                  <span className="nav-count">
-                    {group.sessions.length.toLocaleString()}
-                    <span className="sr-only">
-                      {' '}
-                      {group.sessions.length === 1 ? 'session' : 'sessions'}
+      {ageBands.length > 0 && (
+        <nav className="age-jump-nav age-band-nav" aria-label="Jump to age band">
+          <div className="age-band-nav-header">
+            <span className="eyebrow age-jump-label">Age-band timeline</span>
+            <span className="small muted age-band-nav-hint">
+              Six-month spans, youngest to oldest
+            </span>
+          </div>
+          <ul className="age-jump-list age-band-list">
+            {ageBands.map(band => {
+              const count = band.sessions.length;
+              const barPercent = computeBandBarPercent(count, maxBandCount);
+              const isCurrent = effectiveActiveBandKey === band.key;
+              return (
+                <li key={band.key} className="age-band-nav-item">
+                  <a
+                    className="age-jump-link age-band-link"
+                    href={`#${band.key}`}
+                    aria-current={isCurrent ? 'location' : undefined}
+                  >
+                    <span className="age-band-link-row">
+                      <span className="age-band-label">{band.label}</span>
+                      <span className="sr-only">{' — '}</span>
+                      <span className="nav-count">
+                        {count.toLocaleString()}
+                        <span className="sr-only">
+                          {' '}
+                          {count === 1 ? 'session' : 'sessions'}
+                        </span>
+                      </span>
                     </span>
-                  </span>
-                </a>
-              </li>
-            ))}
+                    <span className="age-band-bar" aria-hidden="true">
+                      <span
+                        className="age-band-bar-fill"
+                        style={{ width: `${barPercent}%` }}
+                      />
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       )}
 
-      {ageGroups.length === 0 ? (
+      {ageBands.length === 0 ? (
         <div className="empty-state">
           <Search size={28} aria-hidden="true" />
           <h2>No sessions match this filter</h2>
@@ -195,87 +246,95 @@ export default function SessionsBrowseClient({
           )}
         </div>
       ) : (
-        <div className="age-year-groups">
-          {ageGroups.map(group => (
-            <section
-              key={group.key}
-              id={group.key}
-              className="age-year-group"
-              aria-labelledby={`${group.key}-heading`}
-            >
-              <div className="age-group-header">
-                <h2 id={`${group.key}-heading`}>{group.label}</h2>
-                <p className="small muted age-group-count">
-                  {group.sessions.length.toLocaleString()}{' '}
-                  {group.sessions.length === 1 ? 'session' : 'sessions'}
-                </p>
-              </div>
-              <ol
-                className={view === 'list' ? 'sessions-compact-list' : 'sessions-detail-list'}
-                role="list"
-                start={group.startIndex}
+        <div className="age-band-groups">
+          {ageBands.map(band => {
+            const count = band.sessions.length;
+            const isActive = effectiveActiveBandKey === band.key;
+            return (
+              <section
+                key={band.key}
+                id={band.key}
+                className={isActive ? 'age-band-group is-active-band' : 'age-band-group'}
+                aria-labelledby={`${band.key}-heading`}
               >
-                {group.sessions.map((session, index) => {
-                  const headingId = `browse-session-${session.id}`;
-                  const sessionHref = `/sessions/${encodeURIComponent(session.slug)}`;
-                  return (
-                    <li key={session.id}>
-                      <article
-                        className={view === 'list' ? 'session-list-row' : 'session-card'}
-                        aria-labelledby={headingId}
-                      >
-                        <div className="session-index" aria-hidden="true">
-                          {String(group.startIndex + index).padStart(2, '0')}
-                        </div>
-                        <div className="session-card-body">
-                          <h3 id={headingId}>
-                            <a
-                              href={sessionHref}
-                              onClick={() =>
-                                trackArchiveEvent('recording_open', {
-                                  recordingId: session.id,
-                                  origin: session.origin,
-                                  view,
-                                  action: 'guide',
-                                })
-                              }
-                              onAuxClick={event => {
-                                if (event.button === 1) {
+                <div className="age-band-header">
+                  <h2 id={`${band.key}-heading`} className="age-band-heading">
+                    <span className="age-band-title">{band.label}</span>
+                    <span className="sr-only">{' — '}</span>
+                    <span className="age-band-count">
+                      {count.toLocaleString()} {count === 1 ? 'session' : 'sessions'}
+                    </span>
+                  </h2>
+                  <p className="small muted age-band-prose">{band.proseRange}</p>
+                </div>
+                <ol
+                  className={view === 'list' ? 'sessions-compact-list' : 'sessions-detail-list'}
+                  role="list"
+                  start={band.startIndex}
+                >
+                  {band.sessions.map((session, index) => {
+                    const headingId = `browse-session-${session.id}`;
+                    const sessionHref = `/sessions/${encodeURIComponent(session.slug)}`;
+                    return (
+                      <li key={session.id}>
+                        <article
+                          className={view === 'list' ? 'session-list-row' : 'session-card'}
+                          aria-labelledby={headingId}
+                        >
+                          <div className="session-index" aria-hidden="true">
+                            {String(band.startIndex + index).padStart(2, '0')}
+                          </div>
+                          <div className="session-card-body">
+                            <h3 id={headingId}>
+                              <a
+                                href={sessionHref}
+                                onClick={() =>
                                   trackArchiveEvent('recording_open', {
                                     recordingId: session.id,
                                     origin: session.origin,
                                     view,
                                     action: 'guide',
-                                  });
+                                  })
                                 }
-                              }}
-                            >
-                              {session.title}
-                              <ArrowRight size={view === 'list' ? 17 : 20} aria-hidden="true" />
-                            </a>
-                          </h3>
-                          <CatalogRecord
-                            variant={view === 'list' ? 'compact' : 'card'}
-                            slug={session.slug}
-                            sourceName={session.sourceName}
-                            ages={session.ages}
-                            inferredAge={session.inferredAge}
-                            dates={session.dates}
-                            origin={session.origin}
-                            audioStatus={view === 'details' ? session.audioStatus : undefined}
-                          />
-                          <p className="card-overview">
-                            {view === 'list' ? shortOverview(session.overview) : session.overview}
-                          </p>
-                          {view === 'details' && <TopicLabels topics={session.topics} compact />}
-                        </div>
-                      </article>
-                    </li>
-                  );
-                })}
-              </ol>
-            </section>
-          ))}
+                                onAuxClick={event => {
+                                  if (event.button === 1) {
+                                    trackArchiveEvent('recording_open', {
+                                      recordingId: session.id,
+                                      origin: session.origin,
+                                      view,
+                                      action: 'guide',
+                                    });
+                                  }
+                                }}
+                              >
+                                {session.title}
+                                <ArrowRight size={view === 'list' ? 17 : 20} aria-hidden="true" />
+                              </a>
+                            </h3>
+                            <CatalogRecord
+                              variant={view === 'list' ? 'compact' : 'card'}
+                              slug={session.slug}
+                              sourceName={session.sourceName}
+                              ages={session.ages}
+                              inferredAge={session.inferredAge}
+                              dates={session.dates}
+                              origin={session.origin}
+                              audioStatus={view === 'details' ? session.audioStatus : undefined}
+                              showAgeSource
+                            />
+                            <p className="card-overview">
+                              {view === 'list' ? shortOverview(session.overview) : session.overview}
+                            </p>
+                            {view === 'details' && <TopicLabels topics={session.topics} compact />}
+                          </div>
+                        </article>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            );
+          })}
         </div>
       )}
     </>

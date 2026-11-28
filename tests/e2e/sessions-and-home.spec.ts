@@ -209,15 +209,16 @@ test('legacy query parameters on / permanently redirect while empty params rende
   await expect(page.locator('.home-search-form')).toHaveAttribute('action', '/search');
 });
 
-test('/sessions renders per request with private headers, year-of-age headings in youngest-first order, labelled inferred ages, and /sessions/<slug> links', async ({ page, request }) => {
+test('/sessions renders per request with private headers, six-month age-band headings in youngest-first order, explicit source/inferred ages, and /sessions/<slug> links', async ({ page, request }) => {
   const response = await request.get('/sessions');
   expect(response.status()).toBe(200);
   expectPrivateHeaders(response, '/sessions');
   const html = await response.text();
   expect(html).toContain('<title>Sessions · The Seth Tapes</title>');
-  expect(html).toContain('Age 1');
-  expect(html).toContain('Age 2');
-  expect(html).toContain('Age not recorded');
+  expect(html).toContain('1;6–1;11');
+  expect(html).toContain('2;0–2;5');
+  expect(html).toContain('2;6–2;11');
+  expect(html).toContain('Age unknown');
   expect(html).toContain('/sessions/010815');
 
   const consoleErrors: string[] = [];
@@ -232,19 +233,26 @@ test('/sessions renders per request with private headers, year-of-age headings i
   await expect(page.getByRole('heading', { level: 1, name: 'Sessions', exact: true })).toBeVisible();
   await expectContinuousHeadingHierarchy(page, '/sessions');
 
-  // Year-of-age group headings in chronological order, unaged last
-  const groupHeadings = page.locator('.age-year-group h2');
-  await expect(groupHeadings).toHaveText(['Age 1', 'Age 2', 'Age not recorded']);
+  // Six-month age-band headings in chronological order with session counts, Age unknown last
+  const bandHeadings = page.locator('.age-band-group h2');
+  await expect(bandHeadings).toHaveText([
+    '1;6–1;11 — 1 session',
+    '2;0–2;5 — 1 session',
+    '2;6–2;11 — 1 session',
+    'Age unknown — 1 session',
+  ]);
 
-  // Jump-to-age navigation links match the year-of-age sections with spaced VoiceOver accessible names
+  // Age-band navigator links match the six-month band sections with VoiceOver-friendly spaced accessible names
   const jumpLinks = page.locator('.age-jump-nav a');
-  await expect(jumpLinks).toHaveCount(3);
-  await expect(jumpLinks.nth(0)).toHaveAttribute('href', '#age-1');
-  await expect(jumpLinks.nth(0)).toHaveAccessibleName('Age 1 1 session');
-  await expect(jumpLinks.nth(1)).toHaveAttribute('href', '#age-2');
-  await expect(jumpLinks.nth(1)).toHaveAccessibleName('Age 2 2 sessions');
-  await expect(jumpLinks.nth(2)).toHaveAttribute('href', '#age-unrecorded');
-  await expect(jumpLinks.nth(2)).toHaveAccessibleName('Age not recorded 1 session');
+  await expect(jumpLinks).toHaveCount(4);
+  await expect(jumpLinks.nth(0)).toHaveAttribute('href', '#age-1-6');
+  await expect(jumpLinks.nth(0)).toHaveAccessibleName('1;6–1;11 — 1 session');
+  await expect(jumpLinks.nth(1)).toHaveAttribute('href', '#age-2-0');
+  await expect(jumpLinks.nth(1)).toHaveAccessibleName('2;0–2;5 — 1 session');
+  await expect(jumpLinks.nth(2)).toHaveAttribute('href', '#age-2-6');
+  await expect(jumpLinks.nth(2)).toHaveAccessibleName('2;6–2;11 — 1 session');
+  await expect(jumpLinks.nth(3)).toHaveAttribute('href', '#age-unknown');
+  await expect(jumpLinks.nth(3)).toHaveAccessibleName('Age unknown — 1 session');
 
   // Top navigation keeps stable, identical labels across every route without shifting count badges
   await expect(page.locator('.section-nav a')).toHaveText([
@@ -257,26 +265,25 @@ test('/sessions renders per request with private headers, year-of-age headings i
   await expect(page.locator('.section-nav a[href="/sessions"]')).toHaveAccessibleName('Sessions');
   await expect(page.locator('.section-nav .nav-count')).toHaveCount(0);
 
-  // Sessions within each year group are youngest-first and link to /sessions/<slug>
-  await expect(page.locator('#age-1 h3 a')).toHaveText(['Blue locomotive and wooden bridge']);
-  await expect(page.locator('#age-1 h3 a').first()).toHaveAttribute('href', '/sessions/010815');
+  // Sessions within each six-month band are youngest-first and link to /sessions/<slug>
+  await expect(page.locator('#age-1-6 h3 a')).toHaveText(['Blue locomotive and wooden bridge']);
+  await expect(page.locator('#age-1-6 h3 a').first()).toHaveAttribute('href', '/sessions/010815');
 
-  await expect(page.locator('#age-2 h3 a')).toHaveText([
-    'Yellow submarine in the courtyard',
-    'Paper lighthouse and harbor bells',
-  ]);
-  await expect(page.locator('#age-2 h3 a').nth(0)).toHaveAttribute('href', '/sessions/020110-tb');
-  await expect(page.locator('#age-2 h3 a').nth(1)).toHaveAttribute('href', '/sessions/020604-local');
+  await expect(page.locator('#age-2-0 h3 a')).toHaveText(['Yellow submarine in the courtyard']);
+  await expect(page.locator('#age-2-0 h3 a').first()).toHaveAttribute('href', '/sessions/020110-tb');
 
-  await expect(page.locator('#age-unrecorded h3 a')).toHaveText(['Cardboard observatory without audio']);
-  await expect(page.locator('#age-unrecorded h3 a').first()).toHaveAttribute('href', '/sessions/011103');
+  await expect(page.locator('#age-2-6 h3 a')).toHaveText(['Paper lighthouse and harbor bells']);
+  await expect(page.locator('#age-2-6 h3 a').first()).toHaveAttribute('href', '/sessions/020604-local');
 
-  // Source ages have no inferred label; inferred ages show italicized "(inferred from filename)" with zero nested links
-  const locomotiveMeta = page.locator('#age-1 .session-meta').first();
-  await expect(locomotiveMeta).toContainText('Age 1 year, 8 months, 15 days');
+  await expect(page.locator('#age-unknown h3 a')).toHaveText(['Cardboard observatory without audio']);
+  await expect(page.locator('#age-unknown h3 a').first()).toHaveAttribute('href', '/sessions/011103');
+
+  // Source ages explicitly state "(source age)"; inferred ages show italicized "(inferred from filename)" with zero nested links
+  const locomotiveMeta = page.locator('#age-1-6 .session-meta').first();
+  await expect(locomotiveMeta).toContainText('Age 1 year, 8 months, 15 days (source age)');
   await expect(locomotiveMeta).not.toContainText('inferred from filename');
 
-  const lighthouseCard = page.locator('#age-2 .session-card').nth(1);
+  const lighthouseCard = page.locator('#age-2-6 .session-card').first();
   await expect(lighthouseCard.locator('.session-meta')).toContainText('Age 2 years, 6 months, 4 days (inferred from filename)');
   await expect(lighthouseCard.locator('.inferred-age-link em')).toHaveText('(inferred from filename)');
   await expect(lighthouseCard).toContainText('Unreviewed machine draft');
@@ -284,14 +291,14 @@ test('/sessions renders per request with private headers, year-of-age headings i
   const nestedLinks = await page.evaluate(() => document.querySelectorAll('a a, button a, a button').length);
   expect(nestedLinks).toBe(0);
 
-  // Obsolete #access= fragment is stripped while normal #age-2 anchor stays intact
+  // Obsolete #access= fragment is stripped while normal #age-2-0 anchor stays intact
   await page.goto('/sessions#access=obsolete-key');
   await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('');
-  await page.goto('/sessions#age-2');
-  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#age-2');
+  await page.goto('/sessions#age-2-0');
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#age-2-0');
 
   // Clicking a session opens /sessions/<slug> and Back returns to /sessions
-  await page.locator('#age-1 h3 a').first().click();
+  await page.locator('#age-1-6 h3 a').first().click();
   await expect(page).toHaveURL(/\/sessions\/010815$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
   await page.goBack();
@@ -318,14 +325,14 @@ test('/sessions preserves Details/List preference via VIEW_STORAGE_KEY, filters 
   const status = page.locator('.sessions-browse-status');
 
   await expect(detailsButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(status).toHaveText('Showing all 4 sessions across 3 age groups, youngest first');
+  await expect(status).toHaveText('Showing all 4 sessions across 4 age bands, youngest first');
 
   // Switch to List view via keyboard Enter and verify VIEW_STORAGE_KEY persistence across reload (with zero archive text in storage)
   await listButton.focus();
   await expect(listButton).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(listButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.sessions-compact-list')).toHaveCount(3);
+  await expect(page.locator('.sessions-compact-list')).toHaveCount(4);
 
   const storedView = await page.evaluate(() => window.localStorage.getItem('balloons-and-bananas:recordings-view'));
   expect(storedView).toBe('list');
@@ -341,7 +348,7 @@ test('/sessions preserves Details/List preference via VIEW_STORAGE_KEY, filters 
 
   await page.reload();
   await expect(listButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.sessions-compact-list')).toHaveCount(3);
+  await expect(page.locator('.sessions-compact-list')).toHaveCount(4);
 
   // Audit List view in 320px reflow and across all themes
   await page.setViewportSize({ width: 320, height: 800 });
@@ -352,7 +359,7 @@ test('/sessions preserves Details/List preference via VIEW_STORAGE_KEY, filters 
   // Switch back to Details and verify storage updates
   await detailsButton.click();
   await expect(detailsButton).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.sessions-detail-list')).toHaveCount(3);
+  await expect(page.locator('.sessions-detail-list')).toHaveCount(4);
   expect(await page.evaluate(() => window.localStorage.getItem('balloons-and-bananas:recordings-view'))).toBe('details');
 
   // Explicitly clicking Details when storage holds a stale 'list' value overwrites storage so reload stays Details
@@ -365,24 +372,27 @@ test('/sessions preserves Details/List preference via VIEW_STORAGE_KEY, filters 
   // Transcript origin filter updates DOM, live status, and URL, and supports Back/Forward
   await originSelect.selectOption('archived_research');
   await expect(page).toHaveURL(/\/sessions\?origin=archived_research$/);
-  await expect(status).toHaveText('Showing 2 of 4 sessions (archived research) across 2 age groups, youngest first');
-  await expect(page.locator('.age-year-group h2')).toHaveText(['Age 1', 'Age not recorded']);
-  await expect(page.locator('.age-year-group h3 a')).toHaveText([
+  await expect(status).toHaveText('Showing 2 of 4 sessions (archived research) across 2 age bands, youngest first');
+  await expect(page.locator('.age-band-group h2')).toHaveText([
+    '1;6–1;11 — 1 session',
+    'Age unknown — 1 session',
+  ]);
+  await expect(page.locator('.age-band-group h3 a')).toHaveText([
     'Blue locomotive and wooden bridge',
     'Cardboard observatory without audio',
   ]);
 
   await originSelect.selectOption('local_ai_draft');
   await expect(page).toHaveURL(/\/sessions\?origin=local_ai_draft$/);
-  await expect(status).toHaveText('Showing 1 of 4 sessions (local AI draft) across 1 age group, youngest first');
-  await expect(page.locator('.age-year-group h2')).toHaveText(['Age 2']);
-  await expect(page.locator('.age-year-group h3 a')).toHaveText(['Paper lighthouse and harbor bells']);
+  await expect(status).toHaveText('Showing 1 of 4 sessions (local AI draft) across 1 age band, youngest first');
+  await expect(page.locator('.age-band-group h2')).toHaveText(['2;6–2;11 — 1 session']);
+  await expect(page.locator('.age-band-group h3 a')).toHaveText(['Paper lighthouse and harbor bells']);
 
   // Back restores archived_research; Forward restores local_ai_draft
   await page.goBack();
   await expect(page).toHaveURL(/\/sessions\?origin=archived_research$/);
   await expect(originSelect).toHaveValue('archived_research');
-  await expect(page.locator('.age-year-group h3 a')).toHaveText([
+  await expect(page.locator('.age-band-group h3 a')).toHaveText([
     'Blue locomotive and wooden bridge',
     'Cardboard observatory without audio',
   ]);
@@ -390,30 +400,30 @@ test('/sessions preserves Details/List preference via VIEW_STORAGE_KEY, filters 
   await page.goForward();
   await expect(page).toHaveURL(/\/sessions\?origin=local_ai_draft$/);
   await expect(originSelect).toHaveValue('local_ai_draft');
-  await expect(page.locator('.age-year-group h3 a')).toHaveText(['Paper lighthouse and harbor bells']);
+  await expect(page.locator('.age-band-group h3 a')).toHaveText(['Paper lighthouse and harbor bells']);
 
   // Clicking a filtered session and pressing Back preserves the filtered /sessions?origin= view
-  await page.locator('.age-year-group h3 a').first().click();
+  await page.locator('.age-band-group h3 a').first().click();
   await expect(page).toHaveURL(/\/sessions\/020604-local$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/sessions\?origin=local_ai_draft$/);
   await expect(originSelect).toHaveValue('local_ai_draft');
-  await expect(page.locator('.age-year-group h3 a')).toHaveText(['Paper lighthouse and harbor bells']);
+  await expect(page.locator('.age-band-group h3 a')).toHaveText(['Paper lighthouse and harbor bells']);
 
   // Show all origins button clears filter cleanly
   await page.getByRole('button', { name: 'Show all origins' }).click();
   await expect(page).toHaveURL(/\/sessions$/);
   await expect(originSelect).toHaveValue('');
-  await expect(status).toHaveText('Showing all 4 sessions across 3 age groups, youngest first');
+  await expect(status).toHaveText('Showing all 4 sessions across 4 age bands, youngest first');
 
   // Direct SSR load with valid ?origin= and with invalid ?origin=
   await page.goto('/sessions?origin=talkbank_ai_draft');
   await expect(originSelect).toHaveValue('talkbank_ai_draft');
-  await expect(page.locator('.age-year-group h3 a')).toHaveText(['Yellow submarine in the courtyard']);
+  await expect(page.locator('.age-band-group h3 a')).toHaveText(['Yellow submarine in the courtyard']);
 
   await page.goto('/sessions?origin=not-a-valid-origin');
   await expect(originSelect).toHaveValue('');
-  await expect(page.locator('.age-year-group h3 a')).toHaveCount(4);
+  await expect(page.locator('.age-band-group h3 a')).toHaveCount(4);
 
   // Audit Details view in 320px reflow and across all themes
   await page.setViewportSize({ width: 320, height: 800 });

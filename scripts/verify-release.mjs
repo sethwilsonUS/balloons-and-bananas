@@ -185,7 +185,29 @@ async function main() {
   await expectStatus(sessionsBrowseResponse, 200, 'sessions_browse');
   const sessionsBrowseHtml = await sessionsBrowseResponse.text();
   check(/<title>\s*Sessions · The Seth Tapes\s*<\/title>/.test(sessionsBrowseHtml), 'sessions_browse:title_format');
-  check(sessionsBrowseHtml.includes('Age 1') && sessionsBrowseHtml.includes('Age 2'), 'sessions_browse:age_groups');
+  const parseBandKey = entry => {
+    const candidates = entry.ages && entry.ages.length > 0
+      ? entry.ages
+      : (entry.inferredAge ? [entry.inferredAge] : []);
+    for (const raw of candidates) {
+      if (typeof raw !== 'string') continue;
+      const match = /^(\d+);(?:(\d{1,2})(?:\.(\d{1,2})?)?)?$/.exec(raw.trim());
+      if (!match) continue;
+      const years = Number(match[1]);
+      const months = match[2] === undefined ? undefined : Number(match[2]);
+      const days = match[3] === undefined ? undefined : Number(match[3]);
+      if (!Number.isSafeInteger(years) || (months !== undefined && months > 11) || (days !== undefined && days > 31)) continue;
+      return `age-${years}-${months !== undefined && months >= 6 ? 6 : 0}`;
+    }
+    return 'age-unknown';
+  };
+  const expectedBandKeys = [...new Set(data.entries.map(parseBandKey))];
+  check(
+    sessionsBrowseHtml.includes('aria-label="Jump to age band"')
+      && expectedBandKeys.length >= 2
+      && expectedBandKeys.every(key => sessionsBrowseHtml.includes(`id="${key}"`) && sessionsBrowseHtml.includes(`href="#${key}"`)),
+    'sessions_browse:age_bands',
+  );
   check((sessionsBrowseResponse.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'sessions_browse:frame_protection');
 
   const agedSession = data.entries.find(entry => entry.ages.length > 0) || representative;
