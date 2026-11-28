@@ -6,6 +6,7 @@ import { computeArchiveAgeBounds } from '@/lib/age';
 import { archive, catalog } from '@/lib/archive';
 import { hasActiveSearchFilters, parseSearchUrlParams } from '@/lib/search-params';
 import { ARCHIVE_NAME, formatDocumentTitle } from '@/lib/site';
+import { selectableTopicSet } from '@/lib/topics';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,7 @@ const loadSearchCatalog = cache(async () => {
   const data = await archive();
   const summary = catalog(data);
   const ageBounds = computeArchiveAgeBounds(data.sessions);
-  const validTopics = new Set(summary.topics.map(item => item.name));
+  const validTopics = selectableTopicSet(summary.topics);
   return {
     topics: summary.topics,
     totalSessions: summary.counts.sessions,

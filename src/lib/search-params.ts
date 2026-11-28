@@ -1,7 +1,17 @@
 import { isValidAgeMonths, parseAgeMonthsParam } from './age';
 import { isLinguisticMarkerId, isLinguisticSpeaker, type LinguisticMarkerId, type LinguisticSpeaker } from './linguistic-markers';
 import { isSearchSort, isSessionView, isTranscriptOrigin, pageSizeForView, type SessionView } from './results-view';
-import type { SearchRequest, SearchSort, TranscriptOrigin } from './types';
+import type {
+  LinguisticEvidence,
+  Recording,
+  SearchPageSize,
+  SearchRequest,
+  SearchResponse,
+  SearchResult,
+  SearchSort,
+  SessionCard,
+  TranscriptOrigin,
+} from './types';
 
 export const MAX_SEARCH_QUERY_LENGTH = 300;
 export const MAX_SEARCH_TOPIC_LENGTH = 120;
@@ -26,6 +36,14 @@ export type RawSearchParams =
 
 const POSITIVE_INT_RE = /^[1-9]\d*$/;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+
 function isSearchParamsLike(params: RawSearchParams): params is { get(name: string): string | null } {
   return typeof (params as { get?: unknown }).get === 'function';
 }
@@ -44,6 +62,32 @@ function readParam(params: RawSearchParams, key: string): string | null {
 
 export function defaultSortForQuery(query: string): SearchSort {
   return query.trim() ? 'relevance' : 'age-asc';
+}
+
+/** Return true when the URL explicitly supplies a valid `sort` query parameter. */
+export function hasExplicitSortParam(params: RawSearchParams): boolean {
+  const rawSort = readParam(params, 'sort')?.trim() ?? '';
+  return isSearchSort(rawSort);
+}
+
+/**
+ * Resolve the sort order when the search query transitions between empty and non-empty.
+ * Applies the query-dependent default (`relevance` / `age-asc`) only when no explicit
+ * sort was selected in the URL, preserving an explicit `age-asc` or `age-desc` choice.
+ */
+export function resolveSortForQueryChange(
+  currentSort: SearchSort,
+  hadQuery: boolean,
+  hasNextQuery: boolean,
+  hasExplicitSort: boolean,
+): SearchSort {
+  if (!hadQuery && hasNextQuery) {
+    return hasExplicitSort ? currentSort : 'relevance';
+  }
+  if (hadQuery && !hasNextQuery && !hasExplicitSort && currentSort === 'relevance') {
+    return 'age-asc';
+  }
+  return currentSort;
 }
 
 function parsePageParam(raw: string | null): number {
@@ -219,4 +263,173 @@ export function buildSessionHrefFromSearch(
     ? `#p${options.passage}`
     : '';
   return `${base}${fromQuery}${passageHash}`;
+}
+
+function parseRecording(raw: unknown): Recording | null {
+  if (!isRecord(raw)) return null;
+  if (
+    typeof raw.id !== 'string'
+    || typeof raw.name !== 'string'
+    || typeof raw.format !== 'string'
+    || typeof raw.duration !== 'number' || !Number.isFinite(raw.duration)
+    || typeof raw.bytes !== 'number' || !Number.isFinite(raw.bytes)
+    || typeof raw.available !== 'boolean'
+  ) {
+    return null;
+  }
+  if (raw.kind !== undefined && raw.kind !== 'original' && raw.kind !== 'listening-copy') return null;
+  if (raw.derivedFromId !== undefined && typeof raw.derivedFromId !== 'string') return null;
+  if (raw.encoding !== undefined && typeof raw.encoding !== 'string') return null;
+  const recording: Recording = {
+    id: raw.id,
+    name: raw.name,
+    format: raw.format,
+    duration: raw.duration,
+    bytes: raw.bytes,
+    available: raw.available,
+  };
+  if (raw.kind !== undefined) recording.kind = raw.kind;
+  if (raw.derivedFromId !== undefined) recording.derivedFromId = raw.derivedFromId;
+  if (raw.encoding !== undefined) recording.encoding = raw.encoding;
+  return recording;
+}
+
+function parseSessionCard(raw: unknown): SessionCard | null {
+  if (!isRecord(raw)) return null;
+  if (
+    typeof raw.id !== 'string'
+    || typeof raw.slug !== 'string'
+    || typeof raw.legacyId !== 'string'
+    || typeof raw.sourceName !== 'string'
+    || typeof raw.title !== 'string'
+    || typeof raw.overview !== 'string'
+    || !isTranscriptOrigin(raw.origin)
+    || !isStringArray(raw.topics)
+    || !isStringArray(raw.dates)
+    || !isStringArray(raw.ages)
+    || (raw.inferredAge !== null && typeof raw.inferredAge !== 'string')
+    || !Array.isArray(raw.recordings)
+    || (raw.preferredRecordingId !== null && typeof raw.preferredRecordingId !== 'string')
+  ) {
+    return null;
+  }
+  const recordings: Recording[] = [];
+  for (const item of raw.recordings) {
+    const parsed = parseRecording(item);
+    if (!parsed) return null;
+    recordings.push(parsed);
+  }
+  return {
+    id: raw.id,
+    slug: raw.slug,
+    legacyId: raw.legacyId,
+    sourceName: raw.sourceName,
+    title: raw.title,
+    overview: raw.overview,
+    origin: raw.origin,
+    topics: raw.topics,
+    dates: raw.dates,
+    ages: raw.ages,
+    inferredAge: raw.inferredAge,
+    recordings,
+    preferredRecordingId: raw.preferredRecordingId,
+  };
+}
+
+function parseLinguisticEvidence(raw: unknown): LinguisticEvidence | null {
+  if (!isRecord(raw)) return null;
+  if (
+    !isLinguisticMarkerId(raw.marker)
+    || typeof raw.count !== 'number' || !Number.isSafeInteger(raw.count) || raw.count < 0
+    || !Array.isArray(raw.examples)
+  ) {
+    return null;
+  }
+  const examples: LinguisticEvidence['examples'] = [];
+  for (const item of raw.examples) {
+    if (!isRecord(item)) return null;
+    if (
+      typeof item.passageIndex !== 'number' || !Number.isSafeInteger(item.passageIndex) || item.passageIndex < 0
+      || typeof item.text !== 'string'
+    ) {
+      return null;
+    }
+    if (item.speaker !== undefined && typeof item.speaker !== 'string') return null;
+    if (item.start !== undefined && item.start !== null && (typeof item.start !== 'number' || !Number.isFinite(item.start))) {
+      return null;
+    }
+    const example: LinguisticEvidence['examples'][number] = {
+      passageIndex: item.passageIndex,
+      text: item.text,
+    };
+    if (item.speaker !== undefined) example.speaker = item.speaker;
+    if (item.start !== undefined) example.start = item.start;
+    examples.push(example);
+  }
+  return {
+    marker: raw.marker,
+    count: raw.count,
+    examples,
+  };
+}
+
+function parseSearchResultItem(raw: unknown): SearchResult | null {
+  if (!isRecord(raw)) return null;
+  if (
+    typeof raw.excerpt !== 'string'
+    || (raw.matchedIn !== 'transcript' && raw.matchedIn !== 'guide' && raw.matchedIn !== 'browse')
+  ) {
+    return null;
+  }
+  const session = parseSessionCard(raw.session);
+  if (!session) return null;
+  if (raw.matchedPassage !== undefined) {
+    if (typeof raw.matchedPassage !== 'number' || !Number.isSafeInteger(raw.matchedPassage) || raw.matchedPassage < 1) {
+      return null;
+    }
+  }
+  let linguisticEvidence: LinguisticEvidence | undefined;
+  if (raw.linguisticEvidence !== undefined) {
+    const parsedEvidence = parseLinguisticEvidence(raw.linguisticEvidence);
+    if (!parsedEvidence) return null;
+    linguisticEvidence = parsedEvidence;
+  }
+  return {
+    session,
+    excerpt: raw.excerpt,
+    matchedIn: raw.matchedIn,
+    ...(raw.matchedPassage !== undefined ? { matchedPassage: raw.matchedPassage } : {}),
+    ...(linguisticEvidence !== undefined ? { linguisticEvidence } : {}),
+  };
+}
+
+/**
+ * Runtime boundary validator for `/api/search` JSON responses.
+ * Rejects malformed payloads before they can reach `SessionResults`.
+ */
+export function parseSearchResponse(raw: unknown): SearchResponse | null {
+  if (!isRecord(raw)) return null;
+  if (
+    typeof raw.total !== 'number' || !Number.isSafeInteger(raw.total) || raw.total < 0
+    || typeof raw.page !== 'number' || !Number.isSafeInteger(raw.page) || raw.page < 1
+    || typeof raw.pages !== 'number' || !Number.isSafeInteger(raw.pages) || raw.pages < 1
+    || (raw.pageSize !== 18 && raw.pageSize !== 36)
+    || !Array.isArray(raw.results)
+  ) {
+    return null;
+  }
+  const results: SearchResult[] = [];
+  for (const item of raw.results) {
+    const parsed = parseSearchResultItem(item);
+    if (!parsed) return null;
+    results.push(parsed);
+  }
+  const pageSize: SearchPageSize = raw.pageSize;
+  return {
+    total: raw.total,
+    page: raw.page,
+    pages: raw.pages,
+    pageSize,
+    results,
+  };
 }

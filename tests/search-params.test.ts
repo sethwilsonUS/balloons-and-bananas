@@ -5,14 +5,18 @@ import {
   buildSessionHrefFromSearch,
   defaultSortForQuery,
   hasActiveSearchFilters,
+  hasExplicitSortParam,
   isSafeSearchReturnPath,
   MAX_SEARCH_PAGE,
   MAX_SEARCH_QUERY_LENGTH,
+  parseSearchResponse,
   parseSearchUrlParams,
+  resolveSortForQueryChange,
   searchRequestFromUrlState,
   serializeSearchUrlParams,
   type SearchUrlState,
 } from '../src/lib/search-params';
+import { selectableTopicSet } from '../src/lib/topics';
 
 const VALID_TOPICS = new Set([
   'Play and imagination',
@@ -196,5 +200,96 @@ test('buildSessionHrefFromSearch appends validated returnTo and #p<N> passage an
   for (const unsafe of ['', '//evil.com', 'https://evil.com/search', 'javascript:alert(1)', '/sessions', '/search-other', '/search?q=a\nb']) {
     assert.equal(isSafeSearchReturnPath(unsafe), false, `Expected ${JSON.stringify(unsafe)} to be rejected`);
     assert.equal(buildSessionHrefFromSearch('010815', { passage: 2, returnTo: unsafe }), '/sessions/010815#p2');
+  }
+});
+
+test('explicit sort detection and query-transition sort resolution preserve explicit sorts while defaulting bare /search to relevance', () => {
+  assert.equal(hasExplicitSortParam(new URLSearchParams('')), false);
+  assert.equal(hasExplicitSortParam(new URLSearchParams('sort=invalid')), false);
+  assert.equal(hasExplicitSortParam(new URLSearchParams('sort=age-desc')), true);
+  assert.equal(hasExplicitSortParam(new URLSearchParams('sort=age-asc')), true);
+  assert.equal(hasExplicitSortParam(new URLSearchParams('sort=relevance')), true);
+
+  // Bare /search switches to relevance when adding a query, and back to age-asc when cleared.
+  assert.equal(resolveSortForQueryChange('age-asc', false, true, false), 'relevance');
+  assert.equal(resolveSortForQueryChange('relevance', true, false, false), 'age-asc');
+
+  // Explicit age-desc or age-asc stays preserved when adding or clearing a query.
+  assert.equal(resolveSortForQueryChange('age-desc', false, true, true), 'age-desc');
+  assert.equal(resolveSortForQueryChange('age-asc', false, true, true), 'age-asc');
+  assert.equal(resolveSortForQueryChange('age-desc', true, false, true), 'age-desc');
+});
+
+test('selectableTopicSet aligns URL topic validation strictly with curated dropdown themes', () => {
+  const selectable = selectableTopicSet([
+    { name: 'Play and imagination' },
+    { name: 'Uncurated custom topic' },
+  ]);
+  assert.equal(selectable.has('Play and imagination'), true);
+  assert.equal(selectable.has('Uncurated custom topic'), false);
+  assert.equal(
+    parseSearchUrlParams(new URLSearchParams('topic=Uncurated+custom+topic'), { validTopics: selectable }).topic,
+    '',
+  );
+});
+
+test('parseSearchResponse validates the /api/search response boundary and rejects malformed payloads', () => {
+  const validPayload = {
+    total: 1,
+    page: 1,
+    pages: 1,
+    pageSize: 18,
+    results: [
+      {
+        matchedIn: 'transcript',
+        matchedPassage: 3,
+        excerpt: 'Can the blue locomotive meet the ferry at the pier?',
+        session: {
+          id: 'fixture-020604-lighthouse',
+          slug: '020604-local',
+          legacyId: 'fixture-020604-lighthouse',
+          sourceName: '020604-local.json',
+          title: 'Paper lighthouse and harbor bells',
+          overview: 'Synthetic overview.',
+          origin: 'local_ai_draft',
+          topics: ['Music and stories'],
+          dates: [],
+          ages: [],
+          inferredAge: '2;06.04',
+          recordings: [{ id: 'a1', name: '020604.mp3', format: 'mp3', duration: 18, bytes: 1024, available: true, kind: 'original' }],
+          preferredRecordingId: 'a1',
+        },
+        linguisticEvidence: {
+          marker: 'question',
+          count: 1,
+          examples: [{ passageIndex: 2, text: 'Can the blue locomotive meet the ferry at the pier?', start: 10 }],
+        },
+      },
+    ],
+  };
+
+  const parsed = parseSearchResponse(validPayload);
+  assert.ok(parsed);
+  assert.equal(parsed.total, 1);
+  assert.equal(parsed.results[0].matchedPassage, 3);
+  assert.equal(parsed.results[0].session.slug, '020604-local');
+
+  // Negative boundary cases: malformed outer fields, missing session, invalid origin, invalid matchedPassage.
+  for (const malformed of [
+    null,
+    [],
+    {},
+    { ...validPayload, total: -1 },
+    { ...validPayload, page: 0 },
+    { ...validPayload, pages: 0 },
+    { ...validPayload, pageSize: 20 },
+    { ...validPayload, results: [{}] },
+    { ...validPayload, results: [{ ...validPayload.results[0], matchedIn: 'unknown' }] },
+    { ...validPayload, results: [{ ...validPayload.results[0], matchedPassage: 0 }] },
+    { ...validPayload, results: [{ ...validPayload.results[0], session: { ...validPayload.results[0].session, origin: 'bogus' } }] },
+    { ...validPayload, results: [{ ...validPayload.results[0], session: { ...validPayload.results[0].session, topics: 'not-an-array' } }] },
+    { ...validPayload, results: [{ ...validPayload.results[0], linguisticEvidence: { marker: 'bogus', count: 1, examples: [] } }] },
+  ]) {
+    assert.equal(parseSearchResponse(malformed), null, `Expected malformed payload to be rejected: ${JSON.stringify(malformed)}`);
   }
 });

@@ -239,6 +239,29 @@ test('filter changes update the URL cleanly, empty query acts as filtered browsi
   await expect(page).toHaveURL(/\/search\?q=locomotive$/);
   await expect(searchInput).toHaveValue('locomotive');
   await expect(resultsHeading).toHaveText('2 sessions');
+
+  // Submitting query A keeps A in history when the user then types B and waits for debounce
+  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/\/search\?q=locomotive$/);
+  await searchInput.fill('submarine');
+  await expect(page).toHaveURL(/\/search\?q=submarine$/);
+  await expect(resultsHeading).toHaveText('1 session');
+  await page.goBack();
+  await expect(page).toHaveURL(/\/search\?q=locomotive$/);
+  await expect(searchInput).toHaveValue('locomotive');
+  await expect(resultsHeading).toHaveText('2 sessions');
+
+  // Explicit sort=age-desc is preserved when adding a text query
+  await page.goto('/search?sort=age-desc');
+  await expect(page.getByLabel('Sort by')).toHaveValue('age-desc');
+  await searchInput.fill('locomotive');
+  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/\/search\?q=locomotive&sort=age-desc$/);
+  await expect(page.getByLabel('Sort by')).toHaveValue('age-desc');
+  await expect(cardLinks).toHaveText([
+    'Paper lighthouse and harbor bells',
+    'Blue locomotive and wooden bridge',
+  ]);
 });
 
 test('age-range filter uses source-or-inferred age, excludes unaged sessions, composes with query/filters, and /api/search rejects invalid ages', async ({ page, request, baseURL }) => {
@@ -388,6 +411,16 @@ test('in-flight search requests cancel cleanly on rapid view switches without st
 
   let releaseSlowList = () => {};
   let slowListIntercepted = false;
+  let slowListRequest: import('@playwright/test').Request | null = null;
+  let slowListAborted = false;
+  let slowListFulfilled = false;
+  const onRequestFailed = (req: import('@playwright/test').Request) => {
+    if (slowListRequest && req === slowListRequest) {
+      slowListAborted = true;
+    }
+  };
+  page.on('requestfailed', onRequestFailed);
+
   const makeSyntheticResults = (count: number) => Array.from({ length: count }, (_, i) => ({
     session: {
       id: `fixture-010815-locomotive-${i + 1}`,
@@ -413,8 +446,10 @@ test('in-flight search requests cancel cleanly on rapid view switches without st
     const pageSize = body.pageSize === 36 ? 36 : 18;
     const total = 40;
     const currentPage = body.page === 2 ? 2 : 1;
-    if (pageSize === 36 && !slowListIntercepted) {
+    const isHeldList = pageSize === 36 && !slowListIntercepted;
+    if (isHeldList) {
       slowListIntercepted = true;
+      slowListRequest = route.request();
       await new Promise<void>(resolve => { releaseSlowList = resolve; });
     }
     try {
@@ -429,13 +464,14 @@ test('in-flight search requests cancel cleanly on rapid view switches without st
           results: makeSyntheticResults(Math.min(pageSize, total - (currentPage - 1) * pageSize)),
         }),
       });
+      if (isHeldList) slowListFulfilled = true;
     } catch {
       // Expected when the cancelled request aborts before fulfillment.
     }
   });
 
   // Trigger a fresh search so the mocked 40-session Details page loads
-  await page.getByLabel('Origin' , { exact: false }).selectOption('archived_research');
+  await page.getByLabel('Origin', { exact: false }).selectOption('archived_research');
   await expect(status).toHaveText('1–18 of 40 sessions · page 1 of 3');
 
   // Switch Details -> List: wait until the route interceptor actually holds the slow request
@@ -443,10 +479,12 @@ test('in-flight search requests cancel cleanly on rapid view switches without st
   await expect(status).toHaveText('Updating view…');
   await expect.poll(() => slowListIntercepted).toBe(true);
 
-  // Switch back to Details before the slow List response arrives -> cancels and settles immediately
+  // Switch back to Details before the slow List response arrives -> proves held List request actually aborted
   await detailsButton.click();
+  await expect.poll(() => slowListAborted).toBe(true);
   await expect(status).toHaveText('1–18 of 40 sessions · page 1 of 3');
   releaseSlowList();
+  expect(slowListFulfilled).toBe(false);
 
   // Navigate to Page 2 -> URL updates with page=2; Browser Back restores Page 1
   await page.getByRole('button', { name: 'Next' }).click();
@@ -457,7 +495,35 @@ test('in-flight search requests cancel cleanly on rapid view switches without st
   await expect(page).not.toHaveURL(/page=2/);
   await expect(status).toHaveText('1–18 of 40 sessions · page 1 of 3');
 
+  page.off('requestfailed', onRequestFailed);
   await page.unroute('**/api/search');
+
+  // Failed search or malformed 200 payload never renders stale cards from an earlier URL state,
+  // and retrying makes the new response visible cleanly
+  await page.goto('/search?q=wooden+track');
+  await expect(page.locator('.results-toolbar h2')).toHaveText('1 session');
+  await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toBeVisible();
+
+  await page.route('**/api/search', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ total: 1, page: 1, pages: 1, pageSize: 18, results: [{}] }),
+    });
+  });
+
+  await page.getByLabel('Search sessions and transcripts').fill('pier');
+  await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/\/search\?q=pier$/);
+  await expect(page.locator('.error-panel')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toHaveCount(0);
+  await expect(page.locator('.empty-state')).toHaveCount(0);
+
+  await page.unroute('**/api/search');
+  await page.getByRole('button', { name: 'Try search again' }).click();
+  await expect(page.locator('.error-panel')).toHaveCount(0);
+  await expect(page.locator('.results-toolbar h2')).toHaveText('1 session');
+  await expect(page.getByRole('link', { name: /Paper lighthouse and harbor bells/i })).toBeVisible();
 
   // Verify scripts/check-build-output.mjs proves /search/page is built dynamically with 0 prerendered HTML & 0 leaks
   const output = execFileSync(process.execPath, ['scripts/check-build-output.mjs'], {

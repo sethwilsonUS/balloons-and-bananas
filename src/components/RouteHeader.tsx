@@ -29,14 +29,19 @@ export default function RouteHeader({
   const [shareState, setShareState] = useState<'idle' | 'busy' | 'copied' | 'manual' | 'error'>('idle');
   const [shareUrl, setShareUrl] = useState('');
   const shareInput = useRef<HTMLInputElement>(null);
+  const shareRequestIdRef = useRef(0);
 
   useEffect(() => {
     stripObsoleteAccessHash();
     window.addEventListener('hashchange', stripObsoleteAccessHash);
-    return () => window.removeEventListener('hashchange', stripObsoleteAccessHash);
+    return () => {
+      shareRequestIdRef.current += 1;
+      window.removeEventListener('hashchange', stripObsoleteAccessHash);
+    };
   }, []);
 
   useEffect(() => {
+    shareRequestIdRef.current += 1;
     setShareState('idle');
     setShareUrl('');
   }, [sharePath]);
@@ -49,20 +54,25 @@ export default function RouteHeader({
   }, [shareState]);
 
   const copyShareLink = async () => {
+    const requestId = ++shareRequestIdRef.current;
     setShareState('busy');
     try {
       const targetPath = sharePath || (window.location.pathname + window.location.search);
       const text = new URL(targetPath, window.location.origin).toString();
-      setShareUrl(text);
       try {
         await navigator.clipboard.writeText(text);
+        if (shareRequestIdRef.current !== requestId) return;
+        setShareUrl(text);
         setShareState('copied');
         trackArchiveEvent('share_link', { outcome: 'copied' });
       } catch {
+        if (shareRequestIdRef.current !== requestId) return;
+        setShareUrl(text);
         setShareState('manual');
         trackArchiveEvent('share_link', { outcome: 'manual' });
       }
     } catch {
+      if (shareRequestIdRef.current !== requestId) return;
       trackArchiveEvent('share_link', { outcome: 'error' });
       setShareState('error');
     }

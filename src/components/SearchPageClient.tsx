@@ -24,19 +24,22 @@ import {
   buildSearchHref,
   defaultSortForQuery,
   hasActiveSearchFilters,
+  hasExplicitSortParam,
   MAX_SEARCH_QUERY_LENGTH,
+  parseSearchResponse,
   parseSearchUrlParams,
+  resolveSortForQueryChange,
   searchRequestFromUrlState,
   serializeSearchUrlParams,
   type SearchUrlState,
 } from '../lib/search-params';
 import { ARCHIVE_NAME, formatDocumentTitle } from '../lib/site';
+import { positiveThemes, selectableTopicSet } from '../lib/topics';
 import type { SearchResponse, SearchSort, TranscriptOrigin } from '../lib/types';
 import ArchiveAnalytics from './ArchiveAnalytics';
 import LinguisticFilters from './LinguisticFilters';
 import RouteHeader from './RouteHeader';
 import SessionResults from './SessionResults';
-import { positiveThemes } from './TopicThemes';
 import { request, transcriptOriginLabels } from './api';
 
 export interface SearchTopicCount {
@@ -59,33 +62,62 @@ export default function SearchPageClient({
   const searchParams = useSearchParams();
   const searchParamsKey = searchParams.toString();
 
-  const validTopicSet = useMemo(() => new Set(topics.map(item => item.name)), [topics]);
+  const validTopicSet = useMemo(() => selectableTopicSet(topics), [topics]);
   const urlState = useMemo(
     () => parseSearchUrlParams(new URLSearchParams(searchParamsKey), { validTopics: validTopicSet }),
     [searchParamsKey, validTopicSet],
+  );
+  const hasExplicitSort = useMemo(
+    () => hasExplicitSortParam(new URLSearchParams(searchParamsKey)),
+    [searchParamsKey],
   );
   const canonicalHref = useMemo(() => buildSearchHref(urlState), [urlState]);
   const hasFilters = hasActiveSearchFilters(urlState);
 
   const [draftQuery, setDraftQuery] = useState(urlState.query);
   const [linguisticsOpen, setLinguisticsOpen] = useState(Boolean(urlState.marker));
-  const [search, setSearch] = useState<SearchResponse | null>(null);
-  const [searchSpeaker, setSearchSpeaker] = useState<LinguisticSpeaker>(urlState.speaker);
+  const [searchState, setSearchState] = useState<{
+    requestKey: string;
+    response: SearchResponse;
+    speaker: LinguisticSpeaker;
+  } | null>(null);
   const [busyKind, setBusyKind] = useState<SearchBusyKind>(null);
   const [searchError, setSearchError] = useState('');
   const [retryToken, setRetryToken] = useState(0);
 
+  const filterKey = useMemo(() => JSON.stringify({
+    query: urlState.query,
+    topic: urlState.topic,
+    origin: urlState.origin,
+    marker: urlState.marker,
+    speaker: urlState.speaker,
+    ageMin: urlState.ageMin ?? null,
+    ageMax: urlState.ageMax ?? null,
+    sort: urlState.sort,
+    retryToken,
+  }), [retryToken, urlState]);
+
+  const currentRequestKey = useMemo(
+    () => JSON.stringify({ filterKey, view: urlState.view, page: urlState.page }),
+    [filterKey, urlState.page, urlState.view],
+  );
+
+  const visibleSearch = searchState && searchState.requestKey === currentRequestKey ? searchState.response : null;
+  const visibleSpeaker = searchState && searchState.requestKey === currentRequestKey ? searchState.speaker : urlState.speaker;
+
   const resultHeading = useRef<HTMLHeadingElement>(null);
+  const mountedRef = useRef(true);
   const draftQueryRef = useRef(urlState.query);
   const lastSearchKeyRef = useRef(searchParamsKey);
   const lastMarkerRef = useRef(urlState.marker);
   const selfCommittedKeysRef = useRef<string[]>([]);
+  const submittedDraftRef = useRef(false);
   const queryDebounceTimer = useRef<number | null>(null);
   const focusResultsOnLoad = useRef(false);
   const focusResultsFrame = useRef<number | null>(null);
   const pendingViewChange = useRef(false);
   const loadedSearchRef = useRef<{ filterKey: string; response: SearchResponse } | null>(null);
-  const pendingSearchAnalytics = useRef<{ flush: () => void; cancel: () => void } | null>(null);
+  const pendingSearchAnalytics = useRef<{ key: string; flush: () => void; cancel: () => void } | null>(null);
   const lastSearchAnalytics = useRef<{ signature: string; token: number } | null>(null);
 
   const cancelQueryDebounce = useCallback(() => {
@@ -110,15 +142,22 @@ export default function SearchPageClient({
     });
   }, [cancelFocusResultsFrame]);
 
-  useEffect(() => () => {
-    cancelQueryDebounce();
-    cancelFocusResultsFrame();
-    selfCommittedKeysRef.current.length = 0;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      cancelQueryDebounce();
+      cancelFocusResultsFrame();
+      pendingSearchAnalytics.current?.cancel();
+      pendingSearchAnalytics.current = null;
+      selfCommittedKeysRef.current.length = 0;
+    };
   }, [cancelQueryDebounce, cancelFocusResultsFrame]);
 
   useEffect(() => {
     const onPopState = () => {
       selfCommittedKeysRef.current.length = 0;
+      submittedDraftRef.current = false;
       if (window.location.pathname !== '/search') return;
       const nextSearchKey = new URLSearchParams(window.location.search).toString();
       if (nextSearchKey === lastSearchKeyRef.current) return;
@@ -153,6 +192,7 @@ export default function SearchPageClient({
       // between history.pushState/replaceState and useSearchParams() flushing.
       return;
     }
+    submittedDraftRef.current = false;
     cancelQueryDebounce();
     if (draftQueryRef.current.trim() !== urlState.query) {
       draftQueryRef.current = urlState.query;
@@ -183,35 +223,33 @@ export default function SearchPageClient({
 
   const currentBaseState = useCallback((): SearchUrlState => {
     const trimmedDraft = draftQueryRef.current.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
-    const hadQuery = Boolean(urlState.query);
-    const hasDraft = Boolean(trimmedDraft);
-    let nextSort = urlState.sort;
-    if (!hadQuery && hasDraft) nextSort = 'relevance';
-    else if (hadQuery && !hasDraft && urlState.sort === 'relevance') nextSort = 'age-asc';
+    const nextSort = resolveSortForQueryChange(
+      urlState.sort,
+      Boolean(urlState.query),
+      Boolean(trimmedDraft),
+      hasExplicitSort,
+    );
     return {
       ...urlState,
       query: trimmedDraft,
       sort: nextSort,
     };
-  }, [urlState]);
+  }, [hasExplicitSort, urlState]);
 
   useEffect(() => {
     if (loadError) {
+      pendingSearchAnalytics.current?.cancel();
+      pendingSearchAnalytics.current = null;
       setBusyKind(null);
       return;
     }
 
-    const filterKey = JSON.stringify({
-      query: urlState.query,
-      topic: urlState.topic,
-      origin: urlState.origin,
-      marker: urlState.marker,
-      speaker: urlState.speaker,
-      ageMin: urlState.ageMin ?? null,
-      ageMax: urlState.ageMax ?? null,
-      sort: urlState.sort,
-      retryToken,
-    });
+    const analyticsKey = `${filterKey}::page=${urlState.page}`;
+    if (pendingSearchAnalytics.current && pendingSearchAnalytics.current.key !== analyticsKey) {
+      pendingSearchAnalytics.current.cancel();
+      pendingSearchAnalytics.current = null;
+    }
+
     const loaded = loadedSearchRef.current;
     const sameFilters = loaded !== null && loaded.filterKey === filterKey;
 
@@ -219,8 +257,7 @@ export default function SearchPageClient({
       const adapted = adaptSearchForView(loaded.response, urlState.view);
       if (adapted) {
         pendingViewChange.current = false;
-        setSearch(adapted);
-        setSearchSpeaker(urlState.speaker);
+        setSearchState({ requestKey: currentRequestKey, response: adapted, speaker: urlState.speaker });
         setSearchError('');
         setBusyKind(null);
         if (focusResultsOnLoad.current) {
@@ -232,7 +269,6 @@ export default function SearchPageClient({
     }
 
     const controller = new AbortController();
-    let pendingAnalytics: { flush: () => void; cancel: () => void } | null = null;
     const isViewOnlyChange = pendingViewChange.current && sameFilters;
     pendingViewChange.current = false;
 
@@ -240,16 +276,19 @@ export default function SearchPageClient({
     setSearchError('');
 
     const payload = searchRequestFromUrlState(urlState);
-    void request<SearchResponse>('/api/search', {
+    void request<unknown>('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: controller.signal,
-    }).then(data => {
-      if (controller.signal.aborted) return;
+    }).then(rawData => {
+      if (controller.signal.aborted || !mountedRef.current) return;
+      const data = parseSearchResponse(rawData);
+      if (!data) {
+        throw new Error('Invalid search response.');
+      }
       loadedSearchRef.current = { filterKey, response: data };
-      setSearch(data);
-      setSearchSpeaker(urlState.speaker);
+      setSearchState({ requestKey: currentRequestKey, response: data, speaker: urlState.speaker });
       setBusyKind(null);
       if (focusResultsOnLoad.current) {
         focusResultsOnLoad.current = false;
@@ -282,8 +321,11 @@ export default function SearchPageClient({
         });
         let emitted = false;
         const emit = () => {
-          if (controller.signal.aborted || emitted) return;
+          if (!mountedRef.current || emitted) return;
           emitted = true;
+          if (pendingSearchAnalytics.current === scheduled) {
+            pendingSearchAnalytics.current = null;
+          }
           if (lastSearchAnalytics.current?.signature === signature && lastSearchAnalytics.current.token === retryToken) {
             return;
           }
@@ -299,17 +341,19 @@ export default function SearchPageClient({
             theme: urlState.topic,
           });
         };
+        pendingSearchAnalytics.current?.cancel();
         const analyticsTimer = window.setTimeout(emit, 750);
-        pendingAnalytics = {
+        const scheduled = {
+          key: analyticsKey,
           flush: () => { window.clearTimeout(analyticsTimer); emit(); },
           cancel: () => window.clearTimeout(analyticsTimer),
         };
-        pendingSearchAnalytics.current = pendingAnalytics;
+        pendingSearchAnalytics.current = scheduled;
       } else {
         lastSearchAnalytics.current = { signature: '', token: retryToken };
       }
     }).catch(() => {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || !mountedRef.current) return;
       focusResultsOnLoad.current = false;
       setSearchError('The search could not be completed. Please try again.');
       setBusyKind(null);
@@ -317,12 +361,8 @@ export default function SearchPageClient({
 
     return () => {
       controller.abort();
-      pendingAnalytics?.cancel();
-      if (pendingSearchAnalytics.current === pendingAnalytics) {
-        pendingSearchAnalytics.current = null;
-      }
     };
-  }, [loadError, retryToken, scheduleFocusResults, urlState]);
+  }, [currentRequestKey, filterKey, loadError, retryToken, scheduleFocusResults, urlState]);
 
   const ageOptions = useMemo(
     () => buildAgeSelectOptions(ageBounds, [urlState.ageMin, urlState.ageMax]),
@@ -340,9 +380,7 @@ export default function SearchPageClient({
     const trimmedNext = nextRaw.trim().slice(0, MAX_SEARCH_QUERY_LENGTH);
     const hadUrlQuery = Boolean(urlState.query);
     const hasNextQuery = Boolean(trimmedNext);
-    let nextSort = urlState.sort;
-    if (!hadUrlQuery && hasNextQuery) nextSort = 'relevance';
-    else if (hadUrlQuery && !hasNextQuery && urlState.sort === 'relevance') nextSort = 'age-asc';
+    const nextSort = resolveSortForQueryChange(urlState.sort, hadUrlQuery, hasNextQuery, hasExplicitSort);
 
     const nextState: SearchUrlState = {
       ...urlState,
@@ -350,10 +388,12 @@ export default function SearchPageClient({
       sort: nextSort,
       page: 1,
     };
-    const mode = hadUrlQuery !== hasNextQuery ? 'push' : 'replace';
     queryDebounceTimer.current = window.setTimeout(() => {
       queryDebounceTimer.current = null;
-      commitState(nextState, mode);
+      const mode = hadUrlQuery !== hasNextQuery || submittedDraftRef.current ? 'push' : 'replace';
+      if (commitState(nextState, mode)) {
+        submittedDraftRef.current = false;
+      }
     }, 280);
   };
 
@@ -362,13 +402,14 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = true;
+    submittedDraftRef.current = true;
     const nextState: SearchUrlState = {
       ...currentBaseState(),
       page: 1,
     };
     const changed = commitState(nextState, 'push');
     if (!changed) {
-      if (searchError || !search) {
+      if (searchError || !visibleSearch) {
         setRetryToken(value => value + 1);
       } else {
         focusResultsOnLoad.current = false;
@@ -381,6 +422,7 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     const nextTopic = validTopicSet.has(value) ? value : '';
     trackArchiveEvent('filter_changed', { filter: 'theme', value: nextTopic });
     commitState({ ...currentBaseState(), topic: nextTopic, page: 1 }, 'push');
@@ -390,6 +432,7 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     const nextOrigin: TranscriptOrigin | '' = isTranscriptOrigin(value) ? value : '';
     trackArchiveEvent('filter_changed', { filter: 'origin', value: nextOrigin });
     commitState({ ...currentBaseState(), origin: nextOrigin, page: 1 }, 'push');
@@ -399,6 +442,7 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     const nextAgeMin = parseAgeMonthsParam(raw);
     const base = currentBaseState();
     const nextAgeMax = nextAgeMin !== undefined && base.ageMax !== undefined && nextAgeMin > base.ageMax
@@ -412,6 +456,7 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     const nextAgeMax = parseAgeMonthsParam(raw);
     const base = currentBaseState();
     const nextAgeMin = nextAgeMax !== undefined && base.ageMin !== undefined && base.ageMin > nextAgeMax
@@ -425,6 +470,7 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     const base = currentBaseState();
     const nextSort: SearchSort = isSearchSort(value) ? value : defaultSortForQuery(base.query);
     trackArchiveEvent('filter_changed', { filter: 'sort', value: nextSort });
@@ -435,6 +481,7 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     const base = currentBaseState();
     const nextSpeaker: LinguisticSpeaker = nextMarker ? base.speaker : 'child';
     trackArchiveEvent('filter_changed', { filter: 'marker', value: nextMarker });
@@ -445,6 +492,7 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     const nextSpeaker: LinguisticSpeaker = isLinguisticSpeaker(value) ? value : 'child';
     trackArchiveEvent('filter_changed', { filter: 'speaker', value: nextSpeaker });
     commitState({ ...currentBaseState(), speaker: nextSpeaker, page: 1 }, 'push');
@@ -454,6 +502,7 @@ export default function SearchPageClient({
     if (nextView === urlState.view) return;
     cancelQueryDebounce();
     focusResultsOnLoad.current = false;
+    submittedDraftRef.current = false;
     trackArchiveEvent('view_changed', { view: nextView });
     pendingViewChange.current = true;
     commitState({ ...currentBaseState(), view: nextView, page: 1 }, 'push');
@@ -464,6 +513,7 @@ export default function SearchPageClient({
     cancelFocusResultsFrame();
     focusResultsOnLoad.current = false;
     pendingViewChange.current = false;
+    submittedDraftRef.current = false;
     draftQueryRef.current = '';
     setDraftQuery('');
     trackArchiveEvent('filter_changed', { filter: 'clear', value: 'all' });
@@ -485,7 +535,10 @@ export default function SearchPageClient({
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = true;
-    commitState({ ...currentBaseState(), page: Math.max(1, nextPage) }, 'push');
+    submittedDraftRef.current = false;
+    const base = currentBaseState();
+    const targetPage = base.query !== urlState.query ? 1 : Math.max(1, nextPage);
+    commitState({ ...base, page: targetPage }, 'push');
   };
 
   const flushAnalyticsBeforeNavigate = useCallback(() => {
@@ -628,7 +681,7 @@ export default function SearchPageClient({
 
               <div className="results-toolbar">
                 <h2 ref={resultHeading} tabIndex={-1}>
-                  {search ? `${search.total.toLocaleString()} ${search.total === 1 ? 'session' : 'sessions'}` : 'Sessions'}
+                  {visibleSearch ? `${visibleSearch.total.toLocaleString()} ${visibleSearch.total === 1 ? 'session' : 'sessions'}` : 'Sessions'}
                 </h2>
                 {hasFilters && (
                   <button type="button" className="text-button small" onClick={handleClearFilters}>
@@ -658,7 +711,7 @@ export default function SearchPageClient({
                   </button>
                 </div>
                 <p className="small muted search-status" role="status">
-                  {formatSearchStatus(search, busyKind)}
+                  {formatSearchStatus(visibleSearch, busyKind)}
                 </p>
               </div>
 
@@ -679,12 +732,12 @@ export default function SearchPageClient({
               )}
 
               <div className="results-list" aria-busy={searchBusy}>
-                {search && (
+                {visibleSearch && (
                   <SessionResults
-                    results={search.results}
+                    results={visibleSearch.results}
                     view={urlState.view}
-                    firstIndex={(search.page - 1) * search.pageSize + 1}
-                    speaker={searchSpeaker}
+                    firstIndex={(visibleSearch.page - 1) * visibleSearch.pageSize + 1}
+                    speaker={visibleSpeaker}
                     headingLevel={3}
                     returnTo={canonicalHref}
                     linkPassagesToSessionRoute
@@ -693,7 +746,7 @@ export default function SearchPageClient({
                 )}
               </div>
 
-              {search && !search.results.length && !searchBusy && (
+              {visibleSearch && !visibleSearch.results.length && !searchBusy && (
                 <div className="empty-state">
                   <Search size={28} aria-hidden="true" />
                   <h3>No sessions found</h3>
@@ -705,23 +758,23 @@ export default function SearchPageClient({
                 </div>
               )}
 
-              {search && search.pages > 1 && (
+              {visibleSearch && visibleSearch.pages > 1 && (
                 <nav className="pagination" aria-label="Search result pages">
                   <button
                     className="button secondary"
                     type="button"
-                    disabled={search.page <= 1 || searchBusy}
-                    onClick={() => handlePageChange(search.page - 1)}
+                    disabled={visibleSearch.page <= 1 || searchBusy}
+                    onClick={() => handlePageChange(visibleSearch.page - 1)}
                   >
                     <ChevronLeft size={17} aria-hidden="true" />
                     Previous
                   </button>
-                  <span className="small">Page {search.page} of {search.pages}</span>
+                  <span className="small">Page {visibleSearch.page} of {visibleSearch.pages}</span>
                   <button
                     className="button secondary"
                     type="button"
-                    disabled={search.page >= search.pages || searchBusy}
-                    onClick={() => handlePageChange(search.page + 1)}
+                    disabled={visibleSearch.page >= visibleSearch.pages || searchBusy}
+                    onClick={() => handlePageChange(visibleSearch.page + 1)}
                   >
                     Next
                     <ChevronRight size={17} aria-hidden="true" />

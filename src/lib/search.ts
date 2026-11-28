@@ -148,7 +148,7 @@ function pickTranscriptMatch(
   }
 
   if (bestIndex >= 0) {
-    const focusTerms = bestMissingHits > 0 ? [...new Set([...missingFromGuide, ...transcriptTerms])] : transcriptTerms;
+    const focusTerms = bestMissingHits > 0 ? missingFromGuide : transcriptTerms;
     return {
       excerpt: excerpt(session.transcript[bestIndex].text, focusTerms),
       matchedPassage: bestIndex + 1,

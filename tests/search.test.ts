@@ -317,6 +317,28 @@ test('transcript hits report the 1-based matchedPassage for deep linking while g
   assert.equal(crossFieldHit.results[0].matchedPassage, 3);
   assert.ok(crossFieldHit.results[0].excerpt.includes('pier'));
 
+  // Long passage where guide term ("paper") appears >270 chars before missing transcript terms ("pier ferry"):
+  // excerpt must center on the missing terms so "pier" / "ferry" appear rather than only the early "paper".
+  const longPassageData: ArchiveData = {
+    ...data,
+    sessions: [
+      mockSession('long-passage', {
+        title: 'Paper workshop',
+        overview: 'Folding paper sheets on the table.',
+        transcript: [
+          { text: 'Spotting the pier far away.' },
+          { text: `Folding paper shapes ${'and talking carefully about blocks '.repeat(12)}before meeting the pier ferry at dusk.` },
+        ],
+      }),
+    ],
+  };
+  const longHit = makeSearch(longPassageData)({ query: 'paper pier ferry' });
+  assert.equal(longHit.total, 1);
+  assert.equal(longHit.results[0].matchedIn, 'transcript');
+  assert.equal(longHit.results[0].matchedPassage, 2);
+  assert.ok(longHit.results[0].excerpt.includes('pier'));
+  assert.ok(longHit.results[0].excerpt.includes('ferry'));
+
   // Guide and browse hits never set matchedPassage.
   const guideHit = search({ query: 'harbor bells' });
   assert.equal(guideHit.results[0].matchedIn, 'guide');
