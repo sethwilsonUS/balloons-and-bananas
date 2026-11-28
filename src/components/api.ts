@@ -1,3 +1,5 @@
+import type { TranscriptOrigin } from '../lib/types';
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -20,8 +22,8 @@ export function timeLabel(seconds: number): string {
   return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
 }
 
-export const originLabels = {
-  archived_research: 'Original research transcript',
-  talkbank_ai_draft: 'TalkBank AI transcript draft',
-  local_ai_draft: 'Local AI transcript draft',
-} as const;
+export const transcriptOriginLabels: Record<TranscriptOrigin, string> = {
+  archived_research: 'Archived research transcript',
+  talkbank_ai_draft: 'TalkBank AI draft',
+  local_ai_draft: 'Local AI draft',
+};

@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getNotationLinks, readingText } from '../src/lib/transcript-display';
-import type { Origin, TranscriptSegment } from '../src/lib/types';
+import type { Passage, TranscriptOrigin } from '../src/lib/types';
 
-const spoken = (text: string): TranscriptSegment => ({ text, speaker: 'Synthetic (CHI, target child)', start: 3.2, end: 4.1 });
-const read = (text: string, origin: Origin = 'archived_research') => readingText(spoken(text), origin);
+const spoken = (text: string): Passage => ({ text, speaker: 'Synthetic (CHI, target child)', start: 3.2, end: 4.1 });
+const read = (text: string, origin: TranscriptOrigin = 'archived_research') => readingText(spoken(text), origin);
 
 test('reading projection retains repeated/retraced speech and overt forms instead of target corrections', () => {
   assert.equal(read('<go go> [/] go [//] stay [///] here .'), 'go go go stay here.');
@@ -100,13 +100,13 @@ test('metadata and local AI bypass CHAT parsing, inputs stay immutable, and resu
   const source = 'hello [/] hello (.) xxx 0am .\n  Note: plain AI text';
   assert.equal(read(source, 'local_ai_draft'), source);
   for (const origin of ['archived_research', 'talkbank_ai_draft', 'local_ai_draft'] as const) {
-    const metadata: TranscriptSegment = { text: '[Source Comment] abc [/] xyz\nMore metadata.' };
+    const metadata: Passage = { text: '[Source Comment] abc [/] xyz\nMore metadata.' };
     assert.equal(readingText(metadata, origin), metadata.text);
   }
-  const segment = spoken(source);
-  const snapshot = JSON.stringify(segment);
-  const first = readingText(segment, 'talkbank_ai_draft');
+  const passage = spoken(source);
+  const snapshot = JSON.stringify(passage);
+  const first = readingText(passage, 'talkbank_ai_draft');
   assert.equal(first, 'hello hello [pause] [unintelligible].');
-  assert.equal(readingText(segment, 'talkbank_ai_draft'), first);
-  assert.equal(JSON.stringify(segment), snapshot);
+  assert.equal(readingText(passage, 'talkbank_ai_draft'), first);
+  assert.equal(JSON.stringify(passage), snapshot);
 });

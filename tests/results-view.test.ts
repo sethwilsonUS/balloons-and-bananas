@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { adaptSearchForView, balancedColumnCount, compactGridSpans, formatSearchStatus, shortSummary, visibleExcerpt } from '../src/lib/results-view';
+import { adaptSearchForView, balancedColumnCount, compactGridSpans, formatSearchStatus, shortOverview, visibleExcerpt } from '../src/lib/results-view';
 import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle } from '../src/lib/site';
-import type { EntryCard, SearchResponse, SearchResult } from '../src/lib/types';
+import type { SearchResponse, SearchResult, SessionCard } from '../src/lib/types';
 
-function mockCard(id: string): EntryCard {
+function mockCard(id: string): SessionCard {
   return {
     id,
     sourceName: `${id}.cha`,
@@ -14,8 +14,8 @@ function mockCard(id: string): EntryCard {
     topics: [],
     dates: [],
     ages: [],
-    audio: [],
-    preferredAudioId: null,
+    recordings: [],
+    preferredRecordingId: null,
   };
 }
 
@@ -26,7 +26,7 @@ function mockResponse(count: number, total: number, page: number, pageSize: 18 |
     pages: Math.max(1, Math.ceil(total / pageSize)),
     pageSize,
     results: Array.from({ length: count }, (_, index) => ({
-      entry: mockCard(`entry-${index + 1}`),
+      session: mockCard(`session-${index + 1}`),
       excerpt: '',
       matchedIn: 'browse' as const,
     })),
@@ -40,11 +40,11 @@ test('site branding uses one name and descriptive per-view document titles', () 
   assert.equal(formatDocumentTitle({ kind: 'loading' }), 'The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'error' }), 'Archive unavailable · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'overview' }), 'Overview · The Seth Tapes');
-  assert.equal(formatDocumentTitle({ kind: 'recordings', hasFilters: false }), 'Recordings · The Seth Tapes');
-  assert.equal(formatDocumentTitle({ kind: 'recordings', hasFilters: true }), 'Search results · The Seth Tapes');
-  assert.equal(formatDocumentTitle({ kind: 'recording' }), 'Recording · The Seth Tapes');
-  assert.equal(formatDocumentTitle({ kind: 'recording', title: 'Blue locomotive and wooden bridge' }), 'Blue locomotive and wooden bridge · The Seth Tapes');
-  assert.equal(formatDocumentTitle({ kind: 'recording', notFound: true }), 'Recording not found · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'sessions', hasFilters: false }), 'Sessions · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'sessions', hasFilters: true }), 'Search results · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'session' }), 'Session · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'session', title: 'Blue locomotive and wooden bridge' }), 'Blue locomotive and wooden bridge · The Seth Tapes');
+  assert.equal(formatDocumentTitle({ kind: 'session', notFound: true }), 'Session not found · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'research' }), 'Research & context · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'document', title: 'Fixture annotation provenance guide' }), 'Fixture annotation provenance guide · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'document', title: null }), 'Document not found · The Seth Tapes');
@@ -66,7 +66,7 @@ test('adaptSearchForView reuses already-loaded page 1 results across Details and
   assert.equal(adaptedDetails.pageSize, 18);
   assert.equal(adaptedDetails.pages, 6);
   assert.equal(adaptedDetails.results.length, 18);
-  assert.equal(adaptedDetails.results[17].entry.id, 'entry-18');
+  assert.equal(adaptedDetails.results[17].session.id, 'session-18');
 
   // Large result set loaded in Details (18 of 100): switching to List requires fetching 36.
   const largeDetails = mockResponse(18, 100, 1, 18);
@@ -89,8 +89,9 @@ test('formatSearchStatus distinguishes searching, view updates, and settled resu
   const settled = mockResponse(18, 50, 1, 18);
   assert.equal(formatSearchStatus(settled, 'search'), 'Searching…');
   assert.equal(formatSearchStatus(settled, 'view'), 'Updating view…');
-  assert.equal(formatSearchStatus(settled, null), '1–18 of 50 guides · page 1 of 3');
-  assert.equal(formatSearchStatus(mockResponse(4, 4, 1, 36), null), '1–4 of 4 guides');
+  assert.equal(formatSearchStatus(settled, null), '1–18 of 50 sessions · page 1 of 3');
+  assert.equal(formatSearchStatus(mockResponse(4, 4, 1, 36), null), '1–4 of 4 sessions');
+  assert.equal(formatSearchStatus(mockResponse(1, 1, 1, 18), null), '1–1 of 1 session');
   assert.equal(formatSearchStatus(mockResponse(0, 0, 1, 18), null), '0 results');
   assert.equal(formatSearchStatus(null, null), '');
 });
@@ -141,28 +142,28 @@ test('balancedColumnCount and compactGridSpans avoid single-orphan rows across w
 
 test('visibleExcerpt is view-aware: Details suppresses full-overview excerpts while List keeps excerpts hidden past truncation', () => {
   const longOverview = 'Opening remarks about folding paper maps, sorting wooden blocks, and lining up cardboard houses across the kitchen table while naming streets, corners, and bridges before eventually spotting a telescopic lantern hanging beside the back veranda.';
-  assert.ok(shortSummary(longOverview).length < longOverview.length);
-  assert.ok(!shortSummary(longOverview).includes('telescopic lantern'));
+  assert.ok(shortOverview(longOverview).length < longOverview.length);
+  assert.ok(!shortOverview(longOverview).includes('telescopic lantern'));
 
   const truncatedOverviewResult: SearchResult = {
-    entry: { ...mockCard('long-overview'), overview: longOverview },
-    matchedIn: 'summary',
+    session: { ...mockCard('long-overview'), overview: longOverview },
+    matchedIn: 'guide',
     excerpt: '…naming streets, corners, and bridges before eventually spotting a telescopic lantern hanging beside the back veranda.',
   };
   assert.equal(visibleExcerpt(truncatedOverviewResult, 'details'), '');
   assert.equal(visibleExcerpt(truncatedOverviewResult, 'list'), truncatedOverviewResult.excerpt);
 
   const visibleInShortResult: SearchResult = {
-    entry: { ...mockCard('long-overview'), overview: longOverview },
-    matchedIn: 'summary',
+    session: { ...mockCard('long-overview'), overview: longOverview },
+    matchedIn: 'guide',
     excerpt: 'Opening remarks about folding paper maps, sorting wooden blocks',
   };
   assert.equal(visibleExcerpt(visibleInShortResult, 'details'), '');
   assert.equal(visibleExcerpt(visibleInShortResult, 'list'), '');
 
   const momentResult: SearchResult = {
-    entry: { ...mockCard('long-overview'), overview: longOverview },
-    matchedIn: 'summary',
+    session: { ...mockCard('long-overview'), overview: longOverview },
+    matchedIn: 'guide',
     excerpt: 'Lantern check: Counting three brass lanterns along the railing.',
   };
   assert.equal(visibleExcerpt(momentResult, 'details'), momentResult.excerpt);

@@ -5,8 +5,8 @@ export type DocumentTitleState =
   | { kind: 'loading' }
   | { kind: 'error' }
   | { kind: 'overview' }
-  | { kind: 'recordings'; hasFilters: boolean }
-  | { kind: 'recording'; title?: string | null; notFound?: boolean }
+  | { kind: 'sessions'; hasFilters: boolean }
+  | { kind: 'session'; title?: string | null; notFound?: boolean }
   | { kind: 'research' }
   | { kind: 'document'; title?: string | null };
 
@@ -18,12 +18,12 @@ export function formatDocumentTitle(state: DocumentTitleState): string {
       return `Archive unavailable · ${ARCHIVE_NAME}`;
     case 'overview':
       return `Overview · ${ARCHIVE_NAME}`;
-    case 'recordings':
-      return `${state.hasFilters ? 'Search results' : 'Recordings'} · ${ARCHIVE_NAME}`;
-    case 'recording': {
+    case 'sessions':
+      return `${state.hasFilters ? 'Search results' : 'Sessions'} · ${ARCHIVE_NAME}`;
+    case 'session': {
       const trimmed = state.title?.trim();
       if (trimmed) return `${trimmed} · ${ARCHIVE_NAME}`;
-      return `${state.notFound ? 'Recording not found' : 'Recording'} · ${ARCHIVE_NAME}`;
+      return `${state.notFound ? 'Session not found' : 'Session'} · ${ARCHIVE_NAME}`;
     }
     case 'research':
       return `Research & context · ${ARCHIVE_NAME}`;

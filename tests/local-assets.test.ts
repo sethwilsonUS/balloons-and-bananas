@@ -15,7 +15,7 @@ function makeFixtureData(assetPath = 'archive/v1/files/sample.txt'): ArchiveData
   return {
     version: 1,
     generatedAt: '2026-01-01T00:00:00.000Z',
-    entries: [],
+    sessions: [],
     documents: [],
     assets: {
       'fixture-sample': {

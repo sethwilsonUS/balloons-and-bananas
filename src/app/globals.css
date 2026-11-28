@@ -274,14 +274,14 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .results-toolbar .text-button { color: var(--muted); }
 .search-status { margin: 0 0 0 auto; }
 .results-list[aria-busy='true'] { cursor: progress; }
-.recording-card { display: grid; grid-template-columns: 47px minmax(0, 1fr); gap: 22px; padding: 32px 0 33px; border-bottom: 1px solid var(--line); }
-.recording-index { font: 1.55rem/1.2 var(--serif); color: var(--rust); padding-top: 30px; }
-.entry-meta { display: flex; gap: 6px 17px; flex-wrap: wrap; color: var(--muted); font-size: .75rem; letter-spacing: .025em; margin-bottom: 9px; overflow-wrap: anywhere; }
-.entry-meta > span + span { position: relative; }
-.entry-meta > span + span::before { content: '·'; position: absolute; left: -11px; }
-.recording-card h4 { font-family: var(--serif); font-size: clamp(1.35rem, 2.6vw, 1.72rem); line-height: 1.28; margin: 0 0 14px; }
-.recording-card h4 a { display: flex; align-items: center; justify-content: space-between; gap: 25px; color: var(--ink); text-decoration: none; }
-.recording-card h4 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }
+.session-card { display: grid; grid-template-columns: 47px minmax(0, 1fr); gap: 22px; padding: 32px 0 33px; border-bottom: 1px solid var(--line); }
+.session-index { font: 1.55rem/1.2 var(--serif); color: var(--rust); padding-top: 30px; }
+.session-meta { display: flex; gap: 6px 17px; flex-wrap: wrap; color: var(--muted); font-size: .75rem; letter-spacing: .025em; margin-bottom: 9px; overflow-wrap: anywhere; }
+.session-meta > span + span { position: relative; }
+.session-meta > span + span::before { content: '·'; position: absolute; left: -11px; }
+.session-card h4 { font-family: var(--serif); font-size: clamp(1.35rem, 2.6vw, 1.72rem); line-height: 1.28; margin: 0 0 14px; }
+.session-card h4 a { display: flex; align-items: center; justify-content: space-between; gap: 25px; color: var(--ink); text-decoration: none; }
+.session-card h4 a:hover { color: var(--rust); text-decoration: underline; text-decoration-thickness: 1px; }
 .card-overview { font-size: 1rem; line-height: 1.7; color: var(--reading); max-width: 950px; margin: 0 0 17px; }
 .card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
 .audio-count { display: flex; align-items: center; gap: 7px; font-size: .72rem; }
@@ -298,36 +298,36 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .empty-state p { max-width: 480px; margin: auto; font-size: .9rem; }
 .pagination { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 30px; }
 
-/* List view shortens guide summaries, while source evidence stays expandable. */
-.recording-view-control { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-left: auto; }
-.recording-view-control > span { margin-right: 4px; }
-.recording-view-control .button { min-width: 76px; }
+/* List view shortens guide overviews, while source evidence stays expandable. */
+.session-view-control { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-left: auto; }
+.session-view-control > span { margin-right: 4px; }
+.session-view-control .button { min-width: 76px; }
 .results-toolbar .search-status { flex-basis: 100%; margin: 0; }
 .results-reading-note { margin: 10px 0 8px; max-width: 900px; }
-.recordings-compact-list { list-style: none; padding: 0; margin: 0; }
-.recording-list-row { display: grid; grid-template-columns: 43px minmax(0, 1fr); gap: 18px; padding: 19px 0; border-bottom: 1px solid var(--line); }
-.recording-list-row .recording-index { font-size: 1.2rem; padding-top: 2px; }
-.recording-list-row .entry-meta { margin-bottom: 5px; }
-.recording-list-row h4 { font: 500 1.3rem/1.4 var(--serif); margin: 0 0 8px; }
-.recording-list-row h4 a { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; color: var(--ink); text-decoration: none; }
-.recording-list-row h4 a svg { margin-top: 5px; }
-.recording-list-row h4 a:hover { color: var(--rust); text-decoration: underline; }
-.recording-list-row .card-overview { font-size: 1rem; line-height: 1.6; margin-bottom: 10px; }
+.sessions-compact-list { list-style: none; padding: 0; margin: 0; }
+.session-list-row { display: grid; grid-template-columns: 43px minmax(0, 1fr); gap: 18px; padding: 19px 0; border-bottom: 1px solid var(--line); }
+.session-list-row .session-index { font-size: 1.2rem; padding-top: 2px; }
+.session-list-row .session-meta { margin-bottom: 5px; }
+.session-list-row h4 { font: 500 1.3rem/1.4 var(--serif); margin: 0 0 8px; }
+.session-list-row h4 a { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; color: var(--ink); text-decoration: none; }
+.session-list-row h4 a svg { margin-top: 5px; }
+.session-list-row h4 a:hover { color: var(--rust); text-decoration: underline; }
+.session-list-row .card-overview { font-size: 1rem; line-height: 1.6; margin-bottom: 10px; }
 .compact-result-matches { margin-top: 7px; }
 .compact-result-matches > summary { min-height: 44px; padding: 10px 0; color: var(--forest); font-size: .9rem; }
 .compact-result-matches .linguistic-evidence { margin: 8px 0 0; }
 .compact-result-matches .search-excerpt { margin: 8px 0 12px; }
 @media (max-width: 720px) {
-  .recording-view-control { flex-basis: 100%; margin-left: 0; }
-  .recording-list-row { grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+  .session-view-control { flex-basis: 100%; margin-left: 0; }
+  .session-list-row { grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
 }
 @media (max-width: 440px) {
-  .recording-list-row { display: block; padding: 18px 0; }
-  .recording-list-row .recording-index { display: none; }
+  .session-list-row { display: block; padding: 18px 0; }
+  .session-list-row .session-index { display: none; }
 }
 
-/* Each guide is a reading page, with source information kept visibly attached. */
-.recording-detail { max-width: 950px; margin: auto; padding-top: 28px; }
+/* Each session is a reading page, with source information kept visibly attached. */
+.session-detail { max-width: 950px; margin: auto; padding-top: 28px; }
 .back-button { font-size: .8rem; margin-bottom: 30px; color: var(--muted); }
 .detail-header h2 { font-size: clamp(2rem, 4.4vw, 3.3rem); line-height: 1.15; margin: 18px 0 23px; }
 .detail-header .eyebrow { font-size: .65rem; margin: 0; }
@@ -339,11 +339,8 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .section-label { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
 .section-label h3 { font-size: 1rem; margin: 0; }
 .audio-panel > p { margin-bottom: 16px; }
-.recording-references { list-style: none; margin: 0; padding: 0; }
-.recording-references li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 22px; padding: 10px 0; border-top: 1px solid var(--line); font-size: .85rem; overflow-wrap: anywhere; }
-.recording-references .small { font-size: .75rem; }
-.landmarks { margin: 0 0 55px; }
-.landmarks .section-heading h3, .transcript-section .section-heading h3, .source-section h3 { font-family: var(--serif); font-size: 1.9rem; }
+.moments-section { margin: 0 0 55px; }
+.moments-section .section-heading h3, .transcript-section .section-heading h3, .source-section h3 { font-family: var(--serif); font-size: 1.9rem; }
 .moment-list { padding: 0; margin: 0; list-style: none; }
 .moment-list > li { display: grid; grid-template-columns: 65px minmax(0, 1fr); gap: 23px; border-top: 1px solid var(--line); padding: 25px 0 22px; }
 .moment-marker { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
@@ -432,11 +429,11 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .search-form { padding: 19px; }
   .filter-row { grid-template-columns: 1fr 1fr; }
   .filter-row > .field:last-child { grid-column: 1 / -1; max-width: 240px; }
-  .recording-card { grid-template-columns: 30px minmax(0, 1fr); gap: 15px; }
-  .recording-index { font-size: 1.3rem; padding-top: 28px; }
-  .recording-card h4 a { gap: 15px; }
-  .recording-card h4 a svg { width: 17px; }
-  .entry-meta { font-size: .75rem; }
+  .session-card { grid-template-columns: 30px minmax(0, 1fr); gap: 15px; }
+  .session-index { font-size: 1.3rem; padding-top: 28px; }
+  .session-card h4 a { gap: 15px; }
+  .session-card h4 a svg { width: 17px; }
+  .session-meta { font-size: .75rem; }
   .card-overview { font-size: 1rem; }
   .card-bottom { gap: 9px; }
   .results-toolbar { margin-top: 23px; }
@@ -450,7 +447,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .transcript-line { grid-template-columns: 56px minmax(0, 1fr); gap: 11px; }
   .transcript-cue { padding-left: 6px; }
   .transcript-line p { font-size: .96rem; }
-  .landmarks .section-heading h3, .transcript-section .section-heading h3, .source-section h3 { font-size: 1.7rem; }
+  .moments-section .section-heading h3, .transcript-section .section-heading h3, .source-section h3 { font-size: 1.7rem; }
   .site-footer { margin-top: 55px; }
   .entrance-content { padding: 70px 0; }
 }
@@ -475,10 +472,10 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .main-search input { font-size: .87rem; }
   .filter-row { grid-template-columns: 1fr; }
   .filter-row > .field:last-child { max-width: none; }
-  .recording-card { display: block; padding: 27px 0; }
-  .recording-index { display: none; }
-  .recording-card h4 { font-size: 1.5rem; }
-  .recording-card h4 a svg { display: none; }
+  .session-card { display: block; padding: 27px 0; }
+  .session-index { display: none; }
+  .session-card h4 { font-size: 1.5rem; }
+  .session-card h4 a svg { display: none; }
   .pagination { gap: 9px; flex-wrap: wrap; }
   .pagination .button { padding: 9px 12px; font-size: .76rem; }
   .pagination > span { font-size: .7rem; }
@@ -543,7 +540,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .masthead h1 { font-size: 30pt; }
   .source-key, .provenance-note, .audio-panel { background: white; }
   a { color: black; }
-  .moment-list > li, .recording-card, .transcript-line { break-inside: avoid; }
+  .moment-list > li, .session-card, .transcript-line { break-inside: avoid; }
 }
 
 

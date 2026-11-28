@@ -79,27 +79,27 @@ try {
     verify(response.status === 200 && first.pageSize === pageSize, 'effective page size reported');
     verify(first.total === data.entries.length && first.results.length === pageSize, 'full first page');
     verify(first.pages === Math.ceil(first.total / pageSize) && first.page === 1, 'page count respects size');
-    firstPages[pageSize] = first.results.map(row => row.entry.id);
+    firstPages[pageSize] = first.results.map(row => row.session.id);
     response = await call({ pageSize, page: 2, sort: 'oldest' });
     const second = await response.json();
     verify(response.status === 200 && second.page === 2 && second.results.length === pageSize, 'second page');
-    verify(second.results.every(row => !firstPages[pageSize].includes(row.entry.id)), 'adjacent pages do not overlap');
+    verify(second.results.every(row => !firstPages[pageSize].includes(row.session.id)), 'adjacent pages do not overlap');
     response = await call({ pageSize, page: 99999, sort: 'oldest' });
     const last = await response.json();
     verify(response.status === 200 && last.page === first.pages, 'oversized page clamps to last');
     verify(last.results.length === first.total - (first.pages - 1) * pageSize, 'complete final page');
-    verify([...first.results, ...second.results, ...last.results].every(row => !('transcript' in row.entry) && byId.get(row.entry.id)?.origin === row.entry.origin), 'pagination preserves source labels and private projection');
+    verify([...first.results, ...second.results, ...last.results].every(row => !('transcript' in row.session) && byId.get(row.session.id)?.origin === row.session.origin), 'pagination preserves source labels and private projection');
   }
   verify(firstPages[18].every((id, index) => firstPages[36][index] === id), 'switching density preserves ordering');
   response = await call({ pageSize: 18, page: 2, sort: 'oldest' });
   const secondDetails = await response.json();
-  verify(secondDetails.results.every((row, index) => firstPages[36][18 + index] === row.entry.id), 'one list page equals two details pages');
+  verify(secondDetails.results.every((row, index) => firstPages[36][18 + index] === row.session.id), 'one list page equals two details pages');
 
   stage = 'linguistic pagination in list view';
   response = await call({ marker: 'repetition', speaker: 'any', pageSize: 36, page: 2 });
   const listMarkers = await response.json();
   verify(response.status === 200 && listMarkers.total === 81 && listMarkers.page === 2 && listMarkers.pages === 3 && listMarkers.results.length === 36, 'marker filter precedes compact pagination');
-  verify(listMarkers.results.every(row => row.linguisticEvidence?.marker === 'repetition' && row.linguisticEvidence.examples.length > 0 && row.entry.origin !== 'local_ai_draft'), 'compact marker page retains source evidence');
+  verify(listMarkers.results.every(row => row.linguisticEvidence?.marker === 'repetition' && row.linguisticEvidence.examples.length > 0 && row.session.origin !== 'local_ai_draft'), 'compact marker page retains source evidence');
 
   const markers = ['repetition', 'retracing', 'pause', 'question', 'wh-question', 'negation', 'first-person', 'deixis'];
   const totals = {};
@@ -114,21 +114,21 @@ try {
     verify(Number.isSafeInteger(result.total) && result.total >= 0, 'bounded total');
     verify(result.results.length <= 18, 'bounded page');
     for (const row of result.results) {
-      const original = byId.get(row.entry.id);
+      const original = byId.get(row.session.id);
       verify(Boolean(original), 'known source');
-      verify(!('transcript' in row.entry), 'no full transcript in search card');
+      verify(!('transcript' in row.session), 'no full transcript in search card');
       const evidence = row.linguisticEvidence;
       verify(evidence?.marker === marker && evidence.count > 0, 'matching evidence');
       verify(evidence.examples.length > 0 && evidence.examples.length <= 3, 'bounded examples');
       for (const example of evidence.examples) {
-        const segment = original.transcript[example.segmentIndex];
-        verify(Boolean(segment), 'valid source locator');
-        verify(example.speaker === segment.speaker, 'speaker not inferred');
+        const passage = original.transcript[example.passageIndex];
+        verify(Boolean(passage), 'valid source locator');
+        verify(example.speaker === passage.speaker, 'speaker not inferred');
         verify(typeof example.text === 'string' && example.text.length <= 600, 'bounded excerpt');
         // Truncated excerpts retain the source's text, with an ellipsis at the cut.
-        verify(segment.text.includes(example.text.replace(/^…|…$/g, '')), 'excerpt belongs to source');
+        verify(passage.text.includes(example.text.replace(/^…|…$/g, '')), 'excerpt belongs to source');
         verify(!/LOCAL AI-GENERATED EDITORIAL|\[Source |\n\s*Note:/.test(example.text), 'notes are not examples');
-        if (speaker === 'child') verify(original.origin === 'archived_research' && /\(CHI(?:[,)]|\s)/.test(segment.speaker || ''), 'explicit archived child only');
+        if (speaker === 'child') verify(original.origin === 'archived_research' && /\(CHI(?:[,)]|\s)/.test(passage.speaker || ''), 'explicit archived child only');
         if (['repetition', 'retracing', 'pause'].includes(marker)) verify(original.origin !== 'local_ai_draft', 'CHAT notation requires CHAT source');
       }
       sample ??= row;
@@ -140,11 +140,11 @@ try {
   for (const marker of markers) verify(totals[`${marker}/child`] <= totals[`${marker}/any`], 'child subset');
 
   stage = 'combined filters and query excerpt';
-  const source = byId.get(sample.entry.id);
+  const source = byId.get(sample.session.id);
   response = await call({ marker: sample.linguisticEvidence.marker, speaker: 'child', origin: source.origin, topic: source.topics[0] || '', query: source.sourceName, page: 1 });
   const combined = await response.json();
-  verify(response.status === 200 && combined.results.some(row => row.entry.id === source.id), 'query marker source theme intersection');
-  verify(combined.results.every(row => row.entry.origin === source.origin && (!source.topics[0] || row.entry.topics.includes(source.topics[0]))), 'all filter conditions respected');
+  verify(response.status === 200 && combined.results.some(row => row.session.id === source.id), 'query marker source theme intersection');
+  verify(combined.results.every(row => row.session.origin === source.origin && (!source.topics[0] || row.session.topics.includes(source.topics[0]))), 'all filter conditions respected');
 
   stage = 'AI child exclusion';
   for (const origin of ['local_ai_draft', 'talkbank_ai_draft']) {

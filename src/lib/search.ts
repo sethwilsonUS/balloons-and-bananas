@@ -1,7 +1,7 @@
 import MiniSearch, { type SearchResult as MiniSearchResult } from 'minisearch';
 import { makeLinguisticSearch } from './linguistic-search';
-import { shortSummary } from './results-view';
-import type { ArchiveData, ArchiveEntry, EntryCard, SearchPageSize, SearchRequest, SearchResponse } from './types';
+import { shortOverview } from './results-view';
+import type { ArchiveData, SearchPageSize, SearchRequest, SearchResponse, Session, SessionCard } from './types';
 
 const fold = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
 const collapseWhitespace = (s: string) => s.replace(/\s+/g, ' ').trim();
@@ -10,8 +10,8 @@ const normalizeWords = (s: string) => fold(s).replace(/[^\p{L}\p{N}]+/gu, ' ').t
 export function isSearchPageSize(value: unknown): value is SearchPageSize {
   return value === 18 || value === 36;
 }
-export function card(entry: ArchiveEntry): EntryCard {
-  const { transcript: _t, moments: _m, limits: _l, sourceSha256: _s, association: _a, sources: _f, ...value } = entry;
+export function sessionCard(session: Session): SessionCard {
+  const { transcript: _t, moments: _m, limits: _l, sourceSha256: _s, association: _a, sources: _f, ...value } = session;
   return value;
 }
 function excerpt(text: string, terms: string[]) {
@@ -42,10 +42,10 @@ function momentDuplicatesOverview(moment: { title: string; description: string }
     || (duplicatesOverview(moment.description, overview) && (!moment.title.trim() || duplicatesOverview(moment.title, overview)));
 }
 
-function pickTruncatedOverviewExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSearchResult | undefined): string {
-  const overview = entry.overview.trim();
+function pickTruncatedOverviewExcerpt(session: Session, queryTerms: string[], hit: MiniSearchResult | undefined): string {
+  const overview = session.overview.trim();
   if (!overview) return '';
-  const shortened = shortSummary(overview);
+  const shortened = shortOverview(overview);
   if (shortened === overview) return '';
   const foldedOverview = fold(overview);
   const foldedShort = fold(shortened);
@@ -60,14 +60,14 @@ function pickTruncatedOverviewExcerpt(entry: ArchiveEntry, queryTerms: string[],
   return excerpt(overview, hiddenInList);
 }
 
-function pickGuideExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSearchResult | undefined): string {
-  if (entry.moments.length) {
-    const cardFieldsText = fold([entry.title, entry.sourceName, ...entry.audio.map(a => a.name), entry.topics.join(' '), entry.overview].join('\n'));
+function pickGuideExcerpt(session: Session, queryTerms: string[], hit: MiniSearchResult | undefined): string {
+  if (session.moments.length) {
+    const cardFieldsText = fold([session.title, session.sourceName, ...session.recordings.map(r => r.name), session.topics.join(' '), session.overview].join('\n'));
     const missingFromCard = queryTerms.filter(term => !cardFieldsText.includes(term));
     const momentMatchTerms = matchedTermsForField(hit, 'moments');
     const highlightTerms = [...new Set([...queryTerms, ...momentMatchTerms])];
 
-    const moments = entry.moments.map(moment => {
+    const moments = session.moments.map(moment => {
       const text = `${moment.title}: ${moment.description}`;
       const folded = fold(text);
       const exactQueryHits = queryTerms.filter(term => folded.includes(term)).length;
@@ -78,7 +78,7 @@ function pickGuideExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSe
 
     // Prefer a moment that satisfies all query terms (without repeating overview or concatenating title).
     const fullMoment = moments.find(item =>
-      queryTerms.length > 0 && item.exactQueryHits === queryTerms.length && !momentDuplicatesOverview(item.moment, item.text, entry.overview),
+      queryTerms.length > 0 && item.exactQueryHits === queryTerms.length && !momentDuplicatesOverview(item.moment, item.text, session.overview),
     );
     if (fullMoment) return excerpt(fullMoment.text, highlightTerms);
 
@@ -86,7 +86,7 @@ function pickGuideExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSe
     // show the moment that contributes the most of those terms.
     if (missingFromCard.length > 0) {
       const best = moments
-        .filter(item => (item.missingHits > 0 || item.matchedFieldHits > 0) && !momentDuplicatesOverview(item.moment, item.text, entry.overview))
+        .filter(item => (item.missingHits > 0 || item.matchedFieldHits > 0) && !momentDuplicatesOverview(item.moment, item.text, session.overview))
         .sort((a, b) => (b.missingHits - a.missingHits) || (b.exactQueryHits - a.exactQueryHits) || (b.matchedFieldHits - a.matchedFieldHits))[0];
       if (best) return excerpt(best.text, [...new Set([...missingFromCard, ...highlightTerms])]);
     }
@@ -97,7 +97,7 @@ function pickGuideExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSe
       const onlyInMoments = !matchedFields.has('title') && !matchedFields.has('overview') && !matchedFields.has('sourceName') && !matchedFields.has('topics');
       if (onlyInMoments) {
         const best = moments
-          .filter(item => item.matchedFieldHits > 0 && !momentDuplicatesOverview(item.moment, item.text, entry.overview))
+          .filter(item => item.matchedFieldHits > 0 && !momentDuplicatesOverview(item.moment, item.text, session.overview))
           .sort((a, b) => b.matchedFieldHits - a.matchedFieldHits)[0];
         if (best) return excerpt(best.text, highlightTerms);
       }
@@ -105,23 +105,23 @@ function pickGuideExcerpt(entry: ArchiveEntry, queryTerms: string[], hit: MiniSe
   }
 
   // If no moment qualified, keep an overview-only excerpt strictly when List view truncates
-  // the matching term past shortSummary(); Details view still suppresses it as already visible.
-  return pickTruncatedOverviewExcerpt(entry, queryTerms, hit);
+  // the matching term past shortOverview(); Details view still suppresses it as already visible.
+  return pickTruncatedOverviewExcerpt(session, queryTerms, hit);
 }
 
 export function makeSearch(data: ArchiveData) {
-  const byId = new Map(data.entries.map(e => [e.id, e]));
-  const linguisticSearch = makeLinguisticSearch(data.entries);
+  const byId = new Map(data.sessions.map(session => [session.id, session]));
+  const linguisticSearch = makeLinguisticSearch(data.sessions);
   const index = new MiniSearch({
     fields: ['title', 'sourceName', 'topics', 'overview', 'moments', 'transcript'],
     idField: 'id', processTerm: fold,
     searchOptions: { boost: { title: 6, sourceName: 5, topics: 4, overview: 3, moments: 2 }, prefix: true, fuzzy: 0.15, combineWith: 'AND' },
   });
-  index.addAll(data.entries.map(e => ({
-    id: e.id, title: e.title, sourceName: [e.sourceName, ...e.audio.map(a => a.name)].join(' '),
-    topics: e.topics.join(' '), overview: e.overview,
-    moments: e.moments.map(m => `${m.title} ${m.description}`).join('\n'),
-    transcript: e.transcript.map(s => s.text).join('\n'),
+  index.addAll(data.sessions.map(session => ({
+    id: session.id, title: session.title, sourceName: [session.sourceName, ...session.recordings.map(r => r.name)].join(' '),
+    topics: session.topics.join(' '), overview: session.overview,
+    moments: session.moments.map(moment => `${moment.title} ${moment.description}`).join('\n'),
+    transcript: session.transcript.map(passage => passage.text).join('\n'),
   })));
 
   return function search(request: SearchRequest): SearchResponse {
@@ -131,48 +131,48 @@ export function makeSearch(data: ArchiveData) {
     const terms = fold(query).split(/\s+/).filter(Boolean);
     const rawHits = query ? index.search(query) : [];
     const hitById = new Map(rawHits.map(r => [String(r.id), r]));
-    let entries = query ? rawHits.map(r => byId.get(r.id)!).filter(Boolean) : [...data.entries];
-    if (request.origin) entries = entries.filter(e => e.origin === request.origin);
-    if (request.topic) entries = entries.filter(e => e.topics.includes(request.topic!));
+    let sessions = query ? rawHits.map(r => byId.get(r.id)!).filter(Boolean) : [...data.sessions];
+    if (request.origin) sessions = sessions.filter(session => session.origin === request.origin);
+    if (request.topic) sessions = sessions.filter(session => session.topics.includes(request.topic!));
     const linguisticMatches = request.marker ? linguisticSearch(request.marker, request.speaker ?? 'child') : undefined;
-    if (linguisticMatches) entries = entries.filter(entry => linguisticMatches.has(entry.id));
+    if (linguisticMatches) sessions = sessions.filter(session => linguisticMatches.has(session.id));
     const sort = request.sort ?? (query ? 'relevance' : 'oldest');
-    if (sort !== 'relevance' || !query) entries.sort((a, b) => {
+    if (sort !== 'relevance' || !query) sessions.sort((a, b) => {
       const ad = a.dates[0], bd = b.dates[0];
       if (!ad && !bd) return a.sourceName.localeCompare(b.sourceName);
       if (!ad) return 1;
       if (!bd) return -1;
       return (ad.localeCompare(bd) || a.sourceName.localeCompare(b.sourceName)) * (sort === 'newest' ? -1 : 1);
     });
-    const pages = Math.max(1, Math.ceil(entries.length / pageSize));
+    const pages = Math.max(1, Math.ceil(sessions.length / pageSize));
     const page = Math.min(pages, Math.max(1, Math.floor(Number.isFinite(request.page) ? request.page! : 1)));
-    return { total: entries.length, page, pages, pageSize, results: entries.slice((page - 1) * pageSize, page * pageSize).map(entry => {
-      const evidence = linguisticMatches?.get(entry.id);
+    return { total: sessions.length, page, pages, pageSize, results: sessions.slice((page - 1) * pageSize, page * pageSize).map(session => {
+      const evidence = linguisticMatches?.get(session.id);
       const linguistic = evidence ? { linguisticEvidence: evidence } : {};
-      if (!query) return { entry: card(entry), excerpt: '', matchedIn: 'browse', ...linguistic };
-      const hit = hitById.get(entry.id);
+      if (!query) return { session: sessionCard(session), excerpt: '', matchedIn: 'browse', ...linguistic };
+      const hit = hitById.get(session.id);
       const matchedFields = new Set(Object.values(hit?.match ?? {}).flat());
       const guideText = [
-        entry.title,
-        entry.sourceName,
-        ...entry.audio.map(a => a.name),
-        entry.topics.join(' '),
-        entry.overview,
-        ...entry.moments.map(m => `${m.title}: ${m.description}`),
+        session.title,
+        session.sourceName,
+        ...session.recordings.map(r => r.name),
+        session.topics.join(' '),
+        session.overview,
+        ...session.moments.map(moment => `${moment.title}: ${moment.description}`),
       ].join('\n');
-      const inSummary = terms.every(t => fold(guideText).includes(t)) || !matchedFields.has('transcript');
-      if (inSummary) {
+      const inGuide = terms.every(t => fold(guideText).includes(t)) || !matchedFields.has('transcript');
+      if (inGuide) {
         return {
-          entry: card(entry),
-          excerpt: pickGuideExcerpt(entry, terms, hit),
-          matchedIn: 'summary',
+          session: sessionCard(session),
+          excerpt: pickGuideExcerpt(session, terms, hit),
+          matchedIn: 'guide',
           ...linguistic,
         };
       }
-      const transcript = entry.transcript.map(s => s.text).join('\n');
+      const transcript = session.transcript.map(passage => passage.text).join('\n');
       const transcriptTerms = [...new Set([...terms, ...matchedTermsForField(hit, 'transcript')])];
       return {
-        entry: card(entry),
+        session: sessionCard(session),
         excerpt: excerpt(transcript, transcriptTerms),
         matchedIn: 'transcript',
         ...linguistic,

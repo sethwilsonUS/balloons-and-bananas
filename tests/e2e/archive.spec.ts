@@ -63,11 +63,11 @@ test('overview loads, theme toggle switches light/dark/system themes, and axe is
   await page.goto('/');
 
   await expect(page.getByRole('heading', { level: 1, name: /the seth tapes/i })).toBeVisible();
-  await expect(page.locator('.collection-note')).toContainText('4 recording guides');
-  await expect(page.locator('.collection-note')).toContainText('3 original audio files');
-  await expect(page.locator('.source-key')).toContainText('2 original research');
-  await expect(page.locator('.source-key')).toContainText('1 TalkBank AI drafts');
-  await expect(page.locator('.source-key')).toContainText('1 local AI drafts');
+  await expect(page.locator('.collection-note')).toContainText('4 sessions');
+  await expect(page.locator('.collection-note')).toContainText('3 original recordings');
+  await expect(page.locator('.source-key')).toContainText('2 archived research');
+  await expect(page.locator('.source-key')).toContainText('1 TalkBank AI draft');
+  await expect(page.locator('.source-key')).toContainText('1 local AI draft');
   await expect(page.getByText('About this invented fixture collection')).toBeVisible();
 
   await setTheme(page, 'light');
@@ -108,19 +108,19 @@ test('search returns results and moves focus to the results heading', async ({ p
   await page.locator('.home-search-form').getByRole('button', { name: 'Search' }).click();
 
   const resultsHeading = page.locator('.results-toolbar h3');
-  await expect(resultsHeading).toHaveText('2 guides');
+  await expect(resultsHeading).toHaveText('2 sessions');
   await expect(resultsHeading).toBeFocused();
   await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toBeVisible();
   await expect(page.getByRole('link', { name: /Paper lighthouse and harbor bells/i })).toBeVisible();
 
   await auditBothThemes(page, 'search results');
 
-  // Submitting from the recordings search form also updates results and moves focus to results heading
-  const archiveSearch = page.getByLabel('Search recordings and transcripts');
+  // Submitting from the sessions search form also updates results and moves focus to results heading
+  const archiveSearch = page.getByLabel('Search sessions and transcripts');
   await archiveSearch.fill('submarine');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
 
-  await expect(resultsHeading).toHaveText('1 guide');
+  await expect(resultsHeading).toHaveText('1 session');
   await expect(resultsHeading).toBeFocused();
   await expect(page.getByRole('link', { name: /Yellow submarine in the courtyard/i })).toBeVisible();
 
@@ -129,21 +129,22 @@ test('search returns results and moves focus to the results heading', async ({ p
   await page.getByRole('button', { name: 'Repetition notation' }).click();
   await archiveSearch.fill('');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
-  await expect(resultsHeading).toHaveText('2 guides');
+  await expect(resultsHeading).toHaveText('2 sessions');
   await expect(resultsHeading).toBeFocused();
   await expect(page.getByRole('link', { name: 'Blue locomotive and wooden bridge', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Cardboard observatory without audio', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /Read in the transcript: passage 1, Blue locomotive/i })).toBeVisible();
 });
 
-test('opening a recording plays fixture audio without Blob, serves private downloads, and handles no-audio sessions', async ({ page, request }) => {
+test('opening a session plays fixture audio without Blob, serves private downloads, and handles no-audio sessions', async ({ page, request }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /Recordings/i }).click();
+  await page.getByRole('button', { name: /Sessions/i }).click();
   await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toBeVisible();
   await page.getByRole('link', { name: /Blue locomotive and wooden bridge/i }).click();
 
   await expect(page.getByRole('heading', { level: 2, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
   await expect(page.locator('.detail-header')).toContainText('Age 1 year, 8 months, 15 days');
+  await expect(page.getByRole('heading', { level: 3, name: 'Moments' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 4, name: 'Crossing the cardboard bridge' })).toBeVisible();
   await expect(page.getByRole('heading', { level: 4, name: 'Counting station lanterns' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Listen from 0:02: Crossing the cardboard bridge/i })).toBeVisible();
@@ -193,13 +194,13 @@ test('opening a recording plays fixture audio without Blob, serves private downl
   expect(downloadRes.headers()['content-disposition']).toContain('attachment');
   expect(await downloadRes.text()).toContain('blue [/] blue locomotive');
 
-  await auditBothThemes(page, 'recording detail with audio');
+  await auditBothThemes(page, 'session detail with audio');
 
   // Session with no audio renders clearly and passes axe
   await page.goto('/?entry=fixture-011103-observatory');
   await expect(page.getByRole('heading', { level: 2, name: 'Cardboard observatory without audio' })).toBeVisible();
-  await expect(page.getByText('The archive has a transcript for this session, but no corresponding audio file.')).toBeVisible();
-  await auditBothThemes(page, 'recording detail without audio');
+  await expect(page.getByText('The archive has a transcript for this session, but no corresponding recording.')).toBeVisible();
+  await auditBothThemes(page, 'session detail without audio');
 });
 
 test('passage deep link (?entry=...&passage=3) highlights and focuses passage 3 with notation visible', async ({ page }) => {
