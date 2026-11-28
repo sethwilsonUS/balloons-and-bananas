@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, Check, Download, Link2, Pause, Play, Search, X } from 'lucide-react';
 import type { Session, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
@@ -56,7 +56,13 @@ function TranscriptText({ text, query, links, sessionId, origin }: { text: strin
   return <>{pieces}</>;
 }
 
-export function SessionBody({ session }: { session: Session }) {
+export function SessionBody({
+  session,
+  printCitation,
+}: {
+  session: Session;
+  printCitation?: ReactNode;
+}) {
   const [jump, setJump] = useState<{ index: number; serial: number } | null>(null);
   const [selectedPassage, setSelectedPassage] = useState<number | null>(null);
   const [message, setMessage] = useState('');
@@ -138,6 +144,7 @@ export function SessionBody({ session }: { session: Session }) {
         </li>)}
       </ol>
     </section>
+    {printCitation}
     <RecordingAudio ref={player} sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} onTime={setCurrentTime} onPlaying={setPlaying} headingLevel={2} />
     <Transcript
       session={session}
@@ -299,7 +306,7 @@ function Transcript({
       setFollow(event.target.checked);
       trackArchiveEvent('transcript_follow', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
     }} />Follow playback</label></div>}
-    {follow && query.trim() && <p className="small muted">Clear the transcript search to follow playback.</p>}
+    {follow && query.trim() && <p className="small muted transcript-filter-notice">Clear the transcript search to follow playback.</p>}
     {hasChatNotation ? <div className="transcript-view-controls"><label className="follow-control"><input type="checkbox" checked={showNotation} aria-describedby="transcript-notation-help" onChange={event => {
       setShowNotation(event.target.checked);
       trackArchiveEvent('notation_toggle', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
@@ -349,15 +356,18 @@ function Transcript({
                 <span className="sr-only">Passage </span><span aria-hidden="true">#</span>{passageNumber}
               </a>
               {canPlayAt(passage.start) ? (
-                <button
-                  className="cue-button"
-                  type="button"
-                  onClick={() => onPlayAt(passage.start!)}
-                  aria-label={`Play transcript passage ${passageNumber} at ${timeLabel(passage.start!)}`}
-                >
-                  <Play size={11} aria-hidden="true" />
-                  {timeLabel(passage.start!)}
-                </button>
+                <>
+                  <button
+                    className="cue-button"
+                    type="button"
+                    onClick={() => onPlayAt(passage.start!)}
+                    aria-label={`Play transcript passage ${passageNumber} at ${timeLabel(passage.start!)}`}
+                  >
+                    <Play size={11} aria-hidden="true" />
+                    {timeLabel(passage.start!)}
+                  </button>
+                  <span className="print-only small transcript-timestamp">{timeLabel(passage.start!)}</span>
+                </>
               ) : typeof passage.start === 'number' ? (
                 <span className="small muted transcript-timestamp">{timeLabel(passage.start)}</span>
               ) : null}
@@ -393,6 +403,37 @@ function Transcript({
 }
 
 export function SessionSources({ session }: { session: Session }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const wasOpenBeforePrintRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    wasOpenBeforePrintRef.current = null;
+    if (typeof window === 'undefined') return;
+    const details = detailsRef.current;
+    if (!details) return;
+    const handleBeforePrint = () => {
+      if (wasOpenBeforePrintRef.current === null) {
+        wasOpenBeforePrintRef.current = details.open;
+      }
+      details.open = true;
+    };
+    const handleAfterPrint = () => {
+      if (wasOpenBeforePrintRef.current === null) return;
+      details.open = wasOpenBeforePrintRef.current;
+      wasOpenBeforePrintRef.current = null;
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+      if (wasOpenBeforePrintRef.current !== null) {
+        details.open = wasOpenBeforePrintRef.current;
+        wasOpenBeforePrintRef.current = null;
+      }
+    };
+  }, [session.id]);
+
   return <section className="source-section" aria-labelledby="sources-heading">
     <p className="eyebrow">Keep the evidence in view</p><h2 id="sources-heading">Sources &amp; reading notes</h2>
     {session.limits.length > 0 && <ul className="reading-notes">{session.limits.map((limit, index) => <li key={index}>{limit}</li>)}</ul>}
@@ -401,6 +442,6 @@ export function SessionSources({ session }: { session: Session }) {
       const category = format === 'cha' ? 'chat' : ['txt', 'json', 'vtt'].includes(format) ? 'transcript' : ['md', 'html'].includes(format) ? 'guide' : 'other';
       trackArchiveEvent('source_download', { recordingId: session.id, origin: session.origin, format, category });
     }}><Download size={18} aria-hidden="true" /><span><strong>{source.label}</strong><span className="small muted">{source.name} · {source.format.toUpperCase()}</span></span></a>)}</div>
-    <details className="technical-notes"><summary>Source identification</summary><p>{session.association}</p><p><strong>Source file: </strong><code>{session.sourceName}</code></p>{session.ages.length > 0 && <p><strong>Stored age notation (CHAT): </strong>{session.ages.join(' / ')}</p>}{session.ages.length === 0 && session.inferredAge && <p><strong>Inferred age notation (from filename): </strong>{session.inferredAge}</p>}<p className="small">Source SHA-256</p><code>{session.sourceSha256}</code></details>
+    <details ref={detailsRef} className="technical-notes"><summary>Source identification</summary><p>{session.association}</p><p><strong>Source file: </strong><code>{session.sourceName}</code></p>{session.ages.length > 0 && <p><strong>Stored age notation (CHAT): </strong>{session.ages.join(' / ')}</p>}{session.ages.length === 0 && session.inferredAge && <p><strong>Inferred age notation (from filename): </strong>{session.inferredAge}</p>}<p className="small">Source SHA-256</p><code>{session.sourceSha256}</code></details>
   </section>;
 }
