@@ -77,7 +77,7 @@ export default function RouteHeader({
           <ThemeControl />
           {showShare && (
             <button
-              className="button share-button"
+              className="button secondary share-button"
               type="button"
               disabled={shareState === 'busy'}
               onClick={() => void copyShareLink()}

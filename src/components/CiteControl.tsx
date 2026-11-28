@@ -225,7 +225,7 @@ export function CitationPanel({
               aria-selected={selected}
               aria-controls={`${idPrefix}-panel-${format}`}
               tabIndex={selected ? 0 : -1}
-              className={`cite-tab${selected ? ' is-active' : ''}`}
+              className={`button secondary cite-tab${selected ? ' is-active' : ''}`}
               onClick={() => selectFormat(format)}
               onKeyDown={event => handleTabKeyDown(event, index)}
             >
@@ -608,7 +608,7 @@ export function CiteSessionButton({
   const button = variant === 'sticky-nav' ? (
     <button
       type="button"
-      className="session-sticky-nav-cite"
+      className="text-button session-sticky-nav-cite"
       aria-haspopup="dialog"
       onClick={handleClick}
     >
@@ -618,7 +618,7 @@ export function CiteSessionButton({
   ) : (
     <button
       type="button"
-      className="button secondary cite-catalog-button"
+      className="text-button cite-catalog-button"
       aria-haspopup="dialog"
       onClick={handleClick}
     >
@@ -651,7 +651,7 @@ export function CitePassageButton({ passageNumber }: { passageNumber: number }) 
   return (
     <button
       type="button"
-      className="passage-cite-button"
+      className="text-button passage-cite-button"
       aria-haspopup="dialog"
       aria-label={`Cite passage ${passageNumber}`}
       onClick={event => ctx.openPassageCite(passageNumber, event.currentTarget)}

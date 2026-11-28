@@ -165,6 +165,8 @@ test('print media hides navigation, audio player, interactive buttons, and open 
     const catalog = document.querySelector('.catalog-record--full')!;
     const citation = document.querySelector('.print-citation-section')!;
     const heading = document.querySelector('#transcript-heading')!;
+    const mainEl = document.querySelector('main')!;
+    const sessionDetail = document.querySelector('.session-detail')!;
 
     return {
       body: readColors('body'),
@@ -177,6 +179,9 @@ test('print media hides navigation, audio player, interactive buttons, and open 
       passageOdd: readColors('#p1'),
       passageEven: readColors('#p2'),
       passageText: readColors('#p2 .transcript-text'),
+      mainDisplay: getComputedStyle(mainEl).display,
+      sessionDetailWidth: sessionDetail.getBoundingClientRect().width,
+      clientWidth: document.documentElement.clientWidth,
       passageContentVisibility: getComputedStyle(passage).contentVisibility,
       passageBreakInside: getComputedStyle(passage).breakInside,
       momentBreakInside: getComputedStyle(moment).breakInside,
@@ -197,6 +202,8 @@ test('print media hides navigation, audio player, interactive buttons, and open 
   expect(styleAudit.passageOdd.bg).toBe('rgb(255, 255, 255)');
   expect(styleAudit.passageEven.bg).toBe('rgb(255, 255, 255)');
   expect(styleAudit.passageText.color).toBe('rgb(0, 0, 0)');
+  expect(styleAudit.mainDisplay).toBe('block');
+  expect(styleAudit.sessionDetailWidth).toBeGreaterThanOrEqual(styleAudit.clientWidth - 2);
   expect(styleAudit.passageContentVisibility).toBe('visible');
   expect(styleAudit.passageBreakInside).toBe('avoid');
   expect(styleAudit.momentBreakInside).toBe('avoid');

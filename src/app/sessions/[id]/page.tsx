@@ -109,8 +109,8 @@ export default async function SessionPage({
   return (
     <div className="archive-shell">
       <RouteHeader activeSection="sessions" showShare sharePath={`/sessions/${encodeURIComponent(session.slug)}`} />
-      <main id="main" tabIndex={-1}>
-        <article className="session-detail session-page">
+      <main id="main" tabIndex={-1} className="layout-reading">
+        <article className="session-detail session-page layout-main">
           <SessionCiteProvider session={citationSession} initialOrigin={requestOrigin}>
             <header className="detail-header">
               <SessionPrintHeader slug={session.slug} initialOrigin={requestOrigin} />
@@ -121,7 +121,7 @@ export default async function SessionPage({
                 <nav className="session-adjacent-nav" aria-label="Adjacent sessions in age order">
                   {adjacent.previous && (
                     <a
-                      className="session-step-link session-step-prev"
+                      className="button secondary session-step-link session-step-prev"
                       href={`/sessions/${encodeURIComponent(adjacent.previous.slug)}`}
                     >
                       <span className="session-step-direction">
@@ -138,7 +138,7 @@ export default async function SessionPage({
                   )}
                   {adjacent.next && (
                     <a
-                      className="session-step-link session-step-next"
+                      className="button secondary session-step-link session-step-next"
                       href={`/sessions/${encodeURIComponent(adjacent.next.slug)}`}
                     >
                       <span className="session-step-direction">

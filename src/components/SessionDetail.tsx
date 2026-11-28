@@ -354,7 +354,7 @@ function Transcript({
             <div className="passage-actions">
               <button
                 type="button"
-                className={`passage-copy-button${isCopied ? ' is-copied' : ''}`}
+                className={`text-button passage-copy-button${isCopied ? ' is-copied' : ''}`}
                 onClick={() => void copyPassageLink(passageNumber)}
                 aria-label={isCopied ? `Copied link to passage ${passageNumber}` : `Copy link to passage ${passageNumber}`}
               >
@@ -406,7 +406,7 @@ export function SessionSources({ session }: { session: Session }) {
   return <section className="source-section" aria-labelledby="sources-heading">
     <p className="eyebrow">Keep the evidence in view</p><h2 id="sources-heading">Sources &amp; reading notes</h2>
     {session.limits.length > 0 && <ul className="reading-notes">{session.limits.map((limit, index) => <li key={index}>{limit}</li>)}</ul>}
-    <div className="source-downloads">{session.sources.map(source => <a key={source.id} href={`/api/assets/${encodeURIComponent(source.id)}`} className="download-link" download={source.name} referrerPolicy="no-referrer" onClick={() => {
+    <div className="source-downloads">{session.sources.map(source => <a key={source.id} href={`/api/assets/${encodeURIComponent(source.id)}`} className="text-link download-link" download={source.name} referrerPolicy="no-referrer" onClick={() => {
       const format = ['cha', 'txt', 'json', 'vtt', 'md', 'html'].includes(source.format.toLowerCase()) ? source.format.toLowerCase() : 'other';
       const category = format === 'cha' ? 'chat' : ['txt', 'json', 'vtt'].includes(format) ? 'transcript' : ['md', 'html'].includes(format) ? 'guide' : 'other';
       trackArchiveEvent('source_download', { recordingId: session.id, origin: session.origin, format, category });

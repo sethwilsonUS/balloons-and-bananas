@@ -32,7 +32,7 @@ export default async function SessionsPage({
   return (
     <div className="archive-shell">
       <RouteHeader activeSection="sessions" />
-      <main id="main" tabIndex={-1}>
+      <main id="main" tabIndex={-1} className="layout-browsing">
         <section className="sessions-browse-section" aria-labelledby="sessions-page-heading">
           <header className="page-header">
             <p className="eyebrow">Browse by age</p>
