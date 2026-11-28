@@ -143,6 +143,16 @@ test('every legacy root query shape returns permanent HTTP 308 with exact Locati
       label: 'legacy ?marker=repetition alone',
     },
     {
+      path: '/?marker=repetition&topic=Bogus',
+      expectedLocation: '/search?marker=repetition',
+      label: 'legacy ?marker= strips invalid topic before 308',
+    },
+    {
+      path: '/?marker=repetition&topic=Play+and+imagination',
+      expectedLocation: '/search?topic=Play+and+imagination&marker=repetition',
+      label: 'legacy ?marker= preserves valid curated topic',
+    },
+    {
       path: '/?entry=fixture-010815-locomotive&document=fixture-provenance-guide&marker=repetition',
       expectedLocation: '/sessions/010815',
       label: 'precedence entry > document > marker',
@@ -213,6 +223,7 @@ test('obsolete #access= fragment is stripped client-side on every page while pre
   // Strip bare #access= across every top-level route
   for (const route of [
     '/',
+    '/sessions',
     '/sessions/010815',
     '/search?q=locomotive',
     '/research',

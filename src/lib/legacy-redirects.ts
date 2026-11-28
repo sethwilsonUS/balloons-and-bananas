@@ -7,11 +7,13 @@ import {
   type RawSearchParams,
 } from './search-params';
 import { resolveBackToResultsUrl } from './session-reading';
+import { positiveThemes } from './topics';
 import type { ArchiveData, ArchiveDocument, Session } from './types';
 
 const POSITIVE_INT_RE = /^[1-9]\d*$/;
 const ACCESS_SEGMENT_RE = /^access=/i;
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
+const VALID_THEME_TOPICS: ReadonlySet<string> = new Set(positiveThemes.map(theme => theme.topic));
 
 /**
  * Legacy document IDs whose content now lives on `/about` if the standalone
@@ -106,7 +108,7 @@ export function classifyLegacyRootRequest(params: RawSearchParams): LegacyRootIn
 
   const rawMarker = readParam(params, 'marker')?.trim() ?? '';
   if (rawMarker && isLinguisticMarkerId(rawMarker)) {
-    const searchState = parseSearchUrlParams(params);
+    const searchState = parseSearchUrlParams(params, { validTopics: VALID_THEME_TOPICS });
     const destination = buildSearchHref(searchState, {
       explicitSort: hasExplicitSortParam(params),
     });

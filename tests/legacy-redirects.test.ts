@@ -177,6 +177,16 @@ test('table-driven legacy root query classification and resolution across every 
       query: 'marker=retracing&speaker=any&origin=archived_research&sort=age-asc',
       expected: { kind: 'redirect', destination: '/search?origin=archived_research&marker=retracing&speaker=any&sort=age-asc' },
     },
+    {
+      name: '?marker= preserves curated valid topic',
+      query: 'marker=repetition&topic=Play+and+imagination',
+      expected: { kind: 'redirect', destination: '/search?topic=Play+and+imagination&marker=repetition' },
+    },
+    {
+      name: '?marker= strips invalid topic and malformed search params before 308 redirect',
+      query: 'marker=repetition&topic=Bogus&origin=invalid&view=grid&page=-2&ageMin=30&ageMax=20',
+      expected: { kind: 'redirect', destination: '/search?marker=repetition' },
+    },
 
     // Precedence: entry > document > marker
     {
@@ -336,6 +346,14 @@ test('Next.js 16 proxy() returns HTTP 308 with private headers for /?marker= and
   const markerDefault = proxy(new NextRequest('https://archive.example/?marker=pause'));
   assert.equal(markerDefault.status, 308);
   assert.equal(markerDefault.headers.get('location'), 'https://archive.example/search?marker=pause');
+
+  const markerInvalidTopic = proxy(new NextRequest('https://archive.example/?marker=repetition&topic=Bogus'));
+  assert.equal(markerInvalidTopic.status, 308);
+  assert.equal(markerInvalidTopic.headers.get('location'), 'https://archive.example/search?marker=repetition');
+
+  const markerValidTopic = proxy(new NextRequest('https://archive.example/?marker=repetition&topic=Play+and+imagination'));
+  assert.equal(markerValidTopic.status, 308);
+  assert.equal(markerValidTopic.headers.get('location'), 'https://archive.example/search?topic=Play+and+imagination&marker=repetition');
 
   // Entry and document take precedence over marker and pass through to page.tsx for archive lookup
   for (const passThroughUrl of [
