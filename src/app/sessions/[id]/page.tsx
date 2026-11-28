@@ -109,8 +109,8 @@ export default async function SessionPage({
   return (
     <div className="archive-shell">
       <RouteHeader activeSection="sessions" showShare sharePath={`/sessions/${encodeURIComponent(session.slug)}`} />
-      <main id="main" tabIndex={-1} className="layout-reading">
-        <article className="session-detail session-page layout-main">
+      <main id="main" tabIndex={-1} className="reading-layout">
+        <article className="session-detail session-page reading-column">
           <SessionCiteProvider session={citationSession} initialOrigin={requestOrigin}>
             <header className="detail-header">
               <SessionPrintHeader slug={session.slug} initialOrigin={requestOrigin} />

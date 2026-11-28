@@ -69,8 +69,8 @@ export default async function ResearchDocumentPage({
         sharePath={`/research/${encodeURIComponent(document.id)}`}
         shareTargetLabel="document"
       />
-      <main id="main" tabIndex={-1} className="layout-reading">
-        <article className="document-detail document-page layout-main">
+      <main id="main" tabIndex={-1} className="reading-layout">
+        <article className="document-detail document-page reading-column">
           <a className="text-link back-button" href="/research">
             <ArrowLeft size={17} aria-hidden="true" />
             Back to research &amp; context
