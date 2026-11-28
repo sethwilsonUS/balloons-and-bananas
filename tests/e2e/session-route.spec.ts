@@ -213,6 +213,9 @@ test('/sessions/[id] handles inferred ages, multiple recordings, unaged no-audio
   await expect(manualShareInput).toHaveValue(`${baseURL}/sessions/010815`);
   await page.locator('.session-share-manual').getByRole('button', { name: 'Dismiss' }).click();
   await expect(manualShareInput).toHaveCount(0);
+  await expect(page.locator('.session-share-status')).toHaveCount(0);
+  await expect(page.locator('.session-share [role="status"]')).toHaveText('');
+  await expect(page.locator('dl.catalog-record').getByRole('button', { name: /Share link to session 010815/i })).toBeFocused();
 
   // TalkBank AI draft with WAV original + MP3 listening copy
   await page.goto('/sessions/020110-tb');

@@ -153,7 +153,13 @@ export default function SessionShareButton({ slug }: { slug: string }) {
               type="button"
               className="button secondary"
               onClick={() => {
+                requestIdRef.current += 1;
+                if (resetTimerRef.current) {
+                  clearTimeout(resetTimerRef.current);
+                  resetTimerRef.current = null;
+                }
                 setManualCopy(null);
+                setStatusMessage('');
                 if (triggerRef.current?.isConnected) {
                   triggerRef.current.focus();
                 }
