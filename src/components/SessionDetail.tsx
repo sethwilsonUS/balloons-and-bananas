@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { ArrowDown, Check, Download, Link2, Pause, Play, Search, X } from 'lucide-react';
 import type { Session, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
@@ -194,6 +195,7 @@ function Transcript({
   onCurrentPassage: () => void;
 }) {
   const [query, setQuery] = useState('');
+  const [isPrinting, setIsPrinting] = useState(false);
   const findEdited = useRef(false);
   const [follow, setFollow] = useState(false);
   const hasChatNotation = session.origin === 'archived_research' || session.origin === 'talkbank_ai_draft';
@@ -208,6 +210,52 @@ function Transcript({
 
   useEffect(() => () => {
     if (copyTimer.current) clearTimeout(copyTimer.current);
+  }, []);
+
+  // Ensure print output always includes the full numbered transcript even when
+  // the reader has an active Find filter, without modifying the screen query.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = typeof window.matchMedia === 'function' ? window.matchMedia('print') : null;
+    let beforePrintActive = false;
+
+    const applyPrintState = (sync: boolean) => {
+      const next = beforePrintActive || Boolean(mql?.matches);
+      if (sync) {
+        flushSync(() => setIsPrinting(next));
+      } else {
+        setIsPrinting(next);
+      }
+    };
+
+    if (mql?.matches) {
+      setIsPrinting(true);
+    }
+
+    const handleBeforePrint = () => {
+      beforePrintActive = true;
+      applyPrintState(true);
+    };
+    const handleAfterPrint = () => {
+      beforePrintActive = false;
+      applyPrintState(false);
+    };
+    const handleMediaChange = () => {
+      applyPrintState(true);
+    };
+
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    if (mql && typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handleMediaChange);
+    }
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+      if (mql && typeof mql.removeEventListener === 'function') {
+        mql.removeEventListener('change', handleMediaChange);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -256,9 +304,9 @@ function Transcript({
   }, [pendingFocus, query]);
 
   useEffect(() => {
-    if (!follow || !playing || query.trim() || activeIndex === null || activeIndex < 0) return;
+    if (isPrinting || !follow || !playing || query.trim() || activeIndex === null || activeIndex < 0) return;
     rows.current.get(activeIndex)?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [activeIndex, follow, playing, query, toolbarHeight]);
+  }, [activeIndex, follow, isPrinting, playing, query, toolbarHeight]);
 
   const displayRows = useMemo(() => session.transcript.map((passage, index) => ({
     passage, index, text: showNotation ? passage.text : readingText(passage, session.origin),
@@ -266,6 +314,8 @@ function Transcript({
   })), [session.origin, session.transcript, showNotation]);
 
   const results = useMemo(() => displayRows.filter(({ passage, text }) => !query.trim() || `${passage.speaker || ''} ${text}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [displayRows, query]);
+  const visibleRows = isPrinting ? displayRows : results;
+  const activeQuery = isPrinting ? '' : query;
 
   useEffect(() => {
     if (!findEdited.current || !query.trim()) return;
@@ -312,7 +362,7 @@ function Transcript({
       trackArchiveEvent('notation_toggle', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
     }} />Show linguistic notation</label><p id="transcript-notation-help" className="small muted">Off: an easier reading view with research codes and dependent notes hidden. Partial-word spellings and uncertainty remain. On: the notation and notes stored in this reading copy; full analysis tiers are in the downloadable CHAT source. This changes only the display; source files are unchanged.</p>{showNotation && <p className="small muted">Linked repetition, retracing, and pause symbols find matching passages across transcripts, initially including any speaker.</p>}</div> : <p className="small muted transcript-view-controls">This local AI draft has no CHAT notation layer to switch on. Its text is displayed unchanged.</p>}
     <div className="transcript-search field"><label htmlFor="transcript-query">Find within this transcript</label><div className="search-input"><Search size={18} aria-hidden="true" /><input id="transcript-query" type="search" value={query} onChange={event => { findEdited.current = true; setQuery(event.target.value); }} placeholder="A word, name, or phrase" autoComplete="off" spellCheck={false} aria-describedby="transcript-search-help" /></div><p id="transcript-search-help" className="small muted">Searches the text currently displayed, including speaker labels and visible source notes.</p></div>
-    <p className="small muted" role="status">{query.trim() ? `${results.length.toLocaleString()} matching ${results.length === 1 ? 'passage' : 'passages'}` : `${session.transcript.length.toLocaleString()} transcript ${session.transcript.length === 1 ? 'passage' : 'passages'}`}</p>
+    <p className="small muted" role="status">{activeQuery.trim() ? `${results.length.toLocaleString()} matching ${results.length === 1 ? 'passage' : 'passages'}` : `${session.transcript.length.toLocaleString()} transcript ${session.transcript.length === 1 ? 'passage' : 'passages'}`}</p>
     <p className="small muted transcript-live-status" role="status" aria-live="polite" aria-atomic="true">{message}</p>
     <p className="small muted transcript-copy-status" role="status" aria-live="polite" aria-atomic="true">{copyMessage}</p>
     {manualCopy && (
@@ -331,7 +381,7 @@ function Transcript({
       </div>
     )}
     <div className="transcript-lines">
-      {results.map(({ passage, index, text, links }) => {
+      {visibleRows.map(({ passage, index, text, links }) => {
         const passageNumber = index + 1;
         const isCopied = copiedPassage === passageNumber;
         return (
@@ -378,7 +428,7 @@ function Transcript({
                 sessionId={session.id}
                 origin={session.origin}
                 text={text}
-                query={query}
+                query={activeQuery}
                 links={links}
               />
             </p>
@@ -397,7 +447,7 @@ function Transcript({
           </div>
         );
       })}
-      {!results.length && <p className="empty-inline">No matching passages. Try a different word or clear your search.</p>}
+      {!visibleRows.length && <p className="empty-inline">No matching passages. Try a different word or clear your search.</p>}
     </div>
   </section>;
 }

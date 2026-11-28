@@ -30,7 +30,7 @@ function inflatePdfStream(raw: Buffer, dict: string): Buffer {
 
 /**
  * Parse indirect PDF objects (`<id> <gen> obj ... endobj`), accurately slicing
- * binary `stream ... endstream` payloads using immediate `/Length` when present.
+ * binary `stream ... endstream` payloads using direct or indirect `/Length`.
  */
 function parsePdfObjects(pdf: Buffer): Map<number, PdfObject> {
   const header = pdf.subarray(0, 8).toString('latin1');
@@ -40,6 +40,14 @@ function parsePdfObjects(pdf: Buffer): Map<number, PdfObject> {
 
   const objects = new Map<number, PdfObject>();
   const latin1 = pdf.toString('latin1');
+
+  // Pre-collect standalone integer objects so indirect `/Length N 0 R` values
+  // can be resolved even when object N appears after its stream.
+  const integerObjects = new Map<number, number>();
+  for (const intMatch of latin1.matchAll(/(?:^|[\r\n\s])(\d+)\s+\d+\s+obj\s+(\d+)\s+endobj\b/g)) {
+    integerObjects.set(Number(intMatch[1]), Number(intMatch[2]));
+  }
+
   const objStartRe = /(?:^|[\r\n\s])(\d+)\s+(\d+)\s+obj(?:\s|<<|\[|\(|\/)/g;
 
   let match: RegExpExecArray | null;
@@ -66,10 +74,19 @@ function parsePdfObjects(pdf: Buffer): Map<number, PdfObject> {
     const streamDataStart = bodyStart + streamMatch.index + streamMatch[0].length;
 
     let streamDataEnd = -1;
-    const immediateLengthMatch = /\/Length\s+(\d+)(?!\s+\d+\s+R)\b/.exec(dictPart);
-    if (immediateLengthMatch) {
-      const length = Number(immediateLengthMatch[1]);
-      const expectedEnd = streamDataStart + length;
+    let declaredLength: number | null = null;
+    const lengthVal = getDictValue(dictPart, 'Length');
+    if (lengthVal) {
+      const indirectLenId = parseIndirectRef(lengthVal);
+      if (indirectLenId !== null) {
+        declaredLength = integerObjects.get(indirectLenId) ?? null;
+      } else if (/^\d+$/.test(lengthVal)) {
+        declaredLength = Number(lengthVal);
+      }
+    }
+
+    if (declaredLength !== null) {
+      const expectedEnd = streamDataStart + declaredLength;
       if (expectedEnd <= pdf.length) {
         const trailing = latin1.slice(expectedEnd, expectedEnd + 32);
         if (/^[\r\n\s]*endstream\b/.test(trailing)) {
@@ -370,7 +387,7 @@ function tokenizeContentStream(stream: string): ContentToken[] {
 
   const isDelimiter = (ch: string) => /\s|[()<>[\]{}/%]/.test(ch);
 
-  const readToken = (): ContentToken | null => {
+  const skipWhitespaceAndComments = () => {
     while (i < stream.length) {
       const ch = stream[i];
       if (/\s/.test(ch)) {
@@ -383,6 +400,10 @@ function tokenizeContentStream(stream: string): ContentToken[] {
       }
       break;
     }
+  };
+
+  const readToken = (): ContentToken | null => {
+    skipWhitespaceAndComments();
     if (i >= stream.length) return null;
 
     const ch = stream[i];
@@ -406,7 +427,7 @@ function tokenizeContentStream(stream: string): ContentToken[] {
       i += 1;
       const items: ContentToken[] = [];
       while (i < stream.length) {
-        while (i < stream.length && /\s/.test(stream[i])) i += 1;
+        skipWhitespaceAndComments();
         if (i >= stream.length) break;
         if (stream[i] === ']') {
           i += 1;
@@ -580,15 +601,19 @@ function extractStreamText(
           const xObj = objects.get(xObjId);
           if (xObj?.stream && /\/Subtype\s*\/Form\b/.test(xObj.body)) {
             visitedXObjects.add(xObjId);
-            const nestedResources = resolveDictBlock(getDictValue(xObj.body, 'Resources'), objects) ?? resourcesDict;
-            const nested = extractStreamText(
-              xObj.stream.toString('latin1'),
-              nestedResources,
-              objects,
-              cmapCache,
-              visitedXObjects,
-            );
-            if (nested) pieces.push(nested);
+            try {
+              const nestedResources = resolveDictBlock(getDictValue(xObj.body, 'Resources'), objects) ?? resourcesDict;
+              const nested = extractStreamText(
+                xObj.stream.toString('latin1'),
+                nestedResources,
+                objects,
+                cmapCache,
+                visitedXObjects,
+              );
+              if (nested) pieces.push(nested);
+            } finally {
+              visitedXObjects.delete(xObjId);
+            }
           }
         }
       }
@@ -661,7 +686,14 @@ export function extractPdfText(pdfBuffer: Buffer): ExtractedPdf {
     if (contentsVal) {
       const singleId = parseIndirectRef(contentsVal);
       if (singleId !== null) {
-        contentIds.push(singleId);
+        const target = objects.get(singleId);
+        if (target && !target.stream && target.body.startsWith('[')) {
+          for (const m of target.body.matchAll(/(\d+)\s+\d+\s+R\b/g)) {
+            contentIds.push(Number(m[1]));
+          }
+        } else {
+          contentIds.push(singleId);
+        }
       } else {
         for (const m of contentsVal.matchAll(/(\d+)\s+\d+\s+R\b/g)) {
           contentIds.push(Number(m[1]));
@@ -669,22 +701,22 @@ export function extractPdfText(pdfBuffer: Buffer): ExtractedPdf {
       }
     }
 
-    const pageChunks: string[] = [];
-    const visitedXObjects = new Set<number>();
+    const streamParts: string[] = [];
     for (const contentId of contentIds) {
       const contentObj = objects.get(contentId);
       if (!contentObj?.stream) continue;
-      pageChunks.push(
-        extractStreamText(
-          contentObj.stream.toString('latin1'),
-          resources,
-          objects,
-          cmapCache,
-          visitedXObjects,
-        ),
-      );
+      streamParts.push(contentObj.stream.toString('latin1'));
     }
-    pages.push(pageChunks.join('\n'));
+    const pageText = streamParts.length > 0
+      ? extractStreamText(
+        streamParts.join('\n'),
+        resources,
+        objects,
+        cmapCache,
+        new Set<number>(),
+      )
+      : '';
+    pages.push(pageText);
   }
 
   return {

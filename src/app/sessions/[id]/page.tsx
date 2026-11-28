@@ -6,6 +6,7 @@ import { connection } from 'next/server';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { archive } from '@/lib/archive';
 import { formatAge } from '@/lib/age';
+import { resolveServerRequestOrigin } from '@/lib/print';
 import {
   type AdjacentSession,
   formatAdjacentAgeSummary,
@@ -34,20 +35,6 @@ const loadSessionContext = cache(async (rawId: string) => {
   const adjacent = getAdjacentSessions(data.sessions, lookup.session.slug);
   return { lookup, adjacent };
 });
-
-function resolveRequestOrigin(headerList: Headers): string | null {
-  const forwardedHost = headerList.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const host = forwardedHost || headerList.get('host')?.trim();
-  if (!host) return null;
-  const forwardedProto = headerList.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const defaultProto = process.env.VERCEL ? 'https' : 'http';
-  const proto = forwardedProto === 'https' || forwardedProto === 'http' ? forwardedProto : defaultProto;
-  try {
-    return new URL(`${proto}://${host}`).origin;
-  } catch {
-    return null;
-  }
-}
 
 function AdjacentAgeText({ session }: { session: AdjacentSession }) {
   const summary = formatAdjacentAgeSummary(session);
@@ -100,7 +87,7 @@ export default async function SessionPage({
   const rawFrom = Array.isArray(resolvedSearchParams.from)
     ? resolvedSearchParams.from[0]
     : resolvedSearchParams.from;
-  const requestOrigin = resolveRequestOrigin(headerList);
+  const requestOrigin = resolveServerRequestOrigin(headerList);
   const explicitFrom = resolveBackToResultsUrl(rawFrom, requestOrigin ?? 'http://localhost');
   if (!lookup.canonical) {
     const canonicalPath = `/sessions/${encodeURIComponent(lookup.session.slug)}`;

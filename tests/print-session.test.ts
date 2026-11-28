@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { deflateSync } from 'node:zlib';
-import { formatPrintSessionHeader, normalizeHttpOrigin } from '../src/lib/print';
+import { formatPrintSessionHeader, normalizeHttpOrigin, resolveServerRequestOrigin } from '../src/lib/print';
 import { extractPdfText, normalizePdfText, parseToUnicodeCMap } from './e2e/helpers/pdf-text';
 
 function buildSyntheticPdf(pages: Array<{ contentStream: string; toUnicodeCMap: string }>): Buffer {
@@ -81,6 +81,26 @@ test('normalizeHttpOrigin accepts valid HTTP(S) origins and rejects invalid/non-
   assert.equal(normalizeHttpOrigin('not a url'), null);
 });
 
+test('resolveServerRequestOrigin binds strictly to Host, ignores forwarded headers, and uses HTTPS on Vercel', () => {
+  const localHeaders = new Headers({
+    host: '127.0.0.1:3103',
+    'x-forwarded-host': 'evil.example',
+    'x-forwarded-proto': 'https',
+  });
+  assert.equal(resolveServerRequestOrigin(localHeaders, false), 'http://127.0.0.1:3103');
+
+  const vercelHeaders = new Headers({
+    host: 'archive.example.org',
+    'x-forwarded-host': 'evil.example',
+    'x-forwarded-proto': 'http',
+  });
+  assert.equal(resolveServerRequestOrigin(vercelHeaders, true), 'https://archive.example.org');
+
+  assert.equal(resolveServerRequestOrigin(new Headers({ 'x-forwarded-host': 'evil.example' }), true), null);
+  assert.equal(resolveServerRequestOrigin(new Headers({ host: 'evil.example/path' }), false), null);
+  assert.equal(resolveServerRequestOrigin(new Headers(), false), null);
+});
+
 test('parseToUnicodeCMap decodes bfchar, bfrange (sequential and array), and UTF-16BE punctuation', () => {
   const cmap = parseToUnicodeCMap(`
     beginbfchar
@@ -142,4 +162,60 @@ test('extractPdfText extracts FlateDecode + ToUnicode text across multiple pages
   assert.equal(normalizePdfText('independently veri\uFB01ed'), 'independently verified');
 
   assert.throws(() => extractPdfText(Buffer.from('not a pdf', 'utf8')), /missing %PDF-/);
+});
+
+test('extractPdfText handles TJ comments before ], repeated Form XObjects, split/indirect /Contents arrays, and indirect /Length streams containing literal endstream', () => {
+  const cmap = `
+    beginbfchar
+    <0001> <0041>
+    <0002> <0042>
+    <0003> <0043>
+    endbfchar
+  `;
+  const cmapStream = deflateSync(Buffer.from(cmap, 'latin1'));
+
+  // 1. TJ array with comment before `]` must extract identically to array without comment.
+  const tjWithComment = buildSyntheticPdf([
+    {
+      contentStream: 'BT /F1 12 Tf [<0001> <0002> % comment before closing bracket\n] TJ ET',
+      toUnicodeCMap: cmap,
+    },
+  ]);
+  const tjPlain = buildSyntheticPdf([
+    {
+      contentStream: 'BT /F1 12 Tf [<0001> <0002>] TJ ET',
+      toUnicodeCMap: cmap,
+    },
+  ]);
+  assert.equal(normalizePdfText(extractPdfText(tjWithComment).text), 'AB');
+  assert.equal(normalizePdfText(extractPdfText(tjWithComment).text), normalizePdfText(extractPdfText(tjPlain).text));
+
+  // 2. Repeated Form XObject (`Do` twice) contributes text both times while still guarding cycles,
+  //    indirect `/Contents` array preserves `/F1` font state across streams, and indirect `/Length`
+  //    (defined AFTER the stream) accurately bounds a plain stream containing literal `endstream`.
+  const plainPart1 = 'BT (endstream ) Tj /F1 12 Tf % literal endstream inside comment\n';
+  const plainPart2 = '<00010002> Tj ET /X1 Do /X1 Do';
+  const formBody = 'BT /F1 12 Tf <0003> Tj ET';
+
+  const rawObjects = [
+    `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`,
+    `2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n`,
+    `3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> /XObject << /X1 8 0 R >> >> /Contents 5 0 R >>\nendobj\n`,
+    `4 0 obj\n<< /Type /Font /Subtype /Type0 /ToUnicode 9 0 R >>\nendobj\n`,
+    `5 0 obj\n[6 0 R 7 0 R]\nendobj\n`,
+    `6 0 obj\n<< /Length 10 0 R >>\nstream\n${plainPart1}\nendstream\nendobj\n`,
+    `7 0 obj\n<< /Length ${Buffer.byteLength(plainPart2, 'latin1')} >>\nstream\n${plainPart2}\nendstream\nendobj\n`,
+    `8 0 obj\n<< /Type /XObject /Subtype /Form /Resources << /Font << /F1 4 0 R >> >> /Length ${Buffer.byteLength(formBody, 'latin1')} >>\nstream\n${formBody}\nendstream\nendobj\n`,
+  ];
+
+  const chunks: Buffer[] = [
+    Buffer.from('%PDF-1.4\n', 'latin1'),
+    ...rawObjects.map(s => Buffer.from(s, 'latin1')),
+    Buffer.from(`9 0 obj\n<< /Filter /FlateDecode /Length ${cmapStream.length} >>\nstream\n`, 'latin1'),
+    cmapStream,
+    Buffer.from(`\nendstream\nendobj\n10 0 obj\n${Buffer.byteLength(plainPart1, 'latin1')}\nendobj\n%%EOF\n`, 'latin1'),
+  ];
+  const complexPdf = Buffer.concat(chunks);
+  const complexText = normalizePdfText(extractPdfText(complexPdf).text);
+  assert.equal(complexText, 'endstream AB C C');
 });

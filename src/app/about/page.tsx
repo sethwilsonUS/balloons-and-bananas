@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { archive } from '@/lib/archive';
+import { resolveServerRequestOrigin } from '@/lib/print';
 import { summarizeArchiveForAbout } from '@/lib/research';
 import { ARCHIVE_NAME, formatDocumentTitle } from '@/lib/site';
 import ArchiveAnalytics from '@/components/ArchiveAnalytics';
@@ -28,23 +29,9 @@ function plural(count: number, singular: string, pluralForm: string): string {
   return `${count.toLocaleString()} ${count === 1 ? singular : pluralForm}`;
 }
 
-function resolveRequestOrigin(headerList: Headers): string | null {
-  const forwardedHost = headerList.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const host = forwardedHost || headerList.get('host')?.trim();
-  if (!host) return null;
-  const forwardedProto = headerList.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const defaultProto = process.env.VERCEL ? 'https' : 'http';
-  const proto = forwardedProto === 'https' || forwardedProto === 'http' ? forwardedProto : defaultProto;
-  try {
-    return new URL(`${proto}://${host}`).origin;
-  } catch {
-    return null;
-  }
-}
-
 export default async function AboutPage() {
   const [stats, headerList] = await Promise.all([loadAboutSummary(), headers()]);
-  const requestOrigin = resolveRequestOrigin(headerList);
+  const requestOrigin = resolveServerRequestOrigin(headerList);
   const accessDate = new Date().toISOString().slice(0, 10);
 
   return (

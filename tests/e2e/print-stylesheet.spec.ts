@@ -309,17 +309,61 @@ test('Chromium PDF render of fixture sessions contains all required sections in 
     { label: 'Unaged Chicago citation', needle: '"Session 011103" (recorded April 3, 1983).' },
     { label: 'Unaged transcript passage #3', needle: 'compass star' },
   ]);
+
+  // 4. Active Find filter (including a zero-match query) must still print the full numbered
+  //    transcript in PDF and leave the reader's screen query & filtered state intact afterward.
+  await page.goto('/sessions/010815');
+  const findInput = page.getByLabel('Find within this transcript');
+  await findInput.fill('zzznomatchphrase');
+  await expect(page.locator('.transcript-line')).toHaveCount(0);
+  await expect(page.getByText('0 matching passages')).toBeVisible();
+  await expect(page.locator('.empty-inline')).toBeVisible();
+
+  const filteredPdfBuffer = await page.pdf({ format: 'Letter', printBackground: true });
+  const filteredPdfText = normalizePdfText(extractPdfText(filteredPdfBuffer).text);
+  expectOrderedSubstrings(filteredPdfText, [
+    { label: 'Filtered PDF header', needle: 'The Seth Tapes · Session 010815' },
+    { label: 'Filtered PDF full passage count', needle: '5 transcript passages' },
+    { label: 'Filtered PDF passage #1', needle: /#\s*1\b/ },
+    { label: 'Filtered PDF passage #1 text', needle: 'blue blue locomotive!' },
+    { label: 'Filtered PDF passage #5', needle: /#\s*5\b/ },
+    { label: 'Filtered PDF passage #5 text', needle: 'three lanterns over there' },
+  ]);
+  expect(filteredPdfText).not.toContain('No matching passages');
+
+  // After printing finishes, the screen Find query and zero-match state remain untouched.
+  await expect(findInput).toHaveValue('zzznomatchphrase');
+  await expect(page.locator('.transcript-line')).toHaveCount(0);
+  await expect(page.getByText('0 matching passages')).toBeVisible();
 });
 
 test('screen view stays clean with zero hydration/console errors, private SSR headers, hidden print-only blocks, and zero axe violations across all themes', async ({ page, request, baseURL }) => {
-  // SSR response includes private headers + server-rendered print header & Chicago citation.
-  const ssrRes = await request.get('/sessions/010815');
+  // SSR response includes private headers + server-rendered print header & Chicago citation,
+  // and ignores spoofed x-forwarded-host / x-forwarded-proto headers (binds to Host).
+  const ssrRes = await request.get('/sessions/010815', {
+    headers: {
+      'x-forwarded-host': 'spoofed.example',
+      'x-forwarded-proto': 'https',
+    },
+  });
   expect(ssrRes.status()).toBe(200);
   expectPrivateHeaders(ssrRes, '/sessions/010815');
   const ssrHtml = await ssrRes.text();
   expect(ssrHtml).toContain('The Seth Tapes · Session 010815');
   expect(ssrHtml).toContain('Peters, Ann, and Bob Wilson.');
   expect(ssrHtml).toContain(`${baseURL}/sessions/010815`);
+  expect(ssrHtml).not.toContain('spoofed.example');
+
+  const aboutSsrRes = await request.get('/about', {
+    headers: {
+      'x-forwarded-host': 'spoofed.example',
+      'x-forwarded-proto': 'https',
+    },
+  });
+  expect(aboutSsrRes.status()).toBe(200);
+  const aboutSsrHtml = await aboutSsrRes.text();
+  expect(aboutSsrHtml).toContain(`${baseURL}/sessions/010626#p42`);
+  expect(aboutSsrHtml).not.toContain('spoofed.example');
 
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
