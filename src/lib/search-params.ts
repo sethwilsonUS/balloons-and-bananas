@@ -543,7 +543,10 @@ export function parseConcordanceResponse(raw: unknown): ConcordanceResponse | nu
     || raw.page > raw.pages
     || !isConcordancePageSize(raw.pageSize)
     || !Array.isArray(raw.rows)
-    || (raw.total === 0 && raw.rows.length > 0)
+    || raw.rows.length > raw.pageSize
+    || raw.rows.length > raw.total
+    || (raw.total === 0 && (raw.rows.length > 0 || raw.pages > 1))
+    || (raw.total > 0 && (raw.sessionCount === 0 || raw.rows.length === 0))
   ) {
     return null;
   }

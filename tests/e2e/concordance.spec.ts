@@ -427,6 +427,25 @@ test('concordance paginates with total count, cancels in-flight requests cleanly
   await expect(page.locator('.error-panel')).toHaveCount(0);
   await expect(page.locator('table.concordance-table tbody tr')).toHaveCount(3);
 
+  // Returning to Concordance after an earlier load never displays stale rows or counts if the re-fetch fails
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
+
+  await page.route('**/api/concordance', async route => {
+    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary failure' }) });
+  });
+  await page.getByRole('button', { name: 'Concordance', exact: true }).click();
+  await expect(page.locator('.error-panel')).toBeVisible();
+  await expect(page.locator('table.concordance-table')).toHaveCount(0);
+  await expect(page.locator('.results-toolbar h2')).toHaveText('Concordance');
+  await expect(page.locator('.search-status')).toHaveText('');
+
+  await page.unroute('**/api/concordance');
+  await page.getByRole('button', { name: 'Try search again' }).click();
+  await expect(page.locator('.error-panel')).toHaveCount(0);
+  await expect(page.locator('.results-toolbar h2')).toHaveText('3 matching passages');
+  await expect(page.locator('table.concordance-table tbody tr')).toHaveCount(3);
+
   // Direct /api/concordance HTTP boundary validation (403 foreign origin, 400 invalid inputs, 200 with private headers)
   const origin = new URL(baseURL!).origin;
   const foreignRes = await request.post('/api/concordance', {

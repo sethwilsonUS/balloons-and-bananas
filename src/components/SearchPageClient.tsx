@@ -114,8 +114,10 @@ export default function SearchPageClient({
     [filterKey, urlState.page, urlState.view],
   );
 
-  const visibleSearch = !isConcordance && searchState && searchState.requestKey === currentRequestKey ? searchState.response : null;
-  const visibleConcordance = isConcordance && Boolean(urlState.query) && concordanceState && concordanceState.requestKey === currentRequestKey
+  const visibleSearch = !isConcordance && !searchError && searchState && searchState.requestKey === currentRequestKey
+    ? searchState.response
+    : null;
+  const visibleConcordance = isConcordance && !searchError && Boolean(urlState.query) && concordanceState && concordanceState.requestKey === currentRequestKey
     ? concordanceState.response
     : null;
   const visibleSpeaker = searchState && searchState.requestKey === currentRequestKey ? searchState.speaker : urlState.speaker;
@@ -363,6 +365,7 @@ export default function SearchPageClient({
       }).catch(() => {
         if (controller.signal.aborted || !mountedRef.current) return;
         focusResultsOnLoad.current = false;
+        setConcordanceState(prev => (prev && prev.requestKey === currentRequestKey ? null : prev));
         setSearchError('The concordance could not be loaded. Please try again.');
         setBusyKind(null);
       });
@@ -479,6 +482,7 @@ export default function SearchPageClient({
     }).catch(() => {
       if (controller.signal.aborted || !mountedRef.current) return;
       focusResultsOnLoad.current = false;
+      setSearchState(prev => (prev && prev.requestKey === currentRequestKey ? null : prev));
       setSearchError('The search could not be completed. Please try again.');
       setBusyKind(null);
     });
@@ -620,7 +624,7 @@ export default function SearchPageClient({
     commitState({ ...base, marker: nextMarker, speaker: nextSpeaker, page: 1 }, 'push');
   };
 
-  const handleSpeakerChange = (value: LinguisticSpeaker) => {
+  const handleSpeakerChange = (value: string) => {
     cancelQueryDebounce();
     pendingViewChange.current = false;
     focusResultsOnLoad.current = false;
@@ -782,7 +786,7 @@ export default function SearchPageClient({
                         name="speaker"
                         value={urlState.speaker}
                         aria-describedby="concordance-speaker-help"
-                        onChange={event => handleSpeakerChange(event.target.value as LinguisticSpeaker)}
+                        onChange={event => handleSpeakerChange(event.target.value)}
                       >
                         <option value="any">Any speaker / unidentified</option>
                         <option value="child">Seth (CHI) only</option>
