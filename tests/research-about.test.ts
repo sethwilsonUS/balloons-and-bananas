@@ -59,7 +59,7 @@ test('rewriteLegacyDocumentHref converts legacy v1 ?document= links to /research
   assert.equal(rewriteLegacyDocumentHref('https://doi.org/10.21415/T5NS4D'), null);
 });
 
-test('extractReferencedSessionSlugs maps only legacy ?entry= links present in markdown', async () => {
+test('extractReferencedSessionSlugs maps inline and reference-style ?entry= links and records distinct id and legacyId', async () => {
   const raw = JSON.parse(await readFile(path.resolve('tests/fixtures/archive.json'), 'utf8')) as unknown;
   const data = parseStoredArchiveData(raw);
 
@@ -73,6 +73,27 @@ test('extractReferencedSessionSlugs maps only legacy ?entry= links present in ma
   const provenanceDoc = data.documents.find(doc => doc.id === 'fixture-provenance-guide');
   assert.ok(provenanceDoc);
   assert.deepEqual(extractReferencedSessionSlugs(provenanceDoc.markdown, data.sessions), {});
+
+  const dualIdSession = {
+    ...data.sessions[0],
+    id: 'current-session-id',
+    legacyId: 'legacy-session-id',
+    slug: '010815',
+  };
+  const syntheticMarkdown = [
+    'Inline [first](/?entry=current-session-id) and [second][ref-legacy].',
+    '',
+    '[ref-legacy]: ?entry=legacy-session-id',
+    '[ref-angle]: </?entry=fixture-020110-submarine>',
+  ].join('\n');
+  assert.deepEqual(
+    extractReferencedSessionSlugs(syntheticMarkdown, [dualIdSession, data.sessions[1]]),
+    {
+      'current-session-id': '010815',
+      'legacy-session-id': '010815',
+      'fixture-020110-submarine': '020110-tb',
+    },
+  );
 });
 
 test('summarizeArchiveForAbout computes live request-time counts across origins, recordings, and age types', async () => {

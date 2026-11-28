@@ -45,7 +45,8 @@ export default function ArchiveMarkdown({
         const resolvedSlug = sessionSlugs && Object.hasOwn(sessionSlugs, decodedSessionId)
           ? sessionSlugs[decodedSessionId]
           : undefined;
-        return <a href={resolvedSlug ? `/sessions/${encodeURIComponent(resolvedSlug)}` : href}>{children}</a>;
+        const fallbackHref = href && !href.startsWith('/') ? `/${href}` : href;
+        return <a href={resolvedSlug ? `/sessions/${encodeURIComponent(resolvedSlug)}` : fallbackHref}>{children}</a>;
       }
       // Preserve backward compatibility with already-deployed v1 blobs whose markdown still contains `/?document=` links.
       const documentMatch = href?.match(/^(?:\/)?\?document=([^&#]+)/);

@@ -54,11 +54,13 @@ export function rewriteLegacyDocumentHref(href: string): string | null {
   return `/research/${encodeURIComponent(trimmed)}${hash}`;
 }
 
-const LEGACY_ENTRY_LINK_RE = /(?:\]\(|\bhref=["'])(?:\/)?\?entry=([^&#)\s"']+)/g;
+const LEGACY_ENTRY_INLINE_RE = /(?:\]\(<?|\bhref=["'])(?:\/)?\?entry=([^&#)>\s"']+)/g;
+const LEGACY_ENTRY_REF_DEF_RE = /^[ \t]{0,3}\[[^\]]+\]:[ \t]*(?:\r?\n[ \t]*)?<?(?:\/)?\?entry=([^&#>\s]+)/gm;
 
 /**
  * Build a minimal `{ [legacyId]: slug }` lookup for only the legacy `/?entry=`
- * session links referenced inside a single markdown document.
+ * session links referenced inside a single markdown document (inline links,
+ * HTML hrefs, and CommonMark reference-style definitions).
  */
 export function extractReferencedSessionSlugs(
   markdown: string | undefined,
@@ -66,11 +68,13 @@ export function extractReferencedSessionSlugs(
 ): Record<string, string> {
   if (!markdown) return {};
   const referenced = new Set<string>();
-  for (const match of markdown.matchAll(LEGACY_ENTRY_LINK_RE)) {
-    try {
-      referenced.add(decodeURIComponent(match[1]));
-    } catch {
-      referenced.add(match[1]);
+  for (const regex of [LEGACY_ENTRY_INLINE_RE, LEGACY_ENTRY_REF_DEF_RE]) {
+    for (const match of markdown.matchAll(regex)) {
+      try {
+        referenced.add(decodeURIComponent(match[1]));
+      } catch {
+        referenced.add(match[1]);
+      }
     }
   }
   if (referenced.size === 0) return {};
@@ -78,7 +82,8 @@ export function extractReferencedSessionSlugs(
   for (const session of sessions) {
     if (referenced.has(session.id)) {
       result[session.id] = session.slug;
-    } else if (referenced.has(session.legacyId)) {
+    }
+    if (referenced.has(session.legacyId)) {
       result[session.legacyId] = session.slug;
     }
   }
