@@ -142,12 +142,6 @@ export default function ArchiveApp() {
     setLoadMessage('');
     const bootstrap = async () => {
       try {
-        // Old shared links remain usable; fragments never reach analytics.
-        const clean = new URL(window.location.href);
-        if (clean.hash) {
-          clean.hash = '';
-          window.history.replaceState(window.history.state, '', clean.pathname + clean.search);
-        }
         const nextCatalog = await request<Catalog>('/api/catalog', { signal: controller.signal });
         if (controller.signal.aborted) return;
         const params = new URLSearchParams(window.location.search);
@@ -185,17 +179,6 @@ export default function ArchiveApp() {
     void bootstrap();
     return () => controller.abort();
   }, [bootstrapAttempt, restoreFilters]);
-
-  useEffect(() => {
-    const onFragmentChange = () => {
-      const clean = new URL(window.location.href);
-      if (!clean.hash) return;
-      clean.hash = '';
-      window.history.replaceState(window.history.state, '', clean.pathname + clean.search);
-    };
-    window.addEventListener('hashchange', onFragmentChange);
-    return () => window.removeEventListener('hashchange', onFragmentChange);
-  }, []);
 
   useEffect(() => {
     const onHistory = () => {

@@ -162,12 +162,35 @@ test('functional homepage / renders per request with private headers, search for
   await expect(page.getByRole('heading', { level: 1, name: 'Sessions' })).toBeVisible();
 });
 
-test('legacy query parameters on / still reach ArchiveApp until Ticket 15 redirects land', async ({ page }) => {
-  // ?entry= -> Back to sessions preserves ?section=sessions and saved filters across reload
+test('legacy query parameters on / permanently redirect while ?section= fallback and empty params stay functional', async ({ page }) => {
+  // ?entry= permanently redirects to /sessions/<slug>
   await page.goto('/?entry=fixture-010815-locomotive');
-  await expect(page.getByRole('heading', { level: 2, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
-  await page.getByRole('button', { name: /Back to sessions/i }).click();
-  await expect(page).toHaveURL(/\/\?section=sessions$/);
+  await expect(page).toHaveURL(/\/sessions\/010815$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
+
+  // ?entry=&passage= permanently redirects to /sessions/<slug>#pN
+  await page.goto('/?entry=fixture-010815-locomotive&passage=3');
+  await expect(page).toHaveURL(/\/sessions\/010815#p3$/);
+  const passage3 = page.locator('#p3');
+  await expect(passage3).toBeVisible();
+  await expect(passage3).toHaveClass(/\bis-linked\b/);
+
+  // ?document= permanently redirects to /research/<id>
+  await page.goto('/?document=fixture-provenance-guide');
+  await expect(page).toHaveURL(/\/research\/fixture-provenance-guide$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Fixture annotation provenance guide' })).toBeVisible();
+
+  // ?marker=&speaker= permanently redirects to /search?...
+  await page.goto('/?marker=repetition&speaker=any');
+  await expect(page).toHaveURL(/\/search\?marker=repetition&speaker=any$/);
+  await expect(page.locator('.results-toolbar h2')).toHaveText('3 sessions');
+
+  await page.goto('/?marker=repetition');
+  await expect(page).toHaveURL(/\/search\?marker=repetition$/);
+  await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
+
+  // Legacy ?section=sessions / ?section=research fallback still preserves view across reload until Ticket 16
+  await page.goto('/?section=sessions');
   await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
   await page.getByLabel('Search sessions and transcripts').fill('submarine');
   await page.locator('.search-form').getByRole('button', { name: 'Search' }).click();
@@ -178,31 +201,11 @@ test('legacy query parameters on / still reach ArchiveApp until Ticket 15 redire
   await expect(page.getByLabel('Search sessions and transcripts')).toHaveValue('submarine');
   await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
 
-  // ?entry=&passage=
-  await page.goto('/?entry=fixture-010815-locomotive&passage=3');
-  const passage3 = page.locator('#p3');
-  await expect(passage3).toBeVisible();
-  await expect(passage3).toHaveClass(/\bis-linked\b/);
-
-  // ?document= -> Back to research & context preserves ?section=research across reload
-  await page.goto('/?document=fixture-provenance-guide');
-  await expect(page.locator('.document-detail > h2')).toHaveText('Fixture annotation provenance guide');
-  await page.getByRole('button', { name: /Back to research & context/i }).click();
-  await expect(page).toHaveURL(/\/\?section=research$/);
-  await page.reload();
+  await page.goto('/?section=research');
   await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
-
-  // ?marker=&speaker= (any speaker matches 3 fixture sessions; clearing filters keeps ?section=sessions across reload)
-  await page.goto('/?marker=repetition&speaker=any');
-  await expect(page.locator('.results-toolbar h3')).toHaveText('3 sessions');
-  await page.getByRole('button', { name: /Clear filters/i }).click();
-  await expect(page).toHaveURL(/\/\?section=sessions$/);
-  await expect(page.locator('.results-toolbar h3')).toHaveText('4 sessions');
   await page.reload();
-  await expect(page.getByRole('heading', { level: 2, name: 'Find a session' })).toBeVisible();
-
-  await page.goto('/?marker=repetition');
-  await expect(page.locator('.results-toolbar h3')).toHaveText('2 sessions');
+  await expect(page).toHaveURL(/\/\?section=research$/);
+  await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
 
   // Empty legacy key (?entry=) and bare / still render the new functional homepage rather than legacy SPA
   await page.goto('/?entry=');

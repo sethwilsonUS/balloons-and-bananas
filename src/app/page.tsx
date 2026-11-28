@@ -1,4 +1,6 @@
+import { cache } from 'react';
 import type { Metadata } from 'next';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { connection } from 'next/server';
 import { ArrowRight, BookOpen, CalendarRange, Headphones, Search } from 'lucide-react';
 import ArchiveAnalytics from '@/components/ArchiveAnalytics';
@@ -7,16 +9,89 @@ import RouteHeader from '@/components/RouteHeader';
 import SiteFooter from '@/components/SiteFooter';
 import { ThemeShortcutLinks } from '@/components/TopicThemes';
 import { archive, catalog } from '@/lib/archive';
-import { hasLegacyRootParams } from '@/lib/sessions-browse';
-import { ARCHIVE_NAME, ARCHIVE_SUBTITLE } from '@/lib/site';
+import {
+  classifyLegacyRootRequest,
+  isSafeRootRelativeDestination,
+  resolveLegacyDocumentTarget,
+  resolveLegacyEntryTarget,
+  type LegacyRedirectResolution,
+} from '@/lib/legacy-redirects';
+import {
+  ARCHIVE_NAME,
+  ARCHIVE_SUBTITLE,
+  formatDocumentTitle,
+  formatResearchDocumentPageTitle,
+} from '@/lib/site';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: ARCHIVE_NAME,
-  description: `${ARCHIVE_SUBTITLE}.`,
-};
+const LEGACY_SECTION_VALUES = new Set<string>(['sessions', 'recordings', 'research']);
+
+function hasLegacySectionParam(
+  params: Record<string, string | string[] | undefined>,
+): boolean {
+  const raw = Object.hasOwn(params, 'section') ? params.section : undefined;
+  const first = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : undefined;
+  const trimmed = first?.trim();
+  return Boolean(trimmed && LEGACY_SECTION_VALUES.has(trimmed));
+}
+
+const resolveArchiveLegacyLookup = cache(
+  async (
+    kind: 'entry' | 'document',
+    rawId: string,
+    passage: number | null,
+    from: string | null,
+  ): Promise<Exclude<LegacyRedirectResolution, { kind: 'none' }>> => {
+    await connection();
+    const data = await archive();
+    if (kind === 'entry') {
+      return resolveLegacyEntryTarget(data.sessions, rawId, passage, from);
+    }
+    return resolveLegacyDocumentTarget(data.documents, rawId);
+  },
+);
+
+async function resolveLegacyRoot(
+  params: Record<string, string | string[] | undefined>,
+): Promise<LegacyRedirectResolution> {
+  const intent = classifyLegacyRootRequest(params);
+  if (intent.kind === 'none') {
+    return { kind: 'none' };
+  }
+  if (intent.kind === 'marker') {
+    return { kind: 'redirect', destination: intent.destination };
+  }
+  if (intent.kind === 'entry') {
+    return resolveArchiveLegacyLookup('entry', intent.rawId, intent.passage, intent.from);
+  }
+  return resolveArchiveLegacyLookup('document', intent.rawId, null, null);
+}
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  await connection();
+  const resolved = await resolveLegacyRoot(await searchParams);
+  if (resolved.kind === 'not-found') {
+    return resolved.entity === 'document'
+      ? {
+          title: formatResearchDocumentPageTitle(null),
+          description: `Research document not found in ${ARCHIVE_NAME}.`,
+        }
+      : {
+          title: formatDocumentTitle({ kind: 'session', notFound: true }),
+          description: `Session not found in ${ARCHIVE_NAME}.`,
+        };
+  }
+  return {
+    title: ARCHIVE_NAME,
+    description: `${ARCHIVE_SUBTITLE}.`,
+  };
+}
 
 export default async function HomePage({
   searchParams,
@@ -25,7 +100,14 @@ export default async function HomePage({
 }) {
   await connection();
   const params = await searchParams;
-  if (hasLegacyRootParams(params)) {
+  const resolved = await resolveLegacyRoot(params);
+  if (resolved.kind === 'redirect' && isSafeRootRelativeDestination(resolved.destination)) {
+    permanentRedirect(resolved.destination);
+  }
+  if (resolved.kind === 'not-found') {
+    notFound();
+  }
+  if (hasLegacySectionParam(params)) {
     return <ArchiveApp />;
   }
 

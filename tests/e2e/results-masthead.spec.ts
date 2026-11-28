@@ -95,13 +95,14 @@ test('archive uses one name, displays the masthead subtitle, and sets descriptiv
   await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
   await expect(page).toHaveTitle('Session 010815 (age 1;08.15) · The Seth Tapes');
 
-  // Legacy ?entry= link still keeps its session detail title
+  // Legacy ?entry= link permanently redirects to /sessions/<slug> with its canonical title
   await page.goto('/?entry=fixture-010815-locomotive');
-  await expect(page.getByRole('heading', { level: 2, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
-  await expect(page).toHaveTitle('Blue locomotive and wooden bridge · The Seth Tapes');
+  await expect(page).toHaveURL(/\/sessions\/010815$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
+  await expect(page).toHaveTitle('Session 010815 (age 1;08.15) · The Seth Tapes');
 
   // Research & context view
-  await page.getByRole('button', { name: 'Research & context' }).click();
+  await page.goto('/?section=research');
   await expect(page.getByRole('heading', { level: 2, name: 'Research & context' })).toBeVisible();
   await expect(page).toHaveTitle('Research & context · The Seth Tapes');
 
@@ -110,9 +111,10 @@ test('archive uses one name, displays the masthead subtitle, and sets descriptiv
   await expect(page.locator('.document-detail > h2')).toHaveText('Fixture annotation provenance guide');
   await expect(page).toHaveTitle('Fixture annotation provenance guide · The Seth Tapes');
 
-  // Direct link to an unknown session sets a clear not-found title
-  await page.goto('/?entry=nonexistent-fixture-session');
-  await expect(page.getByText('This session could not be found.')).toBeVisible();
+  // Direct link to an unknown legacy session returns 404 with a clear not-found title
+  const missingLegacyRes = await page.goto('/?entry=nonexistent-fixture-session');
+  expect(missingLegacyRes?.status()).toBe(404);
+  await expect(page.getByRole('heading', { level: 1, name: /This archive link could not be found/i })).toBeVisible();
   await expect(page).toHaveTitle('Session not found · The Seth Tapes');
 });
 

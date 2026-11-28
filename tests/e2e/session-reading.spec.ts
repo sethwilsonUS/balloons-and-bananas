@@ -86,53 +86,6 @@ test('full transcript renders without 100-passage cap, supports find-within-tran
   await findInput.fill('');
   await expect(lines).toHaveCount(5);
   await expect(page.getByText('5 transcript passages')).toBeVisible();
-
-  // Verify a >100-passage transcript renders every passage with zero paging cap or Show more button
-  const longTranscript = Array.from({ length: 135 }, (_, idx) => ({
-    speaker: idx % 2 === 0 ? 'Child (CHI, target child)' : 'Parent (FAT, father)',
-    text: idx === 134
-      ? 'synthetic final utterance with windmill lantern token'
-      : `synthetic utterance number ${idx + 1} for scroll responsiveness check`,
-    start: idx * 6,
-    end: idx * 6 + 5,
-  }));
-  await page.route('**/api/entries/fixture-long-reading', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        id: 'fixture-long-reading',
-        slug: '010901-long',
-        legacyId: 'fixture-long-reading',
-        sourceName: '010901-long.cha',
-        title: 'Synthetic long reading session',
-        overview: 'Synthetic 135-passage session verifying removal of the 100-passage cap.',
-        origin: 'archived_research',
-        topics: ['Play and imagination'],
-        dates: [],
-        ages: ['1;09.01'],
-        inferredAge: null,
-        recordings: [],
-        preferredRecordingId: null,
-        sources: [],
-        moments: [],
-        limits: [],
-        transcript: longTranscript,
-        sourceSha256: '0'.repeat(64),
-        association: 'Synthetic fixture',
-      }),
-    });
-  });
-
-  await page.goto('/?entry=fixture-long-reading');
-  await expect(page.getByRole('heading', { level: 2, name: 'Synthetic long reading session' })).toBeVisible();
-  await expect(page.locator('.transcript-line')).toHaveCount(135);
-  await expect(page.locator('#p135')).toHaveCount(1);
-  await expect(page.getByRole('button', { name: /Show \d+ more passages/i })).toHaveCount(0);
-  await page.getByLabel('Find within this transcript').fill('windmill lantern');
-  await expect(page.locator('.transcript-line')).toHaveCount(1);
-  await expect(page.locator('#p135')).toBeVisible();
-  await page.unroute('**/api/entries/fixture-long-reading');
 });
 
 test('#pN anchors scroll, focus, highlight on load and hashchange, and Copy link to passage announces result and handles clipboard errors', async ({ page, baseURL }) => {

@@ -259,6 +259,71 @@ async function main() {
   check(!/<title>[^<]*releasechecktoken/i.test(filteredSearchPageHtml), 'search_page_filtered:no_query_in_title');
   counts.searchRoutesVerified = 2;
 
+  // Verify permanent HTTP 308 legacy link redirects (?entry=, ?passage=, ?document=, ?marker=) and 404s with private headers.
+  async function expectLegacyRedirect(path, expectedTarget, label) {
+    const res = await call(path, label);
+    await expectStatus(res, 308, label);
+    const rawLocation = res.headers.get('location');
+    check(Boolean(rawLocation), `${label}:location_present`);
+    let resolvedLocation;
+    try { resolvedLocation = new URL(rawLocation, base); } catch { throw new VerificationFailure(`${label}:location_valid`); }
+    check(
+      resolvedLocation.origin === base.origin
+        && `${resolvedLocation.pathname}${resolvedLocation.search}${resolvedLocation.hash}` === expectedTarget,
+      `${label}:location_match`,
+      { expectedTarget },
+    );
+    await res.body?.cancel();
+  }
+
+  await expectLegacyRedirect(
+    `/?entry=${encodeURIComponent(agedSession.id)}`,
+    `/sessions/${encodeURIComponent(agedSlug)}`,
+    'legacy_entry_redirect',
+  );
+  await expectLegacyRedirect(
+    `/?entry=${encodeURIComponent(agedSession.id)}&passage=3`,
+    `/sessions/${encodeURIComponent(agedSlug)}#p3`,
+    'legacy_entry_passage_redirect',
+  );
+  await expectLegacyRedirect(
+    '/?entry=local-0extra-82-supp-011119d',
+    '/sessions/011119d-82-supp',
+    'legacy_entry_collision_redirect',
+  );
+  await expectLegacyRedirect(
+    `/?document=${encodeURIComponent(representativeDoc.id)}`,
+    `/research/${encodeURIComponent(representativeDoc.id)}`,
+    'legacy_document_redirect',
+  );
+  await expectLegacyRedirect(
+    '/?document=methods-and-audit',
+    data.documents.some(doc => doc.id === 'methods-and-audit') ? '/research/methods-and-audit' : '/about',
+    'legacy_methods_document_redirect',
+  );
+  await expectLegacyRedirect(
+    '/?marker=repetition&speaker=any',
+    '/search?marker=repetition&speaker=any',
+    'legacy_marker_speaker_redirect',
+  );
+  await expectLegacyRedirect(
+    '/?marker=repetition',
+    '/search?marker=repetition',
+    'legacy_marker_default_redirect',
+  );
+
+  for (const [path, label, titleRe] of [
+    ['/?entry=unknown-release-test-session', 'legacy_unknown_entry', /Session not found/i],
+    ['/?document=unknown-release-test-document', 'legacy_unknown_document', /Document not found/i],
+  ]) {
+    const missingLegacy = await call(path, label);
+    await expectStatus(missingLegacy, 404, label);
+    const missingLegacyHtml = await missingLegacy.text();
+    check(titleRe.test(missingLegacyHtml), `${label}:not_found_title`);
+    check(/href="\/search"|\\"href\\":\\"\/search\\"/.test(missingLegacyHtml), `${label}:search_link_present`);
+  }
+  counts.legacyRedirectsVerified = 9;
+
   // Production BotID deliberately rejects this non-browser search client.
   // Exercise search semantics locally; verify real browser search separately.
   if (!local) {
