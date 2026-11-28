@@ -35,11 +35,20 @@ export function passageSpeechText(passage: Passage, origin: TranscriptOrigin): s
   // Source metadata has no speaker. Local ASR passages are speech drafts,
   // but have no established identity and can only enter the "any" scope.
   if (origin !== 'local_ai_draft' && !hasSpeaker) return '';
-  const speech = origin === 'local_ai_draft'
-    ? passage.text.replace(EDITORIAL_COMMENT_RE, '').replace(/\r?\n+/g, ' ').trim()
-    : utteranceText(passage);
-  if (!speech || NON_SPEECH_LINE_RE.test(speech)) return '';
-  return speech;
+  if (origin !== 'local_ai_draft') {
+    const speech = utteranceText(passage);
+    if (!speech || NON_SPEECH_LINE_RE.test(speech)) return '';
+    return speech;
+  }
+  const lines = passage.text.replace(EDITORIAL_COMMENT_RE, '').split(/\r?\n/);
+  const speechLines: string[] = [];
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (NON_SPEECH_LINE_RE.test(trimmed)) break;
+    speechLines.push(trimmed);
+  }
+  return speechLines.join(' ');
 }
 
 /** Check whether a passage falls within the requested speaker scope without inferring identity. */

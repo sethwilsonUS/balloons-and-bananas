@@ -543,11 +543,17 @@ export function parseConcordanceResponse(raw: unknown): ConcordanceResponse | nu
     || raw.page > raw.pages
     || !isConcordancePageSize(raw.pageSize)
     || !Array.isArray(raw.rows)
-    || raw.rows.length > raw.pageSize
-    || raw.rows.length > raw.total
-    || (raw.total === 0 && (raw.rows.length > 0 || raw.pages > 1))
-    || (raw.total > 0 && (raw.sessionCount === 0 || raw.rows.length === 0))
+    || raw.pages !== Math.max(1, Math.ceil(raw.total / raw.pageSize))
+    || (raw.total > 0 && raw.sessionCount === 0)
   ) {
+    return null;
+  }
+  const expectedRowCount = raw.total === 0
+    ? 0
+    : raw.page < raw.pages
+      ? raw.pageSize
+      : raw.total - (raw.pages - 1) * raw.pageSize;
+  if (raw.rows.length !== expectedRowCount) {
     return null;
   }
   const rows: ConcordanceRow[] = [];

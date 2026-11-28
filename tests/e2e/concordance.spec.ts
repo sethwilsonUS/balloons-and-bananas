@@ -197,10 +197,11 @@ test('concordance explains why empty queries are unavailable, excludes guide-onl
   await page.getByRole('button', { name: 'Focus search box' }).click();
   await expect(page.getByLabel('Search sessions and transcripts')).toBeFocused();
 
-  // Switch to Details view works directly from the empty-query guidance
+  // Switch to Details view works directly from the empty-query guidance and moves focus to results heading
   await page.getByRole('button', { name: 'Switch to Details view' }).click();
   await expect(page).toHaveURL(/\/search$/);
   await expect(page.locator('.results-toolbar h2')).toHaveText('4 sessions');
+  await expect(page.locator('.results-toolbar h2')).toBeFocused();
 
   // Browser Back returns to empty concordance view
   await page.goBack();
@@ -217,10 +218,11 @@ test('concordance explains why empty queries are unavailable, excludes guide-onl
   await expect(page.locator('table.concordance-table')).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 3, name: 'No exact transcript matches found' })).toBeVisible();
 
-  // View in Details finds the guide match
+  // View in Details finds the guide match and moves focus to results heading when the button unmounts
   await page.getByRole('button', { name: 'View in Details' }).click();
   await expect(page).toHaveURL(/\/search\?q=wooden\+track$/);
   await expect(page.locator('.results-toolbar h2')).toHaveText('1 session');
+  await expect(page.locator('.results-toolbar h2')).toBeFocused();
 
   // Switch to a transcript match in Details -> Concordance -> Back restores Details
   await searchInput.fill('locomotive');
@@ -286,6 +288,15 @@ test('origin, speaker, age-range, and linguistic marker filters apply to concord
   // Switching to Repetition notation intersects at the passage level -> only 010815#p1
   await page.getByRole('button', { name: 'Repetition notation', exact: true }).click();
   await expect(page).toHaveURL(/\/search\?q=locomotive&marker=repetition&speaker=any&view=concordance$/);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.nth(0).locator('th[scope="row"]')).toContainText('010815, passage 1');
+
+  // Clearing a marker while Speaker is Seth (CHI) only retains Seth (CHI) only in Concordance
+  await page.getByLabel('Speaker', { exact: true }).selectOption('child');
+  await expect(page).toHaveURL(/\/search\?q=locomotive&marker=repetition&view=concordance$/);
+  await page.getByRole('button', { name: 'Repetition notation', exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?q=locomotive&speaker=child&view=concordance$/);
+  await expect(page.getByLabel('Speaker', { exact: true })).toHaveValue('child');
   await expect(rows).toHaveCount(1);
   await expect(rows.nth(0).locator('th[scope="row"]')).toContainText('010815, passage 1');
 
@@ -368,13 +379,16 @@ test('concordance paginates with total count, cancels in-flight requests cleanly
   await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
 
   let releaseSlowConcordance = () => {};
+  let settleSlowConcordanceHandler = () => {};
+  const slowConcordanceHandlerSettled = new Promise<void>(resolve => {
+    settleSlowConcordanceHandler = resolve;
+  });
   let concordanceIntercepted = false;
   let concordanceRequest: import('@playwright/test').Request | null = null;
-  let concordanceAborted = false;
-  let concordanceFulfilled = false;
+  let concordanceAbortError = '';
   const onRequestFailed = (req: import('@playwright/test').Request) => {
     if (concordanceRequest && req === concordanceRequest) {
-      concordanceAborted = true;
+      concordanceAbortError = req.failure()?.errorText || 'aborted';
     }
   };
   page.on('requestfailed', onRequestFailed);
@@ -382,16 +396,17 @@ test('concordance paginates with total count, cancels in-flight requests cleanly
   await page.route('**/api/concordance', async route => {
     concordanceIntercepted = true;
     concordanceRequest = route.request();
-    await new Promise<void>(resolve => { releaseSlowConcordance = resolve; });
     try {
+      await new Promise<void>(resolve => { releaseSlowConcordance = resolve; });
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ rows: [], total: 0, sessionCount: 0, page: 1, pages: 1, pageSize: 50 }),
       });
-      concordanceFulfilled = true;
     } catch {
-      // Expected when the cancelled request aborts before fulfillment.
+      // Expected when Playwright rejects fulfillment on an aborted request.
+    } finally {
+      settleSlowConcordanceHandler();
     }
   });
 
@@ -400,11 +415,11 @@ test('concordance paginates with total count, cancels in-flight requests cleanly
   await expect.poll(() => concordanceIntercepted).toBe(true);
 
   await page.getByRole('button', { name: 'Details', exact: true }).click();
-  await expect.poll(() => concordanceAborted).toBe(true);
+  await expect.poll(() => concordanceAbortError).toMatch(/ABORTED|aborted/i);
+  releaseSlowConcordance();
+  await slowConcordanceHandlerSettled;
   await expect(page.locator('.results-toolbar h2')).toHaveText('2 sessions');
   await expect(page.locator('table.concordance-table')).toHaveCount(0);
-  releaseSlowConcordance();
-  expect(concordanceFulfilled).toBe(false);
 
   page.off('requestfailed', onRequestFailed);
   await page.unroute('**/api/concordance');
@@ -457,6 +472,8 @@ test('concordance paginates with total count, cancels in-flight requests cleanly
 
   for (const invalidPayload of [
     { query: 42 },
+    { query: `${'a'.repeat(299)} b` },
+    { query: 'x'.repeat(4500) },
     { origin: 'invalid' },
     { speaker: 'unknown' },
     { marker: 'fake' },

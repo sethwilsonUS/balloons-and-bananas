@@ -38,6 +38,9 @@ test('metadata, notes, dependent tiers and local editorial explanations are neve
       child('hello . [[LOCAL AI-GENERATED EDITORIAL PROVENANCE COMMENT | why? no! I was here (.) [/] [//] | END LOCAL AI EDITORIAL COMMENT]]'),
       { text: '[Source Comment] why? no! I was here (.) [/] [//]' },
     ]),
+    mockSession('local-notes', [
+      { text: 'the ferry arrived .\nNote: why? no! I was here' },
+    ], { origin: 'local_ai_draft' }),
     mockSession('notes-only', [child('Note: why? no! I was here')]),
   ]);
   for (const marker of linguisticMarkers) assert.equal(search(marker.id, 'any').size, 0, marker.id);

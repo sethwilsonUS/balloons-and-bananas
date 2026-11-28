@@ -619,7 +619,7 @@ export default function SearchPageClient({
     const base = currentBaseState();
     const nextSpeaker: LinguisticSpeaker = nextMarker
       ? (base.marker ? base.speaker : 'child')
-      : (base.view === 'concordance' ? 'any' : 'child');
+      : (base.view === 'concordance' ? base.speaker : 'child');
     trackArchiveEvent('filter_changed', { filter: 'marker', value: nextMarker });
     commitState({ ...base, marker: nextMarker, speaker: nextSpeaker, page: 1 }, 'push');
   };
@@ -635,10 +635,10 @@ export default function SearchPageClient({
     commitState({ ...currentBaseState(), speaker: nextSpeaker, page: 1 }, 'push');
   };
 
-  const handleViewChange = (nextView: SearchView) => {
+  const handleViewChange = (nextView: SearchView, options?: { focusResults?: boolean }) => {
     if (nextView === urlState.view) return;
     cancelQueryDebounce();
-    focusResultsOnLoad.current = false;
+    focusResultsOnLoad.current = Boolean(options?.focusResults);
     submittedDraftRef.current = false;
     trackArchiveEvent('view_changed', { view: nextView });
     pendingViewChange.current = true;
@@ -952,14 +952,14 @@ export default function SearchPageClient({
                         <button
                           type="button"
                           className="button secondary"
-                          onClick={() => handleViewChange('details')}
+                          onClick={() => handleViewChange('details', { focusResults: true })}
                         >
                           Switch to Details view
                         </button>
                         <button
                           type="button"
                           className="button secondary"
-                          onClick={() => handleViewChange('list')}
+                          onClick={() => handleViewChange('list', { focusResults: true })}
                         >
                           Switch to List view
                         </button>
@@ -999,7 +999,7 @@ export default function SearchPageClient({
                     <button
                       type="button"
                       className="button secondary"
-                      onClick={() => handleViewChange('details')}
+                      onClick={() => handleViewChange('details', { focusResults: true })}
                     >
                       View in Details
                     </button>

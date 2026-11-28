@@ -679,6 +679,13 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .transcript-line { content-visibility: visible !important; }
   .concordance-scroll { overflow: visible; border-color: black; }
   .concordance-table { min-width: 0; font-size: 9pt; }
+  .concordance-table thead th { white-space: normal; }
+  .concordance-session-cell,
+  .concordance-age-cell,
+  .concordance-speaker-cell,
+  .concordance-table tbody td.concordance-left,
+  .concordance-table tbody td.concordance-match,
+  .concordance-table tbody td.concordance-right { min-width: 0; max-width: none; }
 }
 
 

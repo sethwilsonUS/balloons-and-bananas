@@ -71,6 +71,35 @@ test('extractConcordanceMatch matches exact words, phrases, quoted phrases, acce
     match: 'Cafe\u0301',
     rightContext: 'by the bridge .',
   });
+  // Extended combining marks outside U+0300–U+036F stay attached to their base in the highlighted span.
+  const extMark = extractConcordanceMatch('a\u1AB0 end', 'a');
+  assert.deepEqual(extMark, {
+    leftContext: '',
+    match: 'a\u1AB0',
+    rightContext: 'end',
+  });
+
+  // Endpoints inside a single source character's NFKD expansion are rejected (`1` must not match `½`),
+  // while matching the full expansion (`1⁄2`) still matches `½`.
+  assert.equal(extractConcordanceMatch('½ cup of milk .', '1'), null);
+  assert.equal(extractConcordanceMatch('½ cup of milk .', '2'), null);
+  assert.deepEqual(extractConcordanceMatch('½ cup of milk .', '1\u20442'), {
+    leftContext: '',
+    match: '½',
+    rightContext: 'cup of milk .',
+  });
+  // Later valid occurrence after a rejected partial expansion still matches.
+  assert.deepEqual(extractConcordanceMatch('½ cup and 1 spoon .', '1'), {
+    leftContext: '½ cup and',
+    match: '1',
+    rightContext: 'spoon .',
+  });
+
+  // Overlong queries (> 300 chars) are rejected rather than silently matching a truncated prefix.
+  const longWord = 'a'.repeat(299);
+  assert.equal(extractConcordanceMatch(`${longWord} other`, `${longWord} b`), null);
+  assert.equal(extractConcordanceMatch(`${longWord} b`, `${longWord} b`), null);
+  assert.ok(extractConcordanceMatch(`${longWord} other`, longWord));
 
   // Curly and straight apostrophes match interchangeably while retaining authentic source text.
   const apostrophe = extractConcordanceMatch('I don’t want that one .', "don't");
@@ -157,6 +186,13 @@ test('extractConcordanceMatch truncates long left and right contexts cleanly wit
     match: 'locomotive',
     rightContext: '!',
   });
+
+  // Right context stays strictly within maxChars when a base+combining sequence straddles the cutoff.
+  const combiningRun = `locomotive ${'x'.repeat(9)}e${'\u0301'.repeat(6)} tail`;
+  const boundedRight = extractConcordanceMatch(combiningRun, 'locomotive', 10);
+  assert.ok(boundedRight);
+  assert.equal(boundedRight.rightContext, 'xxxxxxxxx…');
+  assert.ok(Array.from(boundedRight.rightContext.replace(/…$/, '')).length <= 10);
 });
 
 test('makeConcordance returns exact transcript passage matches only (zero guide-only hits, metadata, or dependent tiers) ordered strictly by age', () => {
@@ -176,6 +212,7 @@ test('makeConcordance returns exact transcript passage matches only (zero guide-
         topics: ['Outings and nature'],
         transcript: [
           { text: 'Can the blue locomotive meet the ferry at the pier?', start: 10 },
+          { text: 'the ferry arrived\nNote: where is the locomotive?' },
           { text: '[[LOCAL AI-GENERATED EDITORIAL PROVENANCE COMMENT | locomotive editorial note | END LOCAL AI EDITORIAL COMMENT]]' },
         ],
       }),
@@ -453,6 +490,7 @@ test('parseConcordanceBody validates /api/concordance request payloads and rejec
     [],
     'locomotive',
     { query: 123 },
+    { query: `${'a'.repeat(299)} b` },
     { topic: 42 },
     { origin: 'bogus_origin' },
     { ageMin: -1 },

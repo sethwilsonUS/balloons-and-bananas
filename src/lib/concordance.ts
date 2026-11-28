@@ -8,15 +8,16 @@ import type {
   ConcordanceRequest,
   ConcordanceResponse,
   ConcordanceRow,
+  Passage,
   Session,
 } from './types';
 
 export const CONCORDANCE_PAGE_SIZE: ConcordancePageSize = 50;
 export const CONCORDANCE_CONTEXT_CHARS = 72;
+export const MAX_CONCORDANCE_QUERY_LENGTH = 300;
 
-const MAX_CONCORDANCE_QUERY_LENGTH = 300;
 const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
-const COMBINING_MARK_RE = /[\u0300-\u036f]/g;
+const COMBINING_MARK_RE = /\p{Mn}/gu;
 const NONSPACING_MARK_RE = /\p{Mn}/u;
 const APOSTROPHE_RE = /[‘’ʼ]/g;
 
@@ -26,7 +27,7 @@ export function isConcordancePageSize(value: unknown): value is ConcordancePageS
 
 /**
  * Runtime boundary validator for `/api/concordance` POST request JSON bodies.
- * Rejects malformed types, invalid enums, out-of-range/inverted ages, and unsupported page sizes.
+ * Rejects malformed types, overlong queries, invalid enums, out-of-range/inverted ages, and unsupported page sizes.
  */
 export function parseConcordanceBody(
   body: unknown,
@@ -39,6 +40,9 @@ export function parseConcordanceBody(
 
   if (input.query !== undefined) {
     if (typeof input.query !== 'string') return { ok: false, error: 'Invalid concordance query.' };
+    if (input.query.trim().length > MAX_CONCORDANCE_QUERY_LENGTH) {
+      return { ok: false, error: 'Concordance query is too long.' };
+    }
     request.query = input.query;
   }
   if (input.topic !== undefined) {
@@ -99,11 +103,16 @@ interface CompiledConcordanceQuery {
   endsWord: boolean;
 }
 
+interface MatchOffsets {
+  origStart: number;
+  origEnd: number;
+}
+
 /**
  * Normalize text for exact concordance matching (case-, accent-, apostrophe-,
  * and whitespace-normalized) while keeping exact UTF-16 source start/end spans
  * for every folded code unit so multi-byte characters, surrogate pairs, and
- * combining diacritics are never split when slicing source text.
+ * combining marks (`\p{Mn}`) are never split when slicing source text.
  */
 function foldWithSourceMap(raw: string): FoldedTextMap {
   const foldedUnits: string[] = [];
@@ -145,10 +154,15 @@ function foldWithSourceMap(raw: string): FoldedTextMap {
       .toLocaleLowerCase();
 
     if (!normalized) {
-      // Combining mark following a base character in NFD input: extend the
-      // previous source span so slicing includes the trailing mark intact.
+      // Nonspacing combining mark following a base character: extend the
+      // previous character's source span so slicing keeps the mark attached.
       if (srcEnds.length > 0) {
-        srcEnds[srcEnds.length - 1] = nextOffset;
+        const previousEnd = srcEnds[srcEnds.length - 1];
+        let back = srcEnds.length - 1;
+        while (back >= 0 && srcEnds[back] === previousEnd) {
+          srcEnds[back] = nextOffset;
+          back -= 1;
+        }
       }
       offset = nextOffset;
       continue;
@@ -188,7 +202,8 @@ function codePointAtSlice(text: string, index: number): string {
 }
 
 function compileConcordanceQuery(rawQuery: string): CompiledConcordanceQuery | null {
-  let trimmed = rawQuery.trim().slice(0, MAX_CONCORDANCE_QUERY_LENGTH);
+  let trimmed = rawQuery.trim();
+  if (!trimmed || trimmed.length > MAX_CONCORDANCE_QUERY_LENGTH) return null;
   if (
     trimmed.length >= 2
     && (
@@ -240,10 +255,16 @@ function truncateRightContext(rawRight: string, maxChars: number): string {
   if (codePoints.length <= maxChars) return normalized;
 
   let endIndex = maxChars;
-  // Keep any trailing combining marks attached to the last retained character.
-  while (endIndex < codePoints.length && NONSPACING_MARK_RE.test(codePoints[endIndex])) {
-    endIndex += 1;
+  // If the cut lands inside a base + combining-mark sequence, omit that final
+  // combining sequence rather than splitting it or exceeding maxChars.
+  if (endIndex < codePoints.length && NONSPACING_MARK_RE.test(codePoints[endIndex])) {
+    let seqStart = endIndex - 1;
+    while (seqStart > 0 && NONSPACING_MARK_RE.test(codePoints[seqStart])) {
+      seqStart -= 1;
+    }
+    endIndex = seqStart;
   }
+  if (endIndex === 0) return '…';
   let slice = codePoints.slice(0, endIndex);
   const lastSpace = slice.lastIndexOf(' ');
   const minKeep = Math.floor((maxChars * 2) / 3);
@@ -260,11 +281,10 @@ export interface ConcordanceMatchSlice {
   rightContext: string;
 }
 
-function findConcordanceMatch(
+function findConcordanceMatchOffsets(
   speechText: string,
   compiled: CompiledConcordanceQuery,
-  maxContextChars: number,
-): ConcordanceMatchSlice | null {
+): MatchOffsets | null {
   if (!speechText) return null;
   const { folded, srcStarts, srcEnds } = foldWithSourceMap(speechText);
   if (!folded || folded.length < compiled.folded.length) return null;
@@ -275,16 +295,17 @@ function findConcordanceMatch(
     if (at === -1) return null;
     const end = at + compiled.folded.length;
 
-    const leftOk = !compiled.startsWord || at === 0 || !WORD_CHAR_RE.test(codePointBefore(folded, at));
-    const rightOk = !compiled.endsWord || end === folded.length || !WORD_CHAR_RE.test(codePointAtSlice(folded, end));
+    // Require both endpoints to align with complete source characters so a match
+    // never lands strictly inside a single character's NFKD expansion (e.g. `1` in `½`).
+    const leftAligned = at === 0 || srcStarts[at] !== srcStarts[at - 1];
+    const rightAligned = end === folded.length || srcEnds[end - 1] !== srcEnds[end];
+    const leftOk = leftAligned && (!compiled.startsWord || at === 0 || !WORD_CHAR_RE.test(codePointBefore(folded, at)));
+    const rightOk = rightAligned && (!compiled.endsWord || end === folded.length || !WORD_CHAR_RE.test(codePointAtSlice(folded, end)));
 
     if (leftOk && rightOk) {
-      const origStart = srcStarts[at];
-      const origEnd = srcEnds[end - 1];
       return {
-        leftContext: truncateLeftContext(speechText.slice(0, origStart), maxContextChars),
-        match: speechText.slice(origStart, origEnd),
-        rightContext: truncateRightContext(speechText.slice(origEnd), maxContextChars),
+        origStart: srcStarts[at],
+        origEnd: srcEnds[end - 1],
       };
     }
 
@@ -292,6 +313,18 @@ function findConcordanceMatch(
   }
 
   return null;
+}
+
+function formatConcordanceSlice(
+  speechText: string,
+  offsets: MatchOffsets,
+  maxContextChars: number,
+): ConcordanceMatchSlice {
+  return {
+    leftContext: truncateLeftContext(speechText.slice(0, offsets.origStart), maxContextChars),
+    match: speechText.slice(offsets.origStart, offsets.origEnd),
+    rightContext: truncateRightContext(speechText.slice(offsets.origEnd), maxContextChars),
+  };
 }
 
 /**
@@ -310,7 +343,9 @@ export function extractConcordanceMatch(
 ): ConcordanceMatchSlice | null {
   const compiled = compileConcordanceQuery(rawQuery);
   if (!compiled) return null;
-  return findConcordanceMatch(speechText, compiled, maxContextChars);
+  const offsets = findConcordanceMatchOffsets(speechText, compiled);
+  if (!offsets) return null;
+  return formatConcordanceSlice(speechText, offsets, maxContextChars);
 }
 
 /**
@@ -338,6 +373,14 @@ export function compareConcordanceSessions(
   return slugTieBreak();
 }
 
+interface PendingConcordanceMatch {
+  session: Session;
+  passage: Passage;
+  passageNumber: number;
+  speech: string;
+  offsets: MatchOffsets;
+}
+
 export function makeConcordance(data: ArchiveData) {
   const orderedSessions = [...data.sessions].sort(compareConcordanceSessions);
 
@@ -361,7 +404,15 @@ export function makeConcordance(data: ArchiveData) {
     // (matching linguistic search provenance rules), else 'any' for open concordance queries.
     const speaker = request.speaker ?? (marker ? 'child' : 'any');
 
-    const matches: ConcordanceRow[] = [];
+    const requestedPage = Math.max(1, Math.floor(Number.isFinite(request.page) ? request.page! : 1));
+    const windowStart = (requestedPage - 1) * pageSize;
+    const windowEnd = windowStart + pageSize;
+
+    // Retain only the requested page window plus the trailing page (at most 50 entries each)
+    // so large match sets never format or retain rows outside the returned page.
+    const requestedPageMatches: PendingConcordanceMatch[] = [];
+    let lastPageMatches: PendingConcordanceMatch[] = [];
+    let total = 0;
     let sessionCount = 0;
 
     for (const session of orderedSessions) {
@@ -373,7 +424,6 @@ export function makeConcordance(data: ArchiveData) {
       if (speaker === 'child' && session.origin !== 'archived_research') continue;
 
       let sessionMatched = false;
-      const slug = session.slug || session.id;
 
       for (let index = 0; index < session.transcript.length; index += 1) {
         const passage = session.transcript[index];
@@ -384,37 +434,64 @@ export function makeConcordance(data: ArchiveData) {
 
         if (marker && !passageMatchesMarker(passage, session.origin, marker, speaker)) continue;
 
-        const slice = findConcordanceMatch(speech, compiled, CONCORDANCE_CONTEXT_CHARS);
-        if (!slice) continue;
+        const offsets = findConcordanceMatchOffsets(speech, compiled);
+        if (!offsets) continue;
 
         sessionMatched = true;
-        matches.push({
-          sessionId: session.id,
-          sessionSlug: slug,
-          sessionTitle: session.title,
-          sourceName: session.sourceName,
-          origin: session.origin,
-          ages: [...session.ages],
-          inferredAge: session.inferredAge,
-          passageNumber: index + 1,
-          speaker: passage.speaker?.trim() || null,
-          start: typeof passage.start === 'number' && Number.isFinite(passage.start) && passage.start >= 0 ? passage.start : null,
-          leftContext: slice.leftContext,
-          match: slice.match,
-          rightContext: slice.rightContext,
-        });
+        const matchIndex = total;
+        total += 1;
+
+        const inRequestedWindow = matchIndex >= windowStart && matchIndex < windowEnd;
+        const trackLastPage = requestedPage > 1;
+        if (trackLastPage && matchIndex % pageSize === 0) {
+          lastPageMatches = [];
+        }
+
+        if (inRequestedWindow || trackLastPage) {
+          const pending: PendingConcordanceMatch = {
+            session,
+            passage,
+            passageNumber: index + 1,
+            speech,
+            offsets,
+          };
+          if (inRequestedWindow) {
+            requestedPageMatches.push(pending);
+          }
+          if (trackLastPage) {
+            lastPageMatches.push(pending);
+          }
+        }
       }
 
       if (sessionMatched) sessionCount += 1;
     }
 
-    const total = matches.length;
     const pages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(pages, Math.max(1, Math.floor(Number.isFinite(request.page) ? request.page! : 1)));
-    const offset = (page - 1) * pageSize;
+    const page = Math.min(pages, requestedPage);
+    const selected = requestedPage <= pages ? requestedPageMatches : lastPageMatches;
+
+    const rows: ConcordanceRow[] = selected.map(({ session, passage, passageNumber, speech, offsets }) => {
+      const slice = formatConcordanceSlice(speech, offsets, CONCORDANCE_CONTEXT_CHARS);
+      return {
+        sessionId: session.id,
+        sessionSlug: session.slug || session.id,
+        sessionTitle: session.title,
+        sourceName: session.sourceName,
+        origin: session.origin,
+        ages: [...session.ages],
+        inferredAge: session.inferredAge,
+        passageNumber,
+        speaker: passage.speaker?.trim() || null,
+        start: typeof passage.start === 'number' && Number.isFinite(passage.start) && passage.start >= 0 ? passage.start : null,
+        leftContext: slice.leftContext,
+        match: slice.match,
+        rightContext: slice.rightContext,
+      };
+    });
 
     return {
-      rows: matches.slice(offset, offset + pageSize),
+      rows,
       total,
       sessionCount,
       page,

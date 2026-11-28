@@ -319,7 +319,19 @@ async function main() {
     const concordanceRes = await call('/api/concordance', 'concordance_search', { method: 'POST', cookie, origin: base.origin, body: { query: concordanceWord, origin: 'archived_research' } });
     await expectStatus(concordanceRes, 200, 'concordance_search');
     const concordanceBody = await bodyJson(concordanceRes, 'concordance_search');
-    check(concordanceBody.total > 0 && Array.isArray(concordanceBody.rows) && concordanceBody.rows.every(row => row.origin === 'archived_research' && row.passageNumber >= 1), 'concordance_search:exact_rows_found');
+    const foldToken = value => String(value || '').normalize('NFKD').replace(/\p{Mn}/gu, '').toLowerCase();
+    check(
+      concordanceBody.total > 0
+        && Array.isArray(concordanceBody.rows)
+        && concordanceBody.rows.length > 0
+        && concordanceBody.rows.every(
+          row =>
+            row.origin === 'archived_research'
+            && row.passageNumber >= 1
+            && foldToken(row.match) === foldToken(concordanceWord),
+        ),
+      'concordance_search:exact_rows_found',
+    );
     const invalidConcordanceRes = await call('/api/concordance', 'invalid_concordance', { method: 'POST', cookie, origin: base.origin, body: { query: concordanceWord, ageMin: 36, ageMax: 18 } });
     await expectStatus(invalidConcordanceRes, 400, 'invalid_concordance');
     await invalidConcordanceRes.body?.cancel();
