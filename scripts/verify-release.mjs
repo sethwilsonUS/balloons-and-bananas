@@ -257,13 +257,20 @@ async function main() {
   const filteredSearchPageHtml = await filteredSearchPageResponse.text();
   check(/<title>\s*Search results · The Seth Tapes\s*<\/title>/.test(filteredSearchPageHtml), 'search_page_filtered:title');
   check(!/<title>[^<]*releasechecktoken/i.test(filteredSearchPageHtml), 'search_page_filtered:no_query_in_title');
-  counts.searchRoutesVerified = 2;
+
+  const concordancePageResponse = await call('/search?q=releasechecktoken&view=concordance', 'search_page_concordance');
+  await expectStatus(concordancePageResponse, 200, 'search_page_concordance');
+  const concordancePageHtml = await concordancePageResponse.text();
+  check(/<title>\s*Concordance · The Seth Tapes\s*<\/title>/.test(concordancePageHtml), 'search_page_concordance:title');
+  check(!/<title>[^<]*releasechecktoken/i.test(concordancePageHtml), 'search_page_concordance:no_query_in_title');
+  counts.searchRoutesVerified = 3;
 
   // Production BotID deliberately rejects this non-browser search client.
   // Exercise search semantics locally; verify real browser search separately.
   if (!local) {
     await expectStatus(await call('/api/search', 'bot_search', { method: 'POST', origin: base.origin, body: { query: 'test' } }), 403, 'bot_search');
-    counts.botRequestsRejected = 1;
+    await expectStatus(await call('/api/concordance', 'bot_concordance', { method: 'POST', origin: base.origin, body: { query: 'test' } }), 403, 'bot_concordance');
+    counts.botRequestsRejected = 2;
   }
   const origins = local ? ['archived_research', 'talkbank_ai_draft', 'local_ai_draft'] : [];
   for (const [index, origin] of origins.entries()) {
@@ -293,6 +300,41 @@ async function main() {
     const invalidAgeRes = await call('/api/search', 'invalid_age_range', { method: 'POST', cookie, origin: base.origin, body: { ageMin: 36, ageMax: 18 } });
     await expectStatus(invalidAgeRes, 400, 'invalid_age_range');
     await invalidAgeRes.body?.cancel();
+
+    const spokenFirstLine = passage => {
+      if (!passage.speaker || !passage.speaker.trim()) return '';
+      const line = String(passage.text || '').replace(/\[\[LOCAL AI[\s\S]*?END LOCAL AI EDITORIAL COMMENT\]\]/g, '').split(/\r?\n/, 1)[0].trim();
+      return /^(?:\[Source\b|Source \(|Note:|Phonetic transcription\b|Speech-act annotation\b|[%@]\w)/i.test(line) ? '' : line;
+    };
+    const standaloneWord = line => {
+      const match = /(?:^|\s)([a-zA-Z]{5,20})(?=\s|[.,!?;:]|$)/.exec(line);
+      return match ? match[1] : null;
+    };
+    const concordanceEntry = data.entries.find(value => value.origin === 'archived_research' && value.transcript.some(p => Boolean(standaloneWord(spokenFirstLine(p)))));
+    check(Boolean(concordanceEntry), 'concordance_search:representative_available');
+    const concordanceWord = concordanceEntry.transcript
+      .map(p => standaloneWord(spokenFirstLine(p)))
+      .find(Boolean);
+    check(Boolean(concordanceWord), 'concordance_search:query_available');
+    const concordanceRes = await call('/api/concordance', 'concordance_search', { method: 'POST', cookie, origin: base.origin, body: { query: concordanceWord, origin: 'archived_research' } });
+    await expectStatus(concordanceRes, 200, 'concordance_search');
+    const concordanceBody = await bodyJson(concordanceRes, 'concordance_search');
+    const foldToken = value => String(value || '').normalize('NFKD').replace(/\p{Mn}/gu, '').toLowerCase();
+    check(
+      concordanceBody.total > 0
+        && Array.isArray(concordanceBody.rows)
+        && concordanceBody.rows.length > 0
+        && concordanceBody.rows.every(
+          row =>
+            row.origin === 'archived_research'
+            && row.passageNumber >= 1
+            && foldToken(row.match) === foldToken(concordanceWord),
+        ),
+      'concordance_search:exact_rows_found',
+    );
+    const invalidConcordanceRes = await call('/api/concordance', 'invalid_concordance', { method: 'POST', cookie, origin: base.origin, body: { query: concordanceWord, ageMin: 36, ageMax: 18 } });
+    await expectStatus(invalidConcordanceRes, 400, 'invalid_concordance');
+    await invalidConcordanceRes.body?.cancel();
   }
   counts.guideSearchExamples = origins.length;
   counts.transcriptSearchExamples = origins.length;

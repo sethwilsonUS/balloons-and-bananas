@@ -63,6 +63,21 @@ test('event allowlist rejects arbitrary text in known fields and oversized/nonfi
   assert.equal(sanitizeArchiveEvent('source_download', { recordingId: RECORDING, format: 'private-filename.txt' }), null);
   assert.equal(sanitizeArchiveEvent('audio_error', { recordingId: RECORDING, errorCode: 'private error message' }), null);
   assert.equal(sanitizeArchiveEvent('audio_start', { origin: 'archived_research' }), null);
+
+  // Concordance view is allowlisted without permitting arbitrary view names or query text.
+  assert.deepEqual(
+    sanitizeArchiveEvent('view_changed', { view: 'concordance' }),
+    { name: 'view_changed', properties: { view: 'concordance' } },
+  );
+  assert.deepEqual(
+    sanitizeArchiveEvent('search_completed', { results: 5, queryLength: 10, view: 'concordance', query: 'private-words' }),
+    { name: 'search_completed', properties: { results: 5, queryLength: 10, view: 'concordance' } },
+  );
+  assert.deepEqual(
+    sanitizeArchiveEvent('recording_open', { recordingId: RECORDING, origin: 'archived_research', view: 'concordance', action: 'passage', passage: 3 }),
+    { name: 'recording_open', properties: { recordingId: RECORDING, action: 'passage', origin: 'archived_research', view: 'concordance', passage: 3 } },
+  );
+  assert.equal(sanitizeArchiveEvent('view_changed', { view: 'kwic-private' }), null);
 });
 
 test('Pro events fit two properties and Plus expands to eight without changing counts', () => {

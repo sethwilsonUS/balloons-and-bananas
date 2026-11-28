@@ -1,13 +1,22 @@
 import { Check } from 'lucide-react';
-import { linguisticMarkers, type LinguisticMarkerId, type LinguisticSpeaker } from '../lib/linguistic-markers';
+import { isLinguisticSpeaker, linguisticMarkers, type LinguisticMarkerId, type LinguisticSpeaker } from '../lib/linguistic-markers';
 
-export default function LinguisticFilters({ marker, speaker, open, onMarker, onSpeaker, onOpen }: {
+export default function LinguisticFilters({
+  marker,
+  speaker,
+  open,
+  onMarker,
+  onSpeaker,
+  onOpen,
+  externalSpeakerControl = false,
+}: {
   marker: LinguisticMarkerId | '';
   speaker: LinguisticSpeaker;
   open: boolean;
   onMarker: (value: LinguisticMarkerId | '') => void;
   onSpeaker: (value: LinguisticSpeaker) => void;
   onOpen: (value: boolean) => void;
+  externalSpeakerControl?: boolean;
 }) {
   const selected = linguisticMarkers.find(item => item.id === marker);
   return <details className="linguistic-filters" open={open} onToggle={event => onOpen(event.currentTarget.open)}>
@@ -27,8 +36,14 @@ export default function LinguisticFilters({ marker, speaker, open, onMarker, onS
         </div>
         {linguisticMarkers.filter(item => item.kind === kind).map(item => <p key={item.id} id={`linguistic-${item.id}-description`} className={marker === item.id ? 'small linguistic-description' : 'sr-only'}>{item.description}</p>)}
       </fieldset>)}
-      <div className="field linguistic-speaker"><label htmlFor="linguistic-speaker">Speaker for this marker</label><select id="linguistic-speaker" value={speaker} disabled={!marker} aria-describedby="linguistic-speaker-help" onChange={event => onSpeaker(event.target.value as LinguisticSpeaker)}><option value="child">Seth (CHI) only</option><option value="any">Any speaker / unidentified</option></select></div>
-      <p id="linguistic-speaker-help" className="small muted">Speaker scope applies only while a marker is selected. “Seth (CHI) only” uses explicit CHI labels; it excludes PAR and unidentified speech in AI drafts. No speaker identity is inferred.</p>
+      {externalSpeakerControl ? (
+        <p className="small muted">Speaker scope for both the concordance and any selected linguistic marker is controlled by the Speaker filter above. “Seth (CHI) only” uses explicit CHI labels in archived research; no speaker identity is inferred.</p>
+      ) : (
+        <>
+          <div className="field linguistic-speaker"><label htmlFor="linguistic-speaker">Speaker for this marker</label><select id="linguistic-speaker" value={speaker} disabled={!marker} aria-describedby="linguistic-speaker-help" onChange={event => { if (isLinguisticSpeaker(event.target.value)) onSpeaker(event.target.value); }}><option value="child">Seth (CHI) only</option><option value="any">Any speaker / unidentified</option></select></div>
+          <p id="linguistic-speaker-help" className="small muted">Speaker scope applies only while a marker is selected. “Seth (CHI) only” uses explicit CHI labels; it excludes PAR and unidentified speech in AI drafts. No speaker identity is inferred.</p>
+        </>
+      )}
       <p className="small muted">Notation, speaker labels, and AI punctuation vary across transcript origins; counts are not directly comparable. Few or no matches do not show an absence of a linguistic ability. Check the source transcript and recordings; raw CHAT files are available with each session. <a href="https://talkbank.org/0info/manuals/CHAT.html" target="_blank" rel="noreferrer">Read the CHAT notation manual (opens in a new tab)</a>.</p>
     </div>
   </details>;

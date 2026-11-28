@@ -5,6 +5,7 @@ import { initBotId } from 'botid/client/core';
 try {
   initBotId({ protect: [
     { path: '/api/search', method: 'POST', advancedOptions: { checkLevel: 'basic' } },
+    { path: '/api/concordance', method: 'POST', advancedOptions: { checkLevel: 'basic' } },
     { path: '/api/assets/*', method: 'GET', advancedOptions: { checkLevel: 'basic' } },
     { path: '/api/analytics/*', method: 'POST', advancedOptions: { checkLevel: 'basic' } },
   ] });

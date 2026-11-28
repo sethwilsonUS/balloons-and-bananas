@@ -40,7 +40,11 @@ export async function generateMetadata({
   }
   const parsed = parseSearchUrlParams(resolved, { validTopics });
   return {
-    title: formatDocumentTitle({ kind: 'search', hasFilters: hasActiveSearchFilters(parsed) }),
+    title: formatDocumentTitle({
+      kind: 'search',
+      hasFilters: hasActiveSearchFilters(parsed),
+      view: parsed.view,
+    }),
     description: `Search sessions, guides, and transcripts in ${ARCHIVE_NAME}.`,
   };
 }

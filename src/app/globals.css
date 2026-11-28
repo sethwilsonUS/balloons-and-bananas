@@ -368,6 +368,36 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
 .compact-result-matches > summary { min-height: 44px; padding: 10px 0; color: var(--forest); font-size: .9rem; }
 .compact-result-matches .linguistic-evidence { margin: 8px 0 0; }
 .compact-result-matches .search-excerpt { margin: 8px 0 12px; }
+
+/* Concordance aligns exact transcript passage matches in age order. */
+.concordance-speaker-note { margin: 10px 0 0; }
+.concordance-empty-query p { max-width: 620px; }
+.concordance-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 22px; }
+.concordance-scroll { overflow-x: auto; max-width: 100%; margin: 18px 0 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper-light); }
+.concordance-scroll:focus-visible { outline: 3px solid var(--rust); outline-offset: 2px; }
+.concordance-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: .88rem; line-height: 1.55; color: var(--ink); }
+.concordance-caption { caption-side: top; text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--subtle-bg); color: var(--reading); font-size: .86rem; line-height: 1.55; }
+.concordance-table thead th { text-align: left; vertical-align: bottom; padding: 12px 14px; background: var(--forest-soft); color: var(--ink); font-size: .78rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; border-bottom: 1px solid var(--control-line); white-space: nowrap; }
+.concordance-table thead th.concordance-col-left { text-align: right; }
+.concordance-table thead th.concordance-col-match { text-align: center; }
+.concordance-table tbody th,
+.concordance-table tbody td { text-align: left; vertical-align: top; padding: 13px 14px; border-bottom: 1px solid var(--line); }
+.concordance-table tbody tr:nth-child(even) { background: var(--row-bg); }
+.concordance-table tbody tr:last-child th,
+.concordance-table tbody tr:last-child td { border-bottom: 0; }
+.concordance-session-cell { min-width: 195px; max-width: 240px; font-weight: 450; }
+.concordance-session-link { display: flex; flex-direction: column; gap: 2px; color: var(--forest); text-decoration: none; }
+.concordance-session-link:hover { color: var(--rust); }
+.concordance-session-id { font-weight: 650; font-variant-numeric: tabular-nums; text-decoration: underline; text-underline-offset: .2em; text-decoration-thickness: 1px; }
+.concordance-session-title { color: var(--ink); font-size: .84rem; line-height: 1.45; }
+.concordance-session-link:hover .concordance-session-title { color: var(--rust); }
+.concordance-origin { margin-top: 7px; font-size: .72rem; line-height: 1.4; }
+.concordance-age-cell { min-width: 145px; font-variant-numeric: tabular-nums; }
+.concordance-speaker-cell { min-width: 130px; max-width: 185px; overflow-wrap: anywhere; }
+.concordance-table tbody td.concordance-left { text-align: right; color: var(--reading); min-width: 165px; overflow-wrap: anywhere; }
+.concordance-table tbody td.concordance-match { text-align: center; font-weight: 650; min-width: 96px; overflow-wrap: anywhere; }
+.concordance-match mark { display: inline-block; padding: .08em .3em; border-radius: 3px; }
+.concordance-table tbody td.concordance-right { text-align: left; color: var(--reading); min-width: 165px; overflow-wrap: anywhere; }
 @media (max-width: 720px) {
   .session-view-control { flex-basis: 100%; margin-left: 0; }
   .session-list-row { grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
@@ -527,7 +557,7 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   .browse-section, .research-section, .document-detail { padding-top: 33px; }
   .search-form { padding: 19px; }
   .filter-row { grid-template-columns: 1fr 1fr; }
-  .filter-row > .field:last-child { grid-column: 1 / -1; max-width: 240px; }
+  .filter-row > .field:last-child { grid-column: 1 / -1; max-width: 300px; }
   .session-card { grid-template-columns: 30px minmax(0, 1fr); gap: 15px; }
   .session-index { font-size: 1.3rem; padding-top: 28px; }
   .session-card h3 a, .session-card h4 a { gap: 15px; }
@@ -647,6 +677,15 @@ section, h2, h3, h4, .transcript-line { scroll-margin-top: 30px; }
   a { color: black; }
   .moment-list > li, .session-card, .transcript-line { break-inside: avoid; }
   .transcript-line { content-visibility: visible !important; }
+  .concordance-scroll { overflow: visible; border-color: black; }
+  .concordance-table { min-width: 0; font-size: 9pt; }
+  .concordance-table thead th { white-space: normal; }
+  .concordance-session-cell,
+  .concordance-age-cell,
+  .concordance-speaker-cell,
+  .concordance-table tbody td.concordance-left,
+  .concordance-table tbody td.concordance-match,
+  .concordance-table tbody td.concordance-right { min-width: 0; max-width: none; }
 }
 
 
@@ -747,6 +786,8 @@ input[type='range'].audio-range:hover:not(:disabled)::-moz-range-thumb { backgro
   input[type='range'].audio-range::-moz-range-progress { background: Highlight; }
   input[type='range'].audio-range::-webkit-slider-thumb { background: Highlight; border: 2px solid CanvasText; }
   input[type='range'].audio-range::-moz-range-thumb { background: Highlight; border: 2px solid CanvasText; }
+  .concordance-scroll { border-color: CanvasText; }
+  .concordance-match mark { background: Mark; color: MarkText; outline: 1px solid CanvasText; }
 }
 .player-meta { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px 24px; padding-top: 12px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .player-meta .text-link { min-height: 44px; }

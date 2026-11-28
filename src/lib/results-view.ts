@@ -1,6 +1,7 @@
-import type { SearchPageSize, SearchResponse, SearchResult, SearchSort, TranscriptOrigin } from './types';
+import type { ConcordanceResponse, SearchPageSize, SearchResponse, SearchResult, SearchSort, TranscriptOrigin } from './types';
 
 export type SessionView = 'details' | 'list';
+export type SearchView = SessionView | 'concordance';
 export type SearchBusyKind = null | 'search' | 'view';
 export const SEARCH_SORTS: readonly SearchSort[] = ['age-asc', 'age-desc', 'relevance'];
 export const TRANSCRIPT_ORIGINS: readonly TranscriptOrigin[] = ['archived_research', 'talkbank_ai_draft', 'local_ai_draft'];
@@ -11,6 +12,10 @@ export function isSearchSort(value: unknown): value is SearchSort {
 
 export function isSessionView(value: unknown): value is SessionView {
   return value === 'details' || value === 'list';
+}
+
+export function isSearchView(value: unknown): value is SearchView {
+  return value === 'details' || value === 'list' || value === 'concordance';
 }
 
 export function isTranscriptOrigin(value: unknown): value is TranscriptOrigin {
@@ -80,6 +85,21 @@ export function formatSearchStatus(search: SearchResponse | null, busyKind: Sear
   const first = (search.page - 1) * search.pageSize + 1;
   const last = Math.min(search.page * search.pageSize, search.total);
   return `${first}–${last} of ${search.total.toLocaleString()} ${search.total === 1 ? 'session' : 'sessions'}${search.pages > 1 ? ` · page ${search.page} of ${search.pages}` : ''}`;
+}
+
+export function formatConcordanceStatus(
+  concordance: ConcordanceResponse | null,
+  busyKind: SearchBusyKind,
+  hasQuery: boolean,
+): string {
+  if (!hasQuery) return 'Enter a search query to view a concordance.';
+  if (busyKind === 'search') return 'Searching…';
+  if (busyKind === 'view') return 'Updating view…';
+  if (!concordance) return '';
+  if (!concordance.total) return '0 matching passages';
+  const first = (concordance.page - 1) * concordance.pageSize + 1;
+  const last = Math.min(concordance.page * concordance.pageSize, concordance.total);
+  return `${first}–${last} of ${concordance.total.toLocaleString()} matching ${concordance.total === 1 ? 'passage' : 'passages'}${concordance.pages > 1 ? ` · page ${concordance.page} of ${concordance.pages}` : ''}`;
 }
 
 /**

@@ -1,13 +1,15 @@
 import { linguisticMarkers, type LinguisticMarkerId, type LinguisticSpeaker } from './linguistic-markers';
-import type { LinguisticEvidence, Passage, Session } from './types';
+import type { LinguisticEvidence, Passage, Session, TranscriptOrigin } from './types';
 
 const WH_WORDS = new Set(['what', 'who', 'whom', 'whose', 'which', 'when', 'where', 'why', 'how']);
 const FIRST_PERSON = new Set(['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our', 'ours', 'ourselves']);
 const DEIXIS = new Set(['this', 'that', 'these', 'those', 'here', 'there']);
 const NEGATION = new Set(['no', 'not', 'never']);
+const EDITORIAL_COMMENT_RE = /\[\[LOCAL AI[\s\S]*?END LOCAL AI EDITORIAL COMMENT\]\]/g;
+const NON_SPEECH_LINE_RE = /^(?:\[Source\b|Source \(|Note:|Phonetic transcription\b|Speech-act annotation\b|[%@]\w)/i;
 const blank = (value: string) => ' '.repeat(value.length);
 
-function isSourceChild(speaker: string | undefined) {
+export function isSourceChildSpeaker(speaker: string | undefined): boolean {
   // CHI is the source code. "Child", another child's CH2 code, or an anonymous
   // AI participant label is not evidence of the target child's identity.
   return !!speaker && /^(?:\*?CHI:?|[^()]+\(CHI(?:,\s*[^()]*)?\))$/.test(speaker.trim());
@@ -18,9 +20,47 @@ export function utteranceText(passage: Passage): string {
   // tiers / observation notes on subsequent lines. Those are not spoken words.
   // Remove delimited editorial comments first, including any embedded inline.
   return passage.text
-    .replace(/\[\[LOCAL AI[\s\S]*?END LOCAL AI EDITORIAL COMMENT\]\]/g, '')
+    .replace(EDITORIAL_COMMENT_RE, '')
     .split(/\r?\n/, 1)[0]
     .trim();
+}
+
+/**
+ * Extract spoken utterance text for a transcript passage according to its origin.
+ * Excludes source metadata, commentary, dependent CHAT tiers, and delimited local
+ * AI editorial notes. Returns an empty string for non-speech passages.
+ */
+export function passageSpeechText(passage: Passage, origin: TranscriptOrigin): string {
+  const hasSpeaker = Boolean(passage.speaker?.trim());
+  // Source metadata has no speaker. Local ASR passages are speech drafts,
+  // but have no established identity and can only enter the "any" scope.
+  if (origin !== 'local_ai_draft' && !hasSpeaker) return '';
+  if (origin !== 'local_ai_draft') {
+    const speech = utteranceText(passage);
+    if (!speech || NON_SPEECH_LINE_RE.test(speech)) return '';
+    return speech;
+  }
+  const lines = passage.text.replace(EDITORIAL_COMMENT_RE, '').split(/\r?\n/);
+  const speechLines: string[] = [];
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (NON_SPEECH_LINE_RE.test(trimmed)) break;
+    speechLines.push(trimmed);
+  }
+  return speechLines.join(' ');
+}
+
+/** Check whether a passage falls within the requested speaker scope without inferring identity. */
+export function passageMatchesSpeakerScope(
+  passage: Passage,
+  origin: TranscriptOrigin,
+  speaker: LinguisticSpeaker,
+): boolean {
+  if (speaker === 'child') {
+    return origin === 'archived_research' && isSourceChildSpeaker(passage.speaker);
+  }
+  return true;
 }
 
 function withoutAnnotations(text: string, keepChatMarkers: boolean): string {
@@ -94,6 +134,20 @@ function evidenceExcerpt(speech: string, at: number): string {
   return `${from ? '…' : ''}${speech.slice(from, to)}${to < speech.length ? '…' : ''}`;
 }
 
+/** Check whether a single transcript passage matches a linguistic marker in the given speaker scope. */
+export function passageMatchesMarker(
+  passage: Passage,
+  origin: TranscriptOrigin,
+  marker: LinguisticMarkerId,
+  speaker: LinguisticSpeaker = 'child',
+): boolean {
+  if (!passageMatchesSpeakerScope(passage, origin, speaker)) return false;
+  const speech = passageSpeechText(passage, origin);
+  if (!speech) return false;
+  const chatEligible = origin !== 'local_ai_draft' && Boolean(passage.speaker?.trim());
+  return matchedMarkers(speech, chatEligible).some(hit => hit.marker === marker);
+}
+
 type SessionEvidence = Map<string, LinguisticEvidence>;
 type MarkerIndex = Map<LinguisticMarkerId, Record<LinguisticSpeaker, SessionEvidence>>;
 
@@ -101,13 +155,10 @@ function buildIndex(sessions: Session[]): MarkerIndex {
   const index: MarkerIndex = new Map(linguisticMarkers.map(marker => [marker.id, { child: new Map(), any: new Map() }]));
   for (const session of sessions) {
     session.transcript.forEach((passage, passageIndex) => {
-      const chatEligible = session.origin !== 'local_ai_draft' && !!passage.speaker?.trim();
-      // Source metadata has no speaker. Local ASR passages are speech drafts,
-      // but have no established identity and can only enter the "any" scope.
-      if (session.origin !== 'local_ai_draft' && !chatEligible) return;
-      const speech = utteranceText(passage);
-      if (!speech || /^(?:\[Source\b|Source \(|Note:|Phonetic transcription\b|Speech-act annotation\b|[%@]\w)/i.test(speech)) return;
-      const scopes: LinguisticSpeaker[] = session.origin === 'archived_research' && isSourceChild(passage.speaker) ? ['child', 'any'] : ['any'];
+      const speech = passageSpeechText(passage, session.origin);
+      if (!speech) return;
+      const chatEligible = session.origin !== 'local_ai_draft' && Boolean(passage.speaker?.trim());
+      const scopes: LinguisticSpeaker[] = passageMatchesSpeakerScope(passage, session.origin, 'child') ? ['child', 'any'] : ['any'];
       for (const { marker, at } of matchedMarkers(speech, chatEligible)) {
         for (const scope of scopes) {
           const sessionEvidence = index.get(marker)![scope];
