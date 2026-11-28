@@ -1,10 +1,12 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { connection } from 'next/server';
 import { archive } from '@/lib/archive';
 import { summarizeArchiveForAbout } from '@/lib/research';
 import { ARCHIVE_NAME, formatDocumentTitle } from '@/lib/site';
 import ArchiveAnalytics from '@/components/ArchiveAnalytics';
+import HowToCiteSection from '@/components/HowToCiteSection';
 import RouteHeader from '@/components/RouteHeader';
 import SiteFooter from '@/components/SiteFooter';
 
@@ -26,8 +28,24 @@ function plural(count: number, singular: string, pluralForm: string): string {
   return `${count.toLocaleString()} ${count === 1 ? singular : pluralForm}`;
 }
 
+function resolveRequestOrigin(headerList: Headers): string | null {
+  const forwardedHost = headerList.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const host = forwardedHost || headerList.get('host')?.trim();
+  if (!host) return null;
+  const forwardedProto = headerList.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const defaultProto = process.env.VERCEL ? 'https' : 'http';
+  const proto = forwardedProto === 'https' || forwardedProto === 'http' ? forwardedProto : defaultProto;
+  try {
+    return new URL(`${proto}://${host}`).origin;
+  } catch {
+    return null;
+  }
+}
+
 export default async function AboutPage() {
-  const stats = await loadAboutSummary();
+  const [stats, headerList] = await Promise.all([loadAboutSummary(), headers()]);
+  const requestOrigin = resolveRequestOrigin(headerList);
+  const accessDate = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="archive-shell">
@@ -182,65 +200,7 @@ export default async function AboutPage() {
             </p>
           </section>
 
-          <section className="about-section" aria-labelledby="how-to-cite">
-            <h2 id="how-to-cite">How to cite</h2>
-            <p>
-              This collection draws on the <strong>Peters/Wilson corpus in CHILDES</strong>, part of TalkBank:
-            </p>
-            <ul>
-              <li>
-                <a
-                  href="https://talkbank.org/childes/access/Eng-NA/Peters.html"
-                  rel="noopener noreferrer nofollow"
-                  referrerPolicy="no-referrer"
-                  target="_blank"
-                >
-                  Peters corpus record and acknowledgments in TalkBank
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </a>{' '}
-                ·{' '}
-                <a
-                  href="https://doi.org/10.21415/T5NS4D"
-                  rel="noopener noreferrer nofollow"
-                  referrerPolicy="no-referrer"
-                  target="_blank"
-                >
-                  Corpus DOI: 10.21415/T5NS4D
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </a>
-              </li>
-              <li>
-                Peters, Ann M. (1987). <em>The role of imitation in the developing syntax of a blind child</em>. <em>Text</em>, 7(3), 289–311.{' '}
-                <a
-                  href="https://doi.org/10.1515/text.1.1987.7.3.289"
-                  rel="noopener noreferrer nofollow"
-                  referrerPolicy="no-referrer"
-                  target="_blank"
-                >
-                  Publisher record
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </a>
-              </li>
-              <li>
-                Wilson, Bob, and Ann M. Peters (1988). <em>What are you cookin’ on a hot?: Movement constraints in the speech of a three-year-old blind child</em>. <em>Language</em>, 64(2), 249–273.{' '}
-                <a
-                  href="https://doi.org/10.2307/415434"
-                  rel="noopener noreferrer nofollow"
-                  referrerPolicy="no-referrer"
-                  target="_blank"
-                >
-                  Publisher record
-                  <span className="sr-only"> (opens in a new tab)</span>
-                </a>
-              </li>
-            </ul>
-            <p>
-              When citing a session or passage from {ARCHIVE_NAME}, include the session URL (<code>/sessions/&lt;id&gt;</code>), the passage number where applicable, and the <strong>transcript origin</strong> (archived research, TalkBank AI draft, or local AI draft). Check machine drafts against the original recording before quoting speech as evidence.
-            </p>
-            <p className="muted">
-              <em>Upcoming update:</em> One-click Chicago, APA, and BibTeX citation panels for every session and passage will be added here and on session pages in an upcoming update. For the full dissertation and published bibliography, see <a href="/research">Research &amp; context</a>.
-            </p>
-          </section>
+          <HowToCiteSection origin={requestOrigin} accessDate={accessDate} />
         </article>
       </main>
       <SiteFooter />

@@ -13,6 +13,7 @@ import {
   parseSessionHash,
 } from '../lib/session-reading';
 import { ApiError, request, timeLabel, transcriptOriginLabels } from './api';
+import { CitePassageButton, SessionCiteProvider } from './CiteControl';
 import SessionAge from './SessionAge';
 import { TopicLabels } from './TopicThemes';
 import RecordingAudio, { type RecordingAudioHandle } from './RecordingAudio';
@@ -440,6 +441,7 @@ function Transcript({
                 {isCopied ? <Check size={14} aria-hidden="true" /> : <Link2 size={14} aria-hidden="true" />}
                 <span>{isCopied ? 'Copied' : 'Copy link'}</span>
               </button>
+              <CitePassageButton passageNumber={passageNumber} />
             </div>
           </div>
         );
@@ -507,17 +509,27 @@ export default function SessionDetail({ id, passage = null, onBack, onMarker, on
 
   return <article className="session-detail">
     <button type="button" className="text-button back-button" onClick={onBack}><ArrowLeft size={17} aria-hidden="true" />Back to sessions</button>
-    {error ? <div className="error-panel" role="alert"><p>{error}</p><button className="button secondary" type="button" onClick={() => setRetry(value => value + 1)}>Try again</button></div> : !session ? <p className="loading-message" role="status">Opening the session…</p> : <>
-      <header className="detail-header">
-        <div className="session-meta"><span className="eyebrow">Session</span><span>{session.sourceName}</span><SessionAge ages={session.ages} inferredAge={session.inferredAge} onDocument={onDocument} />{session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}</div>
-        <h2 ref={heading} tabIndex={-1}>{session.title}</h2>
-        <div className="badge-row"><span className="ai-badge">AI-written guide</span><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
-        <p className="detail-overview">{session.overview}</p>
-        <TopicLabels topics={session.topics} />
-      </header>
-      <div className="provenance-note"><p><strong>About this guide.</strong> This overview, its themes, and its moments were written with AI from the transcript. They are a starting point for exploring the session; they are not part of the source transcript or an independently verified account of the recordings.</p></div>
-      <SessionBody key={session.id} session={session} targetPassage={passage} onMarker={onMarker} />
-      <SessionSources session={session} />
-    </>}
+    {error ? <div className="error-panel" role="alert"><p>{error}</p><button className="button secondary" type="button" onClick={() => setRetry(value => value + 1)}>Try again</button></div> : !session ? <p className="loading-message" role="status">Opening the session…</p> : (
+      <SessionCiteProvider
+        session={{
+          slug: session.slug || session.id,
+          ages: session.ages,
+          inferredAge: session.inferredAge,
+          dates: session.dates,
+          origin: session.origin,
+        }}
+      >
+        <header className="detail-header">
+          <div className="session-meta"><span className="eyebrow">Session</span><span>{session.sourceName}</span><SessionAge ages={session.ages} inferredAge={session.inferredAge} onDocument={onDocument} />{session.dates.length > 0 && <span>{session.dates.join(' / ')}</span>}</div>
+          <h2 ref={heading} tabIndex={-1}>{session.title}</h2>
+          <div className="badge-row"><span className="ai-badge">AI-written guide</span><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
+          <p className="detail-overview">{session.overview}</p>
+          <TopicLabels topics={session.topics} />
+        </header>
+        <div className="provenance-note"><p><strong>About this guide.</strong> This overview, its themes, and its moments were written with AI from the transcript. They are a starting point for exploring the session; they are not part of the source transcript or an independently verified account of the recordings.</p></div>
+        <SessionBody key={session.id} session={session} targetPassage={passage} onMarker={onMarker} />
+        <SessionSources session={session} />
+      </SessionCiteProvider>
+    )}
   </article>;
 }

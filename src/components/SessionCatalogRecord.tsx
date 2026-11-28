@@ -1,5 +1,6 @@
 import type { Recording, Session } from '../lib/types';
 import { timeLabel, transcriptOriginLabels } from './api';
+import { CiteSessionButton } from './CiteControl';
 import SessionAge from './SessionAge';
 
 function formatRecordingEntry(recording: Recording): string {
@@ -70,6 +71,21 @@ export default function SessionCatalogRecord({ session }: { session: Session }) 
           <span className="small muted">
             {session.moments.length} {session.moments.length === 1 ? 'moment' : 'moments'}
           </span>
+        </dd>
+      </div>
+      <div className="catalog-record-row catalog-cite-row">
+        <dt>Citation</dt>
+        <dd className="catalog-cite-cell">
+          <CiteSessionButton
+            session={{
+              slug: session.slug,
+              ages: session.ages,
+              inferredAge: session.inferredAge,
+              dates: session.dates,
+              origin: session.origin,
+            }}
+          />{' '}
+          <span className="small muted">Chicago, APA, and BibTeX</span>
         </dd>
       </div>
     </dl>

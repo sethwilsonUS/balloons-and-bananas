@@ -6,6 +6,7 @@ import {
   DEFAULT_BACK_TO_RESULTS_HREF,
   resolveBackToResultsUrl,
 } from '../lib/session-reading';
+import { CiteSessionButton } from './CiteControl';
 
 export default function SessionStickyNav({
   initialBackHref = null,
@@ -63,6 +64,7 @@ export default function SessionStickyNav({
         <li><a href="#guide">Guide</a></li>
         <li><a href="#moments">Moments</a></li>
         <li><a href="#transcript">Transcript</a></li>
+        <li><CiteSessionButton variant="sticky-nav" /></li>
         <li className="session-sticky-nav-back-item">
           <a className="session-sticky-nav-back" href={backHref}>
             <ArrowLeft size={15} aria-hidden="true" />
