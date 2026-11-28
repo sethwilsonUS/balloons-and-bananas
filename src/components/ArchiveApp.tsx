@@ -27,6 +27,12 @@ function analyticsSection(section: Section): 'overview' | 'recordings' | 'resear
   return section === 'sessions' ? 'recordings' : section;
 }
 
+function parseSavedSection(value: unknown): Section | null {
+  if (value === 'recordings') return 'sessions';
+  if (value === 'overview' || value === 'sessions' || value === 'research') return value;
+  return null;
+}
+
 function markerFilters(params: URLSearchParams): SearchFilters | null {
   const marker = params.get('marker');
   if (!isLinguisticMarkerId(marker)) return null;
@@ -145,18 +151,32 @@ export default function ArchiveApp() {
         }
         const nextCatalog = await request<Catalog>('/api/catalog', { signal: controller.signal });
         if (controller.signal.aborted) return;
-        setCatalog(nextCatalog);
-        setLoadState('ready');
         const params = new URLSearchParams(window.location.search);
         const id = params.get('entry');
         const doc = params.get('document');
+        const requestedSection = parseSavedSection(params.get('section'));
         const filterLink = !id && !doc ? markerFilters(params) : null;
+        const saved = !id && !doc ? savedFilters(window.history.state?.archiveFilters) : null;
+        const savedSection = !id && !doc ? parseSavedSection(window.history.state?.archiveSection) : null;
+        setCatalog(nextCatalog);
         setSessionId(id);
         setPassage(id ? readPassageParameter(params.get('passage')) : null);
         setDocumentId(id ? null : doc);
-        if (id) setSection('sessions');
-        else if (doc) setSection('research');
-        else if (filterLink) { restoreFilters(filterLink); setSection('sessions'); }
+        if (id) {
+          setSection('sessions');
+        } else if (doc) {
+          setSection('research');
+        } else if (filterLink) {
+          restoreFilters(saved?.marker === filterLink.marker && saved.speaker === filterLink.speaker ? saved : filterLink);
+          setSection('sessions');
+        } else if (requestedSection) {
+          if (requestedSection === 'sessions' && saved) restoreFilters(saved);
+          setSection(requestedSection);
+        } else if (savedSection) {
+          if (savedSection === 'sessions' && saved) restoreFilters(saved);
+          setSection(savedSection);
+        }
+        setLoadState('ready');
       } catch (error) {
         if (controller.signal.aborted) return;
         setLoadState('error');
@@ -190,13 +210,9 @@ export default function ArchiveApp() {
       const saved = savedFilters(window.history.state?.archiveFilters);
       if (filterLink) restoreFilters(saved?.marker === filterLink.marker && saved.speaker === filterLink.speaker ? saved : filterLink);
       else if (saved) restoreFilters(saved);
-      const rawSavedSection = window.history.state?.archiveSection;
-      const savedSection: Section | null = rawSavedSection === 'recordings'
-        ? 'sessions'
-        : rawSavedSection === 'overview' || rawSavedSection === 'sessions' || rawSavedSection === 'research'
-          ? rawSavedSection
-          : null;
-      setSection(id || filterLink ? 'sessions' : doc ? 'research' : savedSection ?? 'overview');
+      const savedSection = parseSavedSection(window.history.state?.archiveSection);
+      const requestedSection = parseSavedSection(params.get('section'));
+      setSection(id || filterLink ? 'sessions' : doc ? 'research' : savedSection ?? requestedSection ?? 'overview');
       setShareState('idle');
       setShareUrl('');
     };
@@ -310,6 +326,7 @@ export default function ArchiveApp() {
     }
     if (!id && !doc && (next !== section || sessionId || documentId)) trackArchiveEvent('section_view', { section: analyticsSection(next) });
     const url = new URL(window.location.href);
+    url.searchParams.delete('section');
     if (id) url.searchParams.set('entry', id); else url.searchParams.delete('entry');
     if (doc) url.searchParams.set('document', doc); else url.searchParams.delete('document');
     if (nextMarker && next === 'sessions' && !id && !doc) { url.searchParams.set('marker', nextMarker); url.searchParams.set('speaker', 'any'); }
@@ -357,6 +374,15 @@ export default function ArchiveApp() {
         : state,
     );
   }, []);
+
+  const prepareSessionNavigation = useCallback(() => {
+    pendingSearchAnalytics.current?.flush();
+    const url = new URL(window.location.href);
+    if (marker) { url.searchParams.set('marker', marker); url.searchParams.set('speaker', speaker); }
+    else { url.searchParams.delete('marker'); url.searchParams.delete('speaker'); }
+    const archiveFilters: SearchFilters = { query, topic, origin, marker, speaker, sort, page, linguisticsOpen, view: sessionView };
+    window.history.replaceState({ ...window.history.state, archiveSection: 'sessions', archiveFilters }, '', url.pathname + url.search + url.hash);
+  }, [linguisticsOpen, marker, origin, page, query, sessionView, sort, speaker, topic]);
 
   const openSession = useCallback((id: string) => { pendingSearchAnalytics.current?.flush(); navigate('sessions', id); }, [navigate]);
   const openResultPassage = useCallback((id: string, targetPassage: number) => { pendingSearchAnalytics.current?.flush(); navigate('sessions', id, null, targetPassage); }, [navigate]);
@@ -484,7 +510,7 @@ export default function ArchiveApp() {
         <div className="results-toolbar"><h3 ref={resultHeading} tabIndex={-1}>{search ? `${search.total.toLocaleString()} ${search.total === 1 ? 'session' : 'sessions'}` : 'Sessions'}</h3>{hasFilters && <button type="button" className="text-button small" onClick={() => { trackArchiveEvent('filter_changed', { filter: 'clear', value: 'all' }); setQuery(''); setTopic(''); setOrigin(''); setMarker(''); setSpeaker('child'); setPage(1); setSort('age-asc'); }}><X size={15} aria-hidden="true" />Clear filters</button>}<div className="session-view-control" role="group" aria-label="Session view"><span className="small muted">View</span><button type="button" className="button secondary theme-shortcut" aria-pressed={sessionView === 'details'} aria-describedby="session-view-help" onClick={() => changeSessionView('details')}>Details</button><button type="button" className="button secondary theme-shortcut" aria-pressed={sessionView === 'list'} aria-describedby="session-view-help" onClick={() => changeSessionView('list')}>List</button></div><p className="small muted search-status" role="status">{formatSearchStatus(search, busyKind)}</p></div>
         <p id="session-view-help" className="small muted results-reading-note">{sessionView === 'list' ? 'List shows up to 36 sessions per page; expand a match to see source excerpts.' : 'Details shows up to 18 sessions per page with guide overviews and source excerpts.'} Session guides are AI-written; labels identify the transcript origin.</p>
         {searchError && <div className="error-panel" role="alert"><p>{searchError}</p><button type="button" className="button secondary" onClick={() => setSearchAttempt(value => value + 1)}>Try search again</button></div>}
-        <div className="results-list" aria-busy={searchBusy}>{search && <SessionResults results={search.results} view={sessionView} firstIndex={(search.page - 1) * search.pageSize + 1} speaker={searchSpeaker} onSession={openSession} onPassage={openResultPassage} onDocument={openDocument} />}</div>
+        <div className="results-list" aria-busy={searchBusy}>{search && <SessionResults results={search.results} view={sessionView} firstIndex={(search.page - 1) * search.pageSize + 1} speaker={searchSpeaker} onBeforeSessionNavigate={prepareSessionNavigation} onPassage={openResultPassage} onDocument={openDocument} />}</div>
         {search && !search.results.length && !searchBusy && <div className="empty-state"><Search size={28} aria-hidden="true" /><h3>No sessions found</h3><p>{marker ? 'Try Any speaker / unidentified, a different transcript origin, or fewer filters. Source notation and explicit CHI labels are sparse in some materials; no matches do not indicate an absent linguistic ability.' : 'Try a shorter phrase, a different spelling, or fewer filters. AI transcript drafts sometimes spell names unexpectedly.'}</p></div>}
         {search && search.pages > 1 && <nav className="pagination" aria-label="Search result pages"><button className="button secondary" type="button" disabled={search.page <= 1 || searchBusy} onClick={() => { setPage(search.page - 1); resultHeading.current?.focus(); }}><ChevronLeft size={17} aria-hidden="true" />Previous</button><span className="small">Page {search.page} of {search.pages}</span><button className="button secondary" type="button" disabled={search.page >= search.pages || searchBusy} onClick={() => { setPage(search.page + 1); resultHeading.current?.focus(); }}>Next<ChevronRight size={17} aria-hidden="true" /></button></nav>}
       </section> : <section className="research-section" aria-labelledby="research-heading"><div className="section-heading"><div><h2 id="research-heading">Research &amp; context</h2></div><BookOpen size={28} strokeWidth={1.3} aria-hidden="true" /></div><p className="section-intro">Background on the dissertation, the archive, and how to read the material. Document descriptions identify the source; new summaries remain distinct from the original research.</p><div className="research-documents">{researchDocs.map(document => {

@@ -4,6 +4,8 @@
   "entries": [
     {
       "id": "fixture-010815-locomotive",
+      "slug": "010815",
+      "legacyId": "fixture-010815-locomotive",
       "sourceName": "010815.cha",
       "title": "Blue locomotive and wooden bridge",
       "overview": "An invented play session assembling a wooden track, naming stations, and sending a blue locomotive across a cardboard bridge.",
@@ -103,6 +105,8 @@
     },
     {
       "id": "fixture-020110-submarine",
+      "slug": "020110-tb",
+      "legacyId": "fixture-020110-submarine",
       "sourceName": "020110-tb.cha",
       "title": "Yellow submarine in the courtyard",
       "overview": "An invented courtyard dialogue imagining a yellow submarine diving beneath garden stepping stones.",
@@ -187,6 +191,8 @@
     },
     {
       "id": "fixture-020604-lighthouse",
+      "slug": "020604-local",
+      "legacyId": "fixture-020604-lighthouse",
       "sourceName": "020604-local.json",
       "title": "Paper lighthouse and harbor bells",
       "overview": "An invented local speech-recognition draft about folding a paper lighthouse and ringing tiny brass bells on the windowsill.",
@@ -261,6 +267,8 @@
     },
     {
       "id": "fixture-011103-observatory",
+      "slug": "011103",
+      "legacyId": "fixture-011103-observatory",
       "sourceName": "011103.cha",
       "title": "Cardboard observatory without audio",
       "overview": "An invented archived research transcript with no associated audio file, describing paper constellations taped to a reading lamp.",

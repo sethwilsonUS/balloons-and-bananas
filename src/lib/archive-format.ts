@@ -1,3 +1,4 @@
+import { deriveSessionSlug, isValidSessionSlug, normalizeSlugToken } from './sessions';
 import { ARCHIVE_NAME } from './site';
 import type {
   ArchiveAsset,
@@ -14,11 +15,16 @@ import type {
 
 /**
  * Stored archive.json (schema v1) keeps its original storage keys (`entries`,
- * `audio`, `preferredAudioId`) so existing imports remain compatible without
- * re-importing. Map them to the domain glossary terms at load time; see CONTEXT.md.
+ * `audio`, `preferredAudioId`) and preserves the previous entry ID on `id`
+ * (mirrored in `legacyId`) alongside the readable URL `slug`, so existing
+ * imports, analytics IDs, listening-copy manifests, and legacy `/?entry=` links
+ * stay compatible without breaking before a re-upload. Map storage keys to the
+ * domain glossary terms at load time; see CONTEXT.md.
  */
 export interface StoredSession {
   id: string;
+  slug?: string;
+  legacyId?: string;
   sourceName: string;
   title: string;
   overview: string;
@@ -59,13 +65,15 @@ function isTranscriptOrigin(value: unknown): value is TranscriptOrigin {
   return typeof value === 'string' && VALID_ORIGINS.has(value);
 }
 
-function mapStoredSession(raw: unknown): Session {
+function mapStoredSession(raw: unknown): { session: Session; explicitSlug: boolean } {
   if (!isRecord(raw)) {
     throw new Error('Archive format mismatch');
   }
   const stored = raw as Partial<StoredSession>;
   if (
     typeof stored.id !== 'string'
+    || (stored.slug !== undefined && (typeof stored.slug !== 'string' || !isValidSessionSlug(stored.slug)))
+    || (stored.legacyId !== undefined && (typeof stored.legacyId !== 'string' || !stored.legacyId.trim()))
     || typeof stored.sourceName !== 'string'
     || typeof stored.title !== 'string'
     || typeof stored.overview !== 'string'
@@ -85,15 +93,31 @@ function mapStoredSession(raw: unknown): Session {
   ) {
     throw new Error('Archive format mismatch');
   }
-  const { audio, preferredAudioId, inferredAge, ...rest } = stored as StoredSession;
+  const { audio, preferredAudioId, inferredAge, slug, legacyId, ...rest } = stored as StoredSession;
+  const resolvedSlug = slug ?? deriveSessionSlug(rest.sourceName, rest.id);
   return {
-    ...rest,
-    // Keep source ages (`ages`) and filename-inferred ages strictly separate;
-    // older v1 blobs without `inferredAge` default cleanly to `null`.
-    inferredAge: rest.ages.length > 0 ? null : (inferredAge?.trim() ?? null),
-    recordings: audio,
-    preferredRecordingId: preferredAudioId ?? null,
+    explicitSlug: slug !== undefined,
+    session: {
+      ...rest,
+      slug: resolvedSlug,
+      legacyId: legacyId?.trim() ?? rest.id,
+      // Keep source ages (`ages`) and filename-inferred ages strictly separate;
+      // older v1 blobs without `inferredAge` default cleanly to `null`.
+      inferredAge: rest.ages.length > 0 ? null : (inferredAge?.trim() ?? null),
+      recordings: audio,
+      preferredRecordingId: preferredAudioId ?? null,
+    },
   };
+}
+
+function disambiguateFallbackSlug(base: string, id: string, used: Set<string>): string {
+  const idToken = normalizeSlugToken(id);
+  if (idToken && !used.has(idToken)) return idToken;
+  const combined = idToken ? `${base}-${idToken}` : base;
+  if (!used.has(combined)) return combined;
+  let suffix = 2;
+  while (used.has(`${combined}-${suffix}`)) suffix += 1;
+  return `${combined}-${suffix}`;
 }
 
 export function parseStoredArchiveData(raw: unknown): ArchiveData {
@@ -110,10 +134,30 @@ export function parseStoredArchiveData(raw: unknown): ArchiveData {
   ) {
     throw new Error('Archive format mismatch');
   }
+  const mapped = data.entries.map(mapStoredSession);
+  // Reserve explicit slugs first so any fallback derivation never steals an explicit slug,
+  // while rejecting duplicate explicit slugs as a format error.
+  const explicitSlugs = new Set<string>();
+  for (const item of mapped) {
+    if (!item.explicitSlug) continue;
+    if (explicitSlugs.has(item.session.slug)) {
+      throw new Error('Archive format mismatch');
+    }
+    explicitSlugs.add(item.session.slug);
+  }
+  const usedSlugs = new Set<string>(explicitSlugs);
+  const sessions = mapped.map(item => {
+    if (item.explicitSlug) return item.session;
+    const slug = usedSlugs.has(item.session.slug)
+      ? disambiguateFallbackSlug(item.session.slug, item.session.id, usedSlugs)
+      : item.session.slug;
+    usedSlugs.add(slug);
+    return slug === item.session.slug ? item.session : { ...item.session, slug };
+  });
   return {
     version: 1,
     generatedAt: data.generatedAt,
-    sessions: data.entries.map(mapStoredSession),
+    sessions,
     documents: data.documents,
     assets: data.assets as Record<string, ArchiveAsset>,
   };

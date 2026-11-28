@@ -62,6 +62,13 @@ async function main() {
   const excluded = Object.keys(privacy.excludedDocuments || {});
   check(excluded.length > 0, 'privacy_config_lists_excluded_documents');
   check(data.entries.length === 391, 'local_expected_session_count');
+  const sessionSlug = entry => entry.slug || (
+    entry.sourceName === 'transcripts-ai/0extra/82-supp/011119d.json'
+      ? '011119d-82-supp'
+      : entry.sourceName.split(/[\\/]/).pop().replace(/\.[^.]+$/, '').toLowerCase()
+  );
+  const localSlugs = data.entries.map(sessionSlug);
+  check(new Set(localSlugs).size === data.entries.length, 'local_unique_session_slugs');
   check(excluded.every(id => !data.documents.some(document => document.id === id)), 'local_personal_briefs_excluded');
   check(Object.values(data.assets).every(asset => !/^application\/pdf/i.test(asset.contentType) && !/\.pdf$/i.test(asset.name)), 'local_no_pdfs');
   const audioFiles = data.entries.flatMap(entry => entry.audio);
@@ -164,6 +171,29 @@ async function main() {
   const detail = await bodyJson(detailResponse, 'entry_detail');
   check(detail.id === representative.id && detail.transcript.length === representative.transcript.length && detail.moments.length === representative.moments.length, 'entry_detail:content_counts_match');
   check(detail.recordings.length === representative.audio.length && detail.recordings.every(recording => recording.available === true), 'entry_detail:audio_available');
+
+  // Verify per-request `/sessions/[id]` SSR pages, private headers, collision slugs, and 404 headers.
+  const agedSession = data.entries.find(entry => entry.ages.length > 0) || representative;
+  const agedSlug = sessionSlug(agedSession);
+  const sessionPageResponse = await call(`/sessions/${encodeURIComponent(agedSlug)}`, 'session_page');
+  await expectStatus(sessionPageResponse, 200, 'session_page');
+  const sessionPageHtml = await sessionPageResponse.text();
+  check(sessionPageHtml.includes(`Session ${agedSlug}`), 'session_page:slug_in_html');
+  check(
+    new RegExp(`<title>[^<]*Session ${agedSlug.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}[^<]*The Seth Tapes\\s*</title>`).test(sessionPageHtml),
+    'session_page:title_format',
+  );
+  check((sessionPageResponse.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'session_page:frame_protection');
+  for (const [slug, label] of [['011119d', 'session_page_011119d'], ['011119d-82-supp', 'session_page_011119d_supp']]) {
+    const res = await call(`/sessions/${encodeURIComponent(slug)}`, label);
+    await expectStatus(res, 200, label);
+    await res.body?.cancel();
+  }
+  const missingSessionResponse = await call('/sessions/unknown-release-test-session', 'unknown_session_page');
+  await expectStatus(missingSessionResponse, 404, 'unknown_session_page');
+  const missingSessionHtml = await missingSessionResponse.text();
+  check(/Session not found/i.test(missingSessionHtml), 'unknown_session_page:helpful_message');
+  counts.sessionRoutesVerified = 4;
 
   // Production BotID deliberately rejects this non-browser search client.
   // Exercise search semantics locally; verify real browser search separately.

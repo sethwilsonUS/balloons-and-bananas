@@ -1,6 +1,26 @@
 export const ARCHIVE_NAME = 'The Seth Tapes';
 export const ARCHIVE_SUBTITLE = 'A childhood-language archive from the Peters/Wilson corpus';
 
+/**
+ * Format the document `<title>` for `/sessions/[id]`, keeping source ages and
+ * filename-inferred ages explicitly distinguished.
+ */
+export function formatSessionPageTitle(session: {
+  slug: string;
+  ages: readonly string[];
+  inferredAge: string | null;
+}): string {
+  const sourceAges = session.ages.map(age => age.trim()).filter(Boolean);
+  if (sourceAges.length > 0) {
+    return `Session ${session.slug} (age ${sourceAges.join(' / ')}) · ${ARCHIVE_NAME}`;
+  }
+  const inferred = session.inferredAge?.trim();
+  if (inferred) {
+    return `Session ${session.slug} (inferred age ${inferred}) · ${ARCHIVE_NAME}`;
+  }
+  return `Session ${session.slug} · ${ARCHIVE_NAME}`;
+}
+
 export type DocumentTitleState =
   | { kind: 'loading' }
   | { kind: 'error' }

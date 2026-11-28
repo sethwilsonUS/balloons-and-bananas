@@ -4,7 +4,7 @@ import { isSearchPageSize, isSearchSort, makeSearch } from '../src/lib/search';
 import type { ArchiveData, Session } from '../src/lib/types';
 
 function mockSession(id: string, changes: Partial<Session>): Session {
-  return { id, sourceName: id + '.txt', title: 'An everyday conversation', overview: 'A short conversation.', origin: 'archived_research', topics: [], dates: [], ages: [], inferredAge: null, recordings: [], preferredRecordingId: null, sources: [], moments: [], limits: [], transcript: [], sourceSha256: '', association: '', ...changes };
+  return { id, slug: id, legacyId: id, sourceName: id + '.txt', title: 'An everyday conversation', overview: 'A short conversation.', origin: 'archived_research', topics: [], dates: [], ages: [], inferredAge: null, recordings: [], preferredRecordingId: null, sources: [], moments: [], limits: [], transcript: [], sourceSha256: '', association: '', ...changes };
 }
 const data: ArchiveData = { version: 1, generatedAt: '', assets: {}, documents: [], sessions: [
   mockSession('research', { sourceName: 'transcripts/020102.cha', title: 'Café and model trains', topics: ['Play'], dates: ['1983-01-02'], ages: ['2;01.02'], overview: 'Building a station together.', transcript: [{ text: 'Before lunch they ask about the blue locomotive and discuss where it should stop. Later they make lunch.' }] }),

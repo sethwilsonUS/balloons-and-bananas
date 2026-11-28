@@ -18,6 +18,8 @@ export interface Passage { text: string; start?: number | null; end?: number | n
 export type SearchSort = 'age-asc' | 'age-desc' | 'relevance';
 export interface Session {
   id: string;
+  slug: string;
+  legacyId: string;
   sourceName: string;
   title: string;
   overview: string;

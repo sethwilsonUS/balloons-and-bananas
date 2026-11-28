@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { adaptSearchForView, balancedColumnCount, compactGridSpans, formatSearchStatus, shortOverview, visibleExcerpt } from '../src/lib/results-view';
-import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle } from '../src/lib/site';
+import { ARCHIVE_NAME, ARCHIVE_SUBTITLE, formatDocumentTitle, formatSessionPageTitle } from '../src/lib/site';
 import type { SearchResponse, SearchResult, SessionCard } from '../src/lib/types';
 
 function mockCard(id: string): SessionCard {
   return {
     id,
+    slug: id,
+    legacyId: id,
     sourceName: `${id}.cha`,
     title: `Session ${id}`,
     overview: 'An invented fixture overview.',
@@ -49,6 +51,24 @@ test('site branding uses one name and descriptive per-view document titles', () 
   assert.equal(formatDocumentTitle({ kind: 'research' }), 'Research & context · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'document', title: 'Fixture annotation provenance guide' }), 'Fixture annotation provenance guide · The Seth Tapes');
   assert.equal(formatDocumentTitle({ kind: 'document', title: null }), 'Document not found · The Seth Tapes');
+
+  // Per-session route titles distinguish source age, inferred age, and unaged sessions.
+  assert.equal(
+    formatSessionPageTitle({ slug: '010626', ages: ['1;06.26'], inferredAge: null }),
+    'Session 010626 (age 1;06.26) · The Seth Tapes',
+  );
+  assert.equal(
+    formatSessionPageTitle({ slug: '020604-local', ages: [], inferredAge: '2;06.04' }),
+    'Session 020604-local (inferred age 2;06.04) · The Seth Tapes',
+  );
+  assert.equal(
+    formatSessionPageTitle({ slug: '011103', ages: [], inferredAge: null }),
+    'Session 011103 · The Seth Tapes',
+  );
+  assert.equal(
+    formatSessionPageTitle({ slug: '011119d-82-supp', ages: [], inferredAge: '1;11.19' }),
+    'Session 011119d-82-supp (inferred age 1;11.19) · The Seth Tapes',
+  );
 });
 
 test('adaptSearchForView reuses already-loaded page 1 results across Details and List without refetching', () => {

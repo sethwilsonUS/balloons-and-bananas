@@ -21,14 +21,27 @@ const config: NextConfig = {
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
   async headers() {
-    return [{ source: '/:path*', headers: [
-      { key: 'X-Robots-Tag', value: robots },
-      { key: 'Referrer-Policy', value: 'no-referrer' },
-      { key: 'X-Content-Type-Options', value: 'nosniff' },
-      { key: 'X-Frame-Options', value: 'DENY' },
-      { key: 'Content-Security-Policy', value: csp },
-      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
-    ] }];
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Robots-Tag', value: robots },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: csp },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
+        ],
+      },
+      {
+        source: '/sessions/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+          { key: 'CDN-Cache-Control', value: 'no-store' },
+          { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
+        ],
+      },
+    ];
   },
 };
 export default withBotId(config);

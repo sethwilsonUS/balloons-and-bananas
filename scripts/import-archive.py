@@ -29,6 +29,13 @@ SPEAKER_RE = re.compile(r"^([^\n]+? \([A-Za-z0-9_]+(?:, [^)]*)?\)):\s*(.*)$", re
 LINK_RE = re.compile(r"(?<!!)\[([^\]\n]+)\]\((<[^>]+>|[^)\n]+)\)")
 AGE_STEM_RE = re.compile(r"\A([0-9]{2})([0-9]{2})([0-9]{2})[A-Za-z]?\Z")
 CHAT_AGE_YMD_RE = re.compile(r"\A(\d+);(\d{1,2})\.(\d{1,2})\Z")
+SLUG_RE = re.compile(r"\A[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+# Seth's approved resolution for the single filename-stem collision (`011119d`).
+# Every other filename-stem collision fails the import hard.
+APPROVED_SLUG_OVERRIDES: dict[tuple[str, str], str] = {
+    ('transcripts-ai/0wav', '011119d'): '011119d',
+    ('transcripts-ai/0extra/82-supp', '011119d'): '011119d-82-supp',
+}
 LEGACY_LOCAL_AGE_LIMIT = 'Recording date and age are not independently verified from this local AI source; filename ages are not calendar dates.'
 INFERRED_LOCAL_AGE_LIMIT = 'Recording date is not established in this local AI source, and calendar dates are never inferred. The displayed age is inferred from the filename stem rather than recorded in source metadata (all 78 archived research transcripts with a source age match their filename stem).'
 INFERRED_GENERAL_AGE_LIMIT = 'The displayed age is inferred from the filename stem rather than recorded in source transcript metadata (all 78 archived research transcripts with a source age match their filename stem). Calendar dates are never inferred.'
@@ -143,6 +150,46 @@ def entry_id(unit_id: str) -> str:
     return value
 
 
+def session_slug(source_name: str) -> str:
+    """Derive a lower-case URL slug from a session's canonical filename stem.
+
+    Applies the single approved collision resolution for ``011119d``
+    (``transcripts-ai/0wav/`` -> ``011119d``,
+    ``transcripts-ai/0extra/82-supp/`` -> ``011119d-82-supp``).
+    """
+    normalized = source_name.replace('\\', '/')
+    while normalized.startswith('./'):
+        normalized = normalized[2:]
+    normalized = normalized.lstrip('/')
+    if not normalized:
+        raise SystemExit(f'Cannot derive session slug from empty sourceName: {source_name!r}')
+    path = Path(normalized)
+    stem = path.stem.lower()
+    parent = path.parent.as_posix()
+    slug = APPROVED_SLUG_OVERRIDES.get((parent, stem), stem)
+    if not SLUG_RE.match(slug):
+        raise SystemExit(f'Invalid session slug {slug!r} derived from {source_name!r}')
+    return slug
+
+
+def resolve_session_slugs(units: list[dict]) -> dict[str, str]:
+    """Map each unit_id to its unique session slug; fail hard on any collision."""
+    slugs_by_unit: dict[str, str] = {}
+    seen_slugs: dict[str, str] = {}
+    for unit in units:
+        unit_id = unit['unit_id']
+        source_name = unit['canonical_source']
+        slug = session_slug(source_name)
+        if slug in seen_slugs:
+            raise SystemExit(
+                f'Session slug collision for {slug!r}: '
+                f'{seen_slugs[slug]} conflicts with {source_name} ({unit_id})'
+            )
+        seen_slugs[slug] = f'{source_name} ({unit_id})'
+        slugs_by_unit[unit_id] = slug
+    return slugs_by_unit
+
+
 def safe_basename(value: str) -> str:
     return re.sub(r'[^A-Za-z0-9._-]+', '-', value).strip('.-') or 'source'
 
@@ -230,7 +277,7 @@ def build_age_limits(origin: str, source_dates: list[str], inferred_age: str | N
 
 
 def preserved_entry_content(entry: dict) -> dict:
-    """Ignore only hosting availability and importer-derived age notes when checking source/guide preservation."""
+    """Ignore only hosting availability and importer-derived age/slug metadata when checking source/guide preservation."""
     derived_notes = {
         'Audio is not hosted in this version. Recording names and transcript timestamps are retained as references to the original collection.',
         'Original audio is available for playback. Transcript timestamps are navigation aids; audio associations, speech recognition and alignment have not been independently verified by listening.',
@@ -241,7 +288,7 @@ def preserved_entry_content(entry: dict) -> dict:
         UNESTABLISHED_LOCAL_AGE_LIMIT,
     }
     return {
-        **{key: value for key, value in entry.items() if key != 'inferredAge'},
+        **{key: value for key, value in entry.items() if key not in {'inferredAge', 'slug', 'legacyId'}},
         'audio': [{key: value for key, value in audio.items() if key != 'available'} for audio in entry['audio']],
         'limits': [limit for limit in entry['limits'] if limit not in derived_notes],
     }
@@ -383,6 +430,8 @@ def main() -> None:
             raise ValueError('Audio asset ID differs from its recording reference')
     for item in inventory['canonical_transcript_assets']:
         register('library/' + item['path'], library / item['path'], expected=item['sha256_from_checked_inventory'])
+
+    slugs_by_unit = resolve_session_slugs(inventory['source_units'])
 
     # Map all known aliases to their source guide, without copying alias symlinks.
     for unit in inventory['source_units']:
@@ -569,8 +618,9 @@ def main() -> None:
             else:
                 sessions_without_age += 1
             limits.extend(build_age_limits(origin, source_dates, inferred_age))
+            legacy_id = entry_id(unit['unit_id'])
             entry = {
-                'id': entry_id(unit['unit_id']), 'sourceName': unit['canonical_source'],
+                'id': legacy_id, 'slug': slugs_by_unit[unit['unit_id']], 'legacyId': legacy_id, 'sourceName': unit['canonical_source'],
                 'title': authored['title'], 'overview': authored['overview'], 'origin': origin,
                 'topics': authored['topics'], 'dates': source_dates, 'ages': source_ages, 'inferredAge': inferred_age,
                 'audio': audio, 'preferredAudioId': audio_reference_ids[preferred] if preferred else None,
@@ -595,6 +645,11 @@ def main() -> None:
     ids = {entry['id'] for entry in entries}
     if len(ids) != len(entries) or len(entries) != 391:
         raise ValueError('Source-unit count or ID collision')
+    slugs = {entry['slug'] for entry in entries}
+    if len(slugs) != len(entries):
+        raise SystemExit('Session slug collision in exported entries')
+    if any(entry['legacyId'] != entry['id'] for entry in entries):
+        raise SystemExit('Session legacyId must match entry id')
     if any(entry['ages'] and entry['inferredAge'] is not None for entry in entries):
         raise SystemExit('Source age and inferredAge must never both be populated on the same session')
     if source_age_sessions != 78 or source_age_stem_matches != source_age_sessions:
@@ -632,6 +687,8 @@ def main() -> None:
     ambiguity_ids = ['archive-011119', 'local-0extra-82-supp-011119d', 'local-0wav-011119d']
     if entries_by_id[ambiguity_ids[0]]['audio'] or entries_by_id[ambiguity_ids[1]]['preferredAudioId'] == entries_by_id[ambiguity_ids[2]]['preferredAudioId']:
         raise ValueError('The orphan or distinct 011119d audio associations changed')
+    if entries_by_id['local-0wav-011119d']['slug'] != '011119d' or entries_by_id['local-0extra-82-supp-011119d']['slug'] != '011119d-82-supp':
+        raise SystemExit('Approved 011119d slug resolution changed')
     if previous_data:
         if [preserved_entry_content(entry) for entry in previous_data['entries']] != [preserved_entry_content(entry) for entry in entries]:
             raise ValueError('Source, transcript, guide or audio-association content changed beyond hosting availability')
@@ -717,6 +774,7 @@ def main() -> None:
         'retainedDocumentAssetPathnamesToReplace': [asset['pathname'] for asset in changed_documents.values()],
         'linkRewrites': dict(rewritten_link_counts), 'unshippedLocalAuditLinksRenderedAsText': dropped_local_links,
         'onlySourceKnownDates': True, 'datesNeverInferred': True, 'sourceAgeAndInferredAgeStoredSeparately': True,
+        'uniqueSessionSlugs': len(slugs), 'allSessionSlugsUnique': len(slugs) == len(entries),
         'sourceAgeSessions': source_age_sessions, 'sourceAgesMatchedFilenameStem': source_age_stem_matches,
         'allSourceAgesMatchFilenameStem': source_age_stem_matches == source_age_sessions,
         'inferredAgeSessions': inferred_age_sessions, 'sessionsWithoutAnyAge': sessions_without_age,
@@ -725,7 +783,7 @@ def main() -> None:
         'limitations': ['Original audio is hosted without transcoding; transcript timestamps remain navigation aids rather than independently verified alignments.', 'Audio content, speech recognition and timing were not independently reviewed by listening.', 'Unknown-author archive notes and local AI editorial comments remain visibly distinguished in the existing readable transcript text.', 'Sessions without a CHAT source age carry a separately stored inferred age parsed from their six-digit filename stem (validated against all 78 archived research transcripts with source ages); calendar dates are never inferred.', 'All original audio hashes were freshly verified against the saved download baseline in this build.'],
     }
     atomic_json(output / 'import-report.json', report)
-    print(json.dumps({key: report[key] for key in ['sourceUnits', 'audioReferences', 'hostedAudioAssets', 'audioBytes', 'canonicalTranscriptAssets', 'documents', 'totalAssetCount', 'moments', 'transcriptSegments', 'catalogBytes', 'sourceAgeSessions', 'sourceAgesMatchedFilenameStem', 'allSourceAgesMatchFilenameStem', 'inferredAgeSessions', 'sessionsWithoutAnyAge', 'sessionsWithAgeTotal', 'checksumsComparedWithPriorBaseline', 'allCanonicalAudioAndTranscriptHashesMatch', 'sourceGuideAndAssociationContentUnchangedExceptHostingAvailability', 'missingAssets']}, indent=2))
+    print(json.dumps({key: report[key] for key in ['sourceUnits', 'uniqueSessionSlugs', 'allSessionSlugsUnique', 'audioReferences', 'hostedAudioAssets', 'audioBytes', 'canonicalTranscriptAssets', 'documents', 'totalAssetCount', 'moments', 'transcriptSegments', 'catalogBytes', 'sourceAgeSessions', 'sourceAgesMatchedFilenameStem', 'allSourceAgesMatchFilenameStem', 'inferredAgeSessions', 'sessionsWithoutAnyAge', 'sessionsWithAgeTotal', 'checksumsComparedWithPriorBaseline', 'allCanonicalAudioAndTranscriptHashesMatch', 'sourceGuideAndAssociationContentUnchangedExceptHostingAvailability', 'missingAssets']}, indent=2))
 
 
 if __name__ == '__main__':

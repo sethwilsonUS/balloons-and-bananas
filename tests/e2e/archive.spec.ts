@@ -142,11 +142,12 @@ test('opening a session plays fixture audio without Blob, serves private downloa
   await expect(page.getByRole('link', { name: /Blue locomotive and wooden bridge/i })).toBeVisible();
   await page.getByRole('link', { name: /Blue locomotive and wooden bridge/i }).click();
 
-  await expect(page.getByRole('heading', { level: 2, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
-  await expect(page.locator('.detail-header')).toContainText('Age 1 year, 8 months, 15 days');
-  await expect(page.getByRole('heading', { level: 3, name: 'Moments' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 4, name: 'Crossing the cardboard bridge' })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 4, name: 'Counting station lanterns' })).toBeVisible();
+  await expect(page).toHaveURL(/\/sessions\/010815$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
+  await expect(page.locator('.detail-header')).toContainText('1 year, 8 months, 15 days');
+  await expect(page.getByRole('heading', { level: 2, name: 'Moments' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'Crossing the cardboard bridge' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'Counting station lanterns' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Listen from 0:02: Crossing the cardboard bridge/i })).toBeVisible();
 
   // Simpler reading view hides CHAT notation by default; toggling shows it

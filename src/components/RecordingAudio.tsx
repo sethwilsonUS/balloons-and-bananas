@@ -25,6 +25,7 @@ interface Props {
   preferredRecordingId: string | null;
   onTime: (seconds: number) => void;
   onPlaying: (playing: boolean) => void;
+  headingLevel?: 2 | 3;
 }
 type SignedRecording = { url: string; expiresAt: number; recordingId: string; generation: number };
 type ScrubIntent = { fromScrub: true; toEnd: boolean; target: number; reportSeek: boolean };
@@ -40,7 +41,8 @@ function releaseMedia(player: HTMLAudioElement | null) {
   player.load();
 }
 
-const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function RecordingAudio({ sessionId, origin, recordings, preferredRecordingId, onTime, onPlaying }, ref) {
+const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function RecordingAudio({ sessionId, origin, recordings, preferredRecordingId, onTime, onPlaying, headingLevel = 3 }, ref) {
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
   const playableRecordings = recordings.filter(recording => recording.format.toLowerCase() === 'mp3');
   const originalWavs = recordings.filter(recording => recording.format.toLowerCase() === 'wav' && recording.kind !== 'listening-copy');
   const initial = playableRecordings.find(recording => recording.id === preferredRecordingId && recording.available)
@@ -471,7 +473,7 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
   };
 
   return <section className="audio-panel" aria-labelledby="listen-heading">
-    <div className="section-label"><Headphones size={18} aria-hidden="true" /><h3 id="listen-heading">Listen to the recording</h3></div>
+    <div className="section-label"><Headphones size={18} aria-hidden="true" /><Heading id="listen-heading">Listen to the recording</Heading></div>
     {!recordings.length ? <p>The archive has a transcript for this session, but no corresponding recording.</p> : <>
       {playableRecordings.length > 0 && <div className="field audio-file-choice"><label htmlFor="recording-select">MP3 recording</label><select id="recording-select" value={selectedId} disabled={!available.length} onChange={event => {
         telemetry.current.tracker.suspend();

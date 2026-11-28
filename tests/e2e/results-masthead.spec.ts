@@ -86,8 +86,14 @@ test('archive uses one name, displays the masthead subtitle, and sets descriptiv
   await expect(page.locator('.results-toolbar h3')).toHaveText('1 session');
   await expect(page).toHaveTitle('Search results · The Seth Tapes');
 
-  // Session detail view sets "<Title> · The Seth Tapes"
+  // Clicking a search card opens the dedicated /sessions/<slug> route with its canonical title
   await page.getByRole('link', { name: /Blue locomotive and wooden bridge/i }).click();
+  await expect(page).toHaveURL(/\/sessions\/010815$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
+  await expect(page).toHaveTitle('Session 010815 (age 1;08.15) · The Seth Tapes');
+
+  // Legacy ?entry= link still keeps its session detail title
+  await page.goto('/?entry=fixture-010815-locomotive');
   await expect(page.getByRole('heading', { level: 2, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
   await expect(page).toHaveTitle('Blue locomotive and wooden bridge · The Seth Tapes');
 
@@ -229,6 +235,8 @@ test('switching Details and List views never leaves a stale "Searching…" statu
   const makeSyntheticResults = (count: number) => Array.from({ length: count }, (_, i) => ({
     session: {
       id: `fixture-010815-locomotive-${i + 1}`,
+      slug: `0108${String(i + 1).padStart(2, '0')}`,
+      legacyId: `fixture-010815-locomotive-${i + 1}`,
       sourceName: `0108${String(i + 1).padStart(2, '0')}.cha`,
       title: `Synthetic session ${i + 1}`,
       overview: 'Synthetic paginated session for view-switch testing.',

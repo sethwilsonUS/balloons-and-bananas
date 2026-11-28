@@ -19,6 +19,8 @@ test('invented fixture archive is valid v1 stored archive covering all required 
   assert.equal(data.version, 1);
   assert.ok(typeof data.generatedAt === 'string' && data.generatedAt.length > 0);
   assert.ok(Array.isArray(data.sessions) && data.sessions.length >= 4);
+  assert.equal(new Set(data.sessions.map(session => session.slug)).size, data.sessions.length, 'Every fixture session must have a unique slug');
+  assert.ok(data.sessions.every(session => session.legacyId === session.id), 'Every fixture session preserves its legacyId');
   assert.ok(Array.isArray(data.documents) && data.documents.length >= 2);
   assert.ok(data.assets && typeof data.assets === 'object');
 
