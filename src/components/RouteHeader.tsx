@@ -1,124 +1,133 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Check, Share2, X } from 'lucide-react';
-import { trackArchiveEvent } from '../lib/analytics';
+import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { Menu, X } from 'lucide-react';
 import { ARCHIVE_NAME } from '../lib/site';
+import CassetteReelLogo from './CassetteReelLogo';
 import ThemeControl from './ThemeControl';
+
+const NAV_LINKS = [
+  { section: 'overview', href: '/', label: 'Overview' },
+  { section: 'sessions', href: '/sessions', label: 'Sessions' },
+  { section: 'search', href: '/search', label: 'Search' },
+  { section: 'research', href: '/research', label: 'Research & context' },
+  { section: 'about', href: '/about', label: 'About & methods' },
+] as const;
+
+type ActiveSection = (typeof NAV_LINKS)[number]['section'];
 
 export default function RouteHeader({
   activeSection,
-  showShare = false,
-  sharePath,
-  shareTargetLabel = 'session',
 }: {
-  activeSection?: 'overview' | 'sessions' | 'search' | 'research' | 'about';
-  showShare?: boolean;
-  sharePath?: string;
-  shareTargetLabel?: string;
+  activeSection?: ActiveSection;
 }) {
-  const [shareState, setShareState] = useState<'idle' | 'busy' | 'copied' | 'manual' | 'error'>('idle');
-  const [shareUrl, setShareUrl] = useState('');
-  const shareInput = useRef<HTMLInputElement>(null);
-  const shareRequestIdRef = useRef(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navId = useId();
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
 
-  useEffect(() => () => {
-    shareRequestIdRef.current += 1;
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(max-width: 900px)');
+    const handleViewportChange = (event: MediaQueryListEvent) => {
+      if (!event.matches) setMenuOpen(false);
+    };
+    media.addEventListener('change', handleViewportChange);
+    return () => media.removeEventListener('change', handleViewportChange);
   }, []);
 
   useEffect(() => {
-    shareRequestIdRef.current += 1;
-    setShareState('idle');
-    setShareUrl('');
-  }, [sharePath]);
+    if (!menuOpen) return;
 
-  useEffect(() => {
-    if (shareState === 'manual') {
-      shareInput.current?.focus();
-      shareInput.current?.select();
-    }
-  }, [shareState]);
-
-  const copyShareLink = async () => {
-    const requestId = ++shareRequestIdRef.current;
-    setShareState('busy');
-    try {
-      const targetPath = sharePath || (window.location.pathname + window.location.search);
-      const text = new URL(targetPath, window.location.origin).toString();
-      try {
-        await navigator.clipboard.writeText(text);
-        if (shareRequestIdRef.current !== requestId) return;
-        setShareUrl(text);
-        setShareState('copied');
-        trackArchiveEvent('share_link', { outcome: 'copied' });
-      } catch {
-        if (shareRequestIdRef.current !== requestId) return;
-        setShareUrl(text);
-        setShareState('manual');
-        trackArchiveEvent('share_link', { outcome: 'manual' });
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      const inMenuButton = menuButtonRef.current?.contains(event.target) ?? false;
+      const inNav = navRef.current?.contains(event.target) ?? false;
+      if (!inMenuButton && !inNav) {
+        setMenuOpen(false);
       }
-    } catch {
-      if (shareRequestIdRef.current !== requestId) return;
-      trackArchiveEvent('share_link', { outcome: 'error' });
-      setShareState('error');
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [menuOpen]);
+
+  const closeMenu = (restoreFocus: boolean) => {
+    setMenuOpen(false);
+    if (restoreFocus) {
+      menuButtonRef.current?.focus();
+    }
+  };
+
+  const handleMenuKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (!menuOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMenu(true);
+    }
+  };
+
+  const handleToggleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Escape' && menuOpen) {
+      event.preventDefault();
+      closeMenu(true);
+    } else if (event.key === 'ArrowDown' && menuOpen) {
+      event.preventDefault();
+      navRef.current?.querySelector<HTMLAnchorElement>('a')?.focus();
+    }
+  };
+
+  const handleHeaderBlur = (event: FocusEvent<HTMLElement>) => {
+    if (!menuOpen) return;
+    const nextFocused = event.relatedTarget;
+    if (!(nextFocused instanceof Node)) return;
+    const inMenuButton = menuButtonRef.current?.contains(nextFocused) ?? false;
+    const inNav = navRef.current?.contains(nextFocused) ?? false;
+    if (!inMenuButton && !inNav) {
+      setMenuOpen(false);
     }
   };
 
   return (
     <>
       <a className="skip-link" href="#main">Skip to main content</a>
-      <header className="site-header">
+      <header className="site-header" onBlur={handleHeaderBlur}>
         <div className="top-bar">
           <a className="brand-button" href="/" aria-label={`${ARCHIVE_NAME}, collection overview`}>
-            <span className="collection-mark" aria-hidden="true"><span /><span /></span>
+            <CassetteReelLogo className="brand-logo" />
             <span>{ARCHIVE_NAME}</span>
           </a>
-          <span className="unlisted-label">Unlisted archive</span>
-          <ThemeControl />
-          {showShare && (
-            <button
-              className="button secondary share-button"
-              type="button"
-              disabled={shareState === 'busy'}
-              onClick={() => void copyShareLink()}
-            >
-              {shareState === 'copied' ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />}
-              <span>{shareState === 'busy' ? 'Preparing…' : shareState === 'copied' ? 'Link copied' : 'Copy share link'}</span>
-            </button>
-          )}
-        </div>
-        {showShare && (
-          <div className="share-feedback" role="status">
-            {shareState === 'copied'
-              ? `Link copied. Anyone can open this ${shareTargetLabel} at its URL.`
-              : shareState === 'error'
-                ? 'That action could not be completed. Please try again.'
-                : ''}
-          </div>
-        )}
-        {showShare && shareState === 'manual' && (
-          <div className="manual-share">
-            <label htmlFor="share-link">Copy this {shareTargetLabel} link</label>
-            <div>
-              <input ref={shareInput} id="share-link" value={shareUrl} readOnly />
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => { setShareState('idle'); setShareUrl(''); }}
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="button secondary menu-toggle"
+            aria-expanded={menuOpen}
+            aria-controls={navId}
+            onClick={() => setMenuOpen(current => !current)}
+            onKeyDown={handleToggleKeyDown}
+          >
+            {menuOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
+            <span>Menu</span>
+          </button>
+          <nav
+            id={navId}
+            ref={navRef}
+            className={`section-nav${menuOpen ? ' is-open' : ''}`}
+            aria-label="Collection sections"
+            onKeyDown={handleMenuKeyDown}
+          >
+            {NAV_LINKS.map(link => (
+              <a
+                key={link.section}
+                href={link.href}
+                aria-current={activeSection === link.section ? 'page' : undefined}
+                onClick={() => setMenuOpen(false)}
               >
-                <X size={16} aria-hidden="true" />Close
-              </button>
-            </div>
-            <p className="small muted">Anyone can open this {shareTargetLabel} at its URL.</p>
-          </div>
-        )}
-        <nav className="section-nav" aria-label="Collection sections">
-          <a href="/" aria-current={activeSection === 'overview' ? 'page' : undefined}>Overview</a>
-          <a href="/sessions" aria-current={activeSection === 'sessions' ? 'page' : undefined}>Sessions</a>
-          <a href="/search" aria-current={activeSection === 'search' ? 'page' : undefined}>Search</a>
-          <a href="/research" aria-current={activeSection === 'research' ? 'page' : undefined}>Research &amp; context</a>
-          <a href="/about" aria-current={activeSection === 'about' ? 'page' : undefined}>About &amp; methods</a>
-        </nav>
+                {link.label}
+              </a>
+            ))}
+          </nav>
+          <ThemeControl />
+        </div>
       </header>
     </>
   );

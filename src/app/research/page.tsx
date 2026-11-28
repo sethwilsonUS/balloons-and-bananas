@@ -33,7 +33,7 @@ export default async function ResearchPage() {
   return (
     <div className="archive-shell">
       <ArchiveAnalytics ready section="research" sessionId={null} documentId={null} />
-      <RouteHeader activeSection="research" showShare sharePath="/research" shareTargetLabel="page" />
+      <RouteHeader activeSection="research" />
       <main id="main" tabIndex={-1} className="browsing-layout">
         <section className="research-section research-page" aria-labelledby="research-heading">
           <header className="detail-header page-header">

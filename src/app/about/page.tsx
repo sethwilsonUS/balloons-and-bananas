@@ -37,7 +37,7 @@ export default async function AboutPage() {
   return (
     <div className="archive-shell">
       <ArchiveAnalytics ready section="about" sessionId={null} documentId={null} />
-      <RouteHeader activeSection="about" showShare sharePath="/about" shareTargetLabel="page" />
+      <RouteHeader activeSection="about" />
       <main id="main" tabIndex={-1} className="reading-layout">
         <article className="about-page reading-column">
           <header className="detail-header">
