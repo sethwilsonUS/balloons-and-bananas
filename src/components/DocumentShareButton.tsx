@@ -51,7 +51,13 @@ export default function DocumentShareButton({
   }, [documentId, sharePath]);
 
   useEffect(() => {
-    if (status === 'manual' && focusManualOnOpen) {
+    if (
+      status === 'manual'
+      && focusManualOnOpen
+      && typeof document !== 'undefined'
+      && buttonRef.current !== null
+      && document.activeElement === buttonRef.current
+    ) {
       manualInputRef.current?.focus();
       manualInputRef.current?.select();
     }
