@@ -1,5 +1,6 @@
 import type { Session } from '../lib/types';
 import CatalogRecord from './CatalogRecord';
+import SessionShareButton from './SessionShareButton';
 
 export default function SessionCatalogRecord({ session }: { session: Session }) {
   return (
@@ -20,6 +21,7 @@ export default function SessionCatalogRecord({ session }: { session: Session }) 
         dates: session.dates,
         origin: session.origin,
       }}
+      shareAction={<SessionShareButton slug={session.slug} />}
     />
   );
 }

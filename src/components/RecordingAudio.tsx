@@ -1,7 +1,7 @@
 'use client';
 
-import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { Download, Headphones, Pause, Play, RotateCcw, RotateCw, Volume1, Volume2, VolumeX } from 'lucide-react';
+import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ChevronDown, Download, Pause, Play, RotateCcw, RotateCw, SlidersHorizontal, Volume1, Volume2, VolumeX } from 'lucide-react';
 import type { Recording, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
 import {
@@ -57,6 +57,9 @@ export default function RecordingAudio({ sessionId, origin, recordings, preferre
   const [volumeSupported, setVolumeSupported] = useState(true);
   const [message, setMessage] = useState('');
   const [failed, setFailed] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const morePanelId = useId();
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const generation = useRef(0);
   const pending = useRef<{ at: number; play: boolean; generation: number; fromScrub?: boolean; toEnd?: boolean; reportSeek?: boolean } | null>(null);
@@ -459,80 +462,130 @@ export default function RecordingAudio({ sessionId, origin, recordings, preferre
     if (next.play) void playLoaded();
   };
 
-  return <section className="audio-panel" aria-labelledby="listen-heading">
-    <div className="section-label"><Headphones size={18} aria-hidden="true" /><Heading id="listen-heading">Listen to the recording</Heading></div>
-    {!recordings.length ? <p>The archive has a transcript for this session, but no corresponding recording.</p> : <>
-      {playableRecordings.length > 0 && <div className="field audio-file-choice"><label htmlFor="recording-select">MP3 recording</label><select id="recording-select" value={selectedId} disabled={!available.length} onChange={event => {
-        telemetry.current.tracker.suspend();
-        selectTelemetry(event.target.value);
-        if (seekTimer.current) {
-          clearTimeout(seekTimer.current);
-          seekTimer.current = null;
-        }
-        generation.current += 1;
-        controller.current?.abort();
-        loading.current = false;
-        pending.current = null;
-        retryScrubIntent.current = null;
-        recoveryTried.current = false;
-        releaseMedia(audio.current);
-        setPlaying(false);
-        setSelectedId(event.target.value);
-        setSource(null);
-        setMediaDuration(null);
-        setBusy(false);
-        setFailed(false);
-        lastPosition.current = 0;
-        setPosition(0);
-        setMessage('');
-      }}>{playableRecordings.map(recording => <option key={recording.id} value={recording.id} disabled={!recording.available}>{recording.name} · {recording.kind === 'listening-copy' ? 'MP3 listening copy' : 'Original MP3'} · {timeLabel(recording.duration)}{!recording.available ? ' · Not yet available' : ''}</option>)}</select></div>}
-      {selected && <p className="small muted audio-provenance">{selected.kind === 'listening-copy' ? <><strong>MP3 listening copy.</strong> Converted from{originalRecording ? <> <span className="audio-filename">{originalRecording.name}</span></> : ' the original WAV'} for playback. The original WAV is preserved.{selected.encoding ? ` Encoding: ${selected.encoding}.` : ''}</> : <><strong>Original MP3.</strong> This is the MP3 supplied in the archive.</>}</p>}
+  const handleViewTranscript = useCallback(() => {
+    const target = document.getElementById('transcript');
+    if (!target) return;
+    target.scrollIntoView({ block: 'start' });
+    target.focus({ preventScroll: true });
+  }, []);
+
+  const closeMore = useCallback((restoreFocus: boolean) => {
+    setMoreOpen(false);
+    if (restoreFocus) {
+      moreButtonRef.current?.focus();
+    }
+  }, []);
+
+  if (!recordings.length) {
+    return (
+      <section id="recording" className="audio-panel audio-panel--empty" aria-labelledby="recording-heading">
+        <Heading id="recording-heading" className="sr-only">Recording</Heading>
+        <div className="audio-empty-row">
+          <p className="small muted audio-empty-note">No recording is associated with this session.</p>
+          <a className="text-link small audio-transcript-link" href="#transcript" onClick={handleViewTranscript}>
+            View transcript
+          </a>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="recording" className="audio-panel" aria-labelledby="recording-heading">
+      <Heading id="recording-heading" className="sr-only">Recording</Heading>
       {available.length ? <>
         <div className="audio-player" aria-busy={busy || undefined}>
-          <div className="playback-controls">
-            <button type="button" className="button primary" aria-disabled={busy || undefined} onClick={toggle}>{playing ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}{busy ? 'Loading audio…' : playing ? 'Pause' : 'Play recording'}</button>
-            <button type="button" className="button secondary" disabled={!source || busy} onClick={() => seek(Math.max(0, lastPosition.current - 15), playing, 'back')}><RotateCcw size={17} aria-hidden="true" /><span className="sr-only">Back 15 seconds</span><span aria-hidden="true">15s</span></button>
-            <button type="button" className="button secondary" disabled={!source || busy} onClick={() => {
-              const player = audio.current;
-              const boundDuration = hasLoadedSelected(player) && Number.isFinite(player.duration) && player.duration > 0
-                ? player.duration
-                : (selected && selected.duration > 0 ? selected.duration : null);
-              const upperBound = boundDuration !== null ? Math.max(0, boundDuration - 0.05) : lastPosition.current + 30;
-              if (boundDuration !== null && lastPosition.current >= upperBound) return;
-              seek(Math.min(lastPosition.current + 30, upperBound), playing, 'forward');
-            }}><span className="sr-only">Forward 30 seconds</span><span aria-hidden="true">30s</span><RotateCw size={17} aria-hidden="true" /></button>
-            <div className="playback-speed field"><label htmlFor="playback-speed">Speed</label><select id="playback-speed" value={speed} onChange={event => {
-              const rate = Number(event.target.value);
-              if (audio.current) observe(telemetry.current.tracker.sample(playbackSample(audio.current)), telemetry.current.recordingId);
-              if (rate !== preferredSpeed.current && selected) report('audio_rate', selected.id, { rateBucket: rateBucket(rate) });
-              setSpeed(rate);
-              preferredSpeed.current = rate;
-              if (audio.current) audio.current.playbackRate = rate;
-            }}>{Array.from(new Set([.5, .75, 1, 1.25, 1.5, 2, speed])).sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×{rate === 1 ? ' (normal)' : ''}</option>)}</select></div>
-          </div>
-          <div className="audio-scrubber">
-            <div className="audio-slider-header">
-              <label htmlFor="playback-seek">Playback position</label>
-              <span className="small muted audio-time-readout">{timeLabel(sliderValue)} / {timeLabel(sliderMax)}</span>
+          <div className="audio-primary-row">
+            <div className="audio-transport">
+              <button type="button" className="button primary audio-play-button" aria-disabled={busy || undefined} onClick={toggle}>
+                {playing ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
+                {busy ? 'Loading audio…' : playing ? 'Pause' : <>Play<span className="sr-only"> recording</span></>}
+              </button>
+              <button type="button" className="button secondary audio-skip-button" disabled={!source || busy} onClick={() => seek(Math.max(0, lastPosition.current - 15), playing, 'back')}>
+                <RotateCcw size={16} aria-hidden="true" />
+                <span className="sr-only">Back 15 seconds</span>
+                <span aria-hidden="true">15s</span>
+              </button>
+              <button type="button" className="button secondary audio-skip-button" disabled={!source || busy} onClick={() => {
+                const player = audio.current;
+                const boundDuration = hasLoadedSelected(player) && Number.isFinite(player.duration) && player.duration > 0
+                  ? player.duration
+                  : (selected && selected.duration > 0 ? selected.duration : null);
+                const upperBound = boundDuration !== null ? Math.max(0, boundDuration - 0.05) : lastPosition.current + 30;
+                if (boundDuration !== null && lastPosition.current >= upperBound) return;
+                seek(Math.min(lastPosition.current + 30, upperBound), playing, 'forward');
+              }}>
+                <span className="sr-only">Forward 30 seconds</span>
+                <span aria-hidden="true">30s</span>
+                <RotateCw size={16} aria-hidden="true" />
+              </button>
             </div>
-            <input
-              id="playback-seek"
-              type="range"
-              className="audio-range audio-seek-range"
-              min={0}
-              max={sliderMax}
-              step={1}
-              value={sliderValue}
-              disabled={sliderMax <= 0}
-              aria-valuetext={seekValueText}
-              aria-describedby="playback-seek-help"
-              style={{ '--range-progress': `${seekPercent}%` } as CSSProperties}
-              onChange={event => scrubTo(Number(event.target.value))}
-              onKeyDown={handleSeekKeyDown}
-            />
-            <span id="playback-seek-help" className="sr-only">Use arrow keys to seek by {formatDurationWords(smallStep)}, Page Up or Page Down by {formatDurationWords(pageStep)}, and Home or End to jump to the start or end.</span>
+            <div className="audio-scrubber-inline">
+              <label htmlFor="playback-seek" className="sr-only">Playback position</label>
+              <input
+                id="playback-seek"
+                type="range"
+                className="audio-range audio-seek-range"
+                min={0}
+                max={sliderMax}
+                step={1}
+                value={sliderValue}
+                disabled={sliderMax <= 0}
+                aria-valuetext={seekValueText}
+                aria-describedby="playback-seek-help"
+                style={{ '--range-progress': `${seekPercent}%` } as CSSProperties}
+                onChange={event => scrubTo(Number(event.target.value))}
+                onKeyDown={handleSeekKeyDown}
+              />
+              <span className="small muted audio-time-readout">{timeLabel(sliderValue)} / {timeLabel(sliderMax)}</span>
+              <span id="playback-seek-help" className="sr-only">Use arrow keys to seek by {formatDurationWords(smallStep)}, Page Up or Page Down by {formatDurationWords(pageStep)}, and Home or End to jump to the start or end.</span>
+            </div>
+            <div className="audio-secondary-controls">
+              <div className="playback-speed">
+                <label htmlFor="playback-speed" className="sr-only">Speed</label>
+                <select id="playback-speed" value={speed} onChange={event => {
+                  const rate = Number(event.target.value);
+                  if (audio.current) observe(telemetry.current.tracker.sample(playbackSample(audio.current)), telemetry.current.recordingId);
+                  if (rate !== preferredSpeed.current && selected) report('audio_rate', selected.id, { rateBucket: rateBucket(rate) });
+                  setSpeed(rate);
+                  preferredSpeed.current = rate;
+                  if (audio.current) audio.current.playbackRate = rate;
+                }}>{Array.from(new Set([.5, .75, 1, 1.25, 1.5, 2, speed])).sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select>
+              </div>
+              <button
+                ref={moreButtonRef}
+                type="button"
+                className="button secondary audio-more-button"
+                aria-expanded={moreOpen}
+                aria-controls={morePanelId}
+                onClick={() => setMoreOpen(current => !current)}
+                onKeyDown={event => {
+                  if (event.key === 'Escape' && moreOpen) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeMore(false);
+                  }
+                }}
+              >
+                <SlidersHorizontal size={15} aria-hidden="true" />
+                <span>More<span className="sr-only"> audio options</span></span>
+                <ChevronDown size={15} className="audio-more-chevron" aria-hidden="true" />
+              </button>
+            </div>
           </div>
-          <div className="player-meta">
+
+          <div
+            id={morePanelId}
+            className="audio-more-panel"
+            hidden={!moreOpen}
+            onKeyDown={event => {
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                closeMore(true);
+              }
+            }}
+          >
             <div className="audio-volume-control">
               <button type="button" className="button secondary audio-mute-button" aria-pressed={effectiveMuted} onClick={toggleMute}>
                 {effectiveMuted ? <VolumeX size={17} aria-hidden="true" /> : volumeLevel <= 0.5 ? <Volume1 size={17} aria-hidden="true" /> : <Volume2 size={17} aria-hidden="true" />}
@@ -558,7 +611,85 @@ export default function RecordingAudio({ sessionId, origin, recordings, preferre
                 />
               </div> : <span className="small muted audio-device-volume-note">Use device buttons to adjust volume.</span>}
             </div>
-            {selected?.available && <a className="text-link small" href={`/api/assets/${encodeURIComponent(selected.id)}?download=1`} download={selected.name} referrerPolicy="no-referrer" onClick={() => report('audio_download', selected.id, { format: 'mp3', fileKind: selected.kind === 'listening-copy' ? 'listening-copy' : 'original' })}><Download size={15} aria-hidden="true" />{selected.kind === 'listening-copy' ? 'Download MP3 listening copy' : 'Download original MP3'}</a>}
+            {playableRecordings.length > 0 && (
+              <div className="field audio-file-choice">
+                <label htmlFor="recording-select">MP3 recording</label>
+                <select id="recording-select" value={selectedId} disabled={!available.length} onChange={event => {
+                  telemetry.current.tracker.suspend();
+                  selectTelemetry(event.target.value);
+                  if (seekTimer.current) {
+                    clearTimeout(seekTimer.current);
+                    seekTimer.current = null;
+                  }
+                  generation.current += 1;
+                  controller.current?.abort();
+                  loading.current = false;
+                  pending.current = null;
+                  retryScrubIntent.current = null;
+                  recoveryTried.current = false;
+                  releaseMedia(audio.current);
+                  setPlaying(false);
+                  setSelectedId(event.target.value);
+                  setSource(null);
+                  setMediaDuration(null);
+                  setBusy(false);
+                  setFailed(false);
+                  lastPosition.current = 0;
+                  setPosition(0);
+                  setMessage('');
+                }}>{playableRecordings.map(recording => <option key={recording.id} value={recording.id} disabled={!recording.available}>{recording.name} · {recording.kind === 'listening-copy' ? 'MP3 listening copy' : 'Original MP3'} · {timeLabel(recording.duration)}{!recording.available ? ' · Not yet available' : ''}</option>)}</select>
+                {selected && (
+                  <p className="small muted audio-provenance">
+                    {selected.kind === 'listening-copy'
+                      ? <><strong>MP3 listening copy.</strong> Converted from{originalRecording ? <> <span className="audio-filename">{originalRecording.name}</span></> : ' the original WAV'}; original WAV preserved.{selected.encoding ? ` (${selected.encoding})` : ''}</>
+                      : <><strong>Original MP3</strong> supplied in the archive.</>}
+                  </p>
+                )}
+              </div>
+            )}
+            {originalWavs.length > 0 && (
+              <div className="original-audio-downloads">
+                <p className="audio-wav-heading">Original WAV {originalWavs.length === 1 ? 'recording' : 'recordings'}</p>
+                <ul>
+                  {originalWavs.map(recording => (
+                    <li key={recording.id}>
+                      {recording.available ? (
+                        <a
+                          className="text-link small"
+                          href={`/api/assets/${encodeURIComponent(recording.id)}?download=1`}
+                          download={recording.name}
+                          referrerPolicy="no-referrer"
+                          onClick={() => report('audio_download', recording.id, { format: 'wav', fileKind: 'original' })}
+                        >
+                          <Download size={15} aria-hidden="true" />
+                          <span>Download original WAV: <span className="audio-filename">{recording.name}</span> ({(recording.bytes / 1_000_000).toFixed(1)} MB)</span>
+                        </a>
+                      ) : (
+                        <span className="small muted audio-filename">{recording.name} · Not yet available</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <div className="audio-utility-row">
+            {selected?.available && (
+              <a
+                className="text-link small audio-download-link"
+                href={`/api/assets/${encodeURIComponent(selected.id)}?download=1`}
+                download={selected.name}
+                referrerPolicy="no-referrer"
+                onClick={() => report('audio_download', selected.id, { format: 'mp3', fileKind: selected.kind === 'listening-copy' ? 'listening-copy' : 'original' })}
+              >
+                <Download size={15} aria-hidden="true" />
+                {selected.kind === 'listening-copy' ? 'Download MP3 listening copy' : 'Download original MP3'}
+              </a>
+            )}
+            <a className="text-link small audio-transcript-link" href="#transcript" onClick={handleViewTranscript}>
+              View transcript
+            </a>
           </div>
         </div>
         <audio key={source ? `source-${source.generation}` : `empty-${generation.current}`} ref={audio} preload={source ? 'metadata' : 'none'} src={source?.url} aria-hidden="true"
@@ -678,10 +809,46 @@ export default function RecordingAudio({ sessionId, origin, recordings, preferre
           const intent = retryScrubIntent.current;
           void load(selected, intent ? intent.target : lastPosition.current, true, intent ?? undefined);
         }}>Retry audio</button>}
-        <p className="small muted audio-timing-note">Audio loads when you choose to listen. Transcript times are approximate and have not been independently verified against the recordings; alternate recordings may differ.</p>
-      </> : <p className="small muted">MP3 playback for this session is not available on the site yet. You can read the transcript and guide below.</p>}
-      {originalWavs.length > 0 && <details className="original-audio-downloads"><summary>Original WAV {originalWavs.length === 1 ? 'recording' : 'recordings'}</summary><p className="small muted">These larger recordings are preserved for download. The player uses MP3 audio.</p><ul>{originalWavs.map(recording => <li key={recording.id}>{recording.available ? <a className="text-link small" href={`/api/assets/${encodeURIComponent(recording.id)}?download=1`} download={recording.name} referrerPolicy="no-referrer" onClick={() => report('audio_download', recording.id, { format: 'wav', fileKind: 'original' })}><Download size={15} aria-hidden="true" /><span>Download original WAV: <span className="audio-filename">{recording.name}</span> ({(recording.bytes / 1_000_000).toFixed(1)} MB)</span></a> : <span className="small muted audio-filename">{recording.name} · Not yet available</span>}</li>)}</ul></details>}
-    </>}
-    <p className="small player-status" role="status">{message}</p>
-  </section>;
+        <p className="small muted audio-timing-note">
+          Audio loads on play; transcript timestamps are approximate.{' '}
+          <a href="/about#timestamps">Learn more</a>
+        </p>
+      </> : (
+        <div className="audio-unavailable-block">
+          <div className="audio-empty-row">
+            <p className="small muted audio-empty-note">MP3 playback is not available for this session yet.</p>
+            <a className="text-link small audio-transcript-link" href="#transcript" onClick={handleViewTranscript}>
+              View transcript
+            </a>
+          </div>
+          {originalWavs.length > 0 && (
+            <div className="original-audio-downloads">
+              <p className="audio-wav-heading">Original WAV {originalWavs.length === 1 ? 'recording' : 'recordings'}</p>
+              <ul>
+                {originalWavs.map(recording => (
+                  <li key={recording.id}>
+                    {recording.available ? (
+                      <a
+                        className="text-link small"
+                        href={`/api/assets/${encodeURIComponent(recording.id)}?download=1`}
+                        download={recording.name}
+                        referrerPolicy="no-referrer"
+                        onClick={() => report('audio_download', recording.id, { format: 'wav', fileKind: 'original' })}
+                      >
+                        <Download size={15} aria-hidden="true" />
+                        <span>Download original WAV: <span className="audio-filename">{recording.name}</span> ({(recording.bytes / 1_000_000).toFixed(1)} MB)</span>
+                      </a>
+                    ) : (
+                      <span className="small muted audio-filename">{recording.name} · Not yet available</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+      <p className="small player-status" role="status">{message}</p>
+    </section>
+  );
 }

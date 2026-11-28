@@ -273,6 +273,11 @@ test('previous and next session links step through canonical age order with sess
   await expect(next2).toContainText('2;06.04');
   await expect(next2.locator('em')).toHaveText('inferred from filename');
 
+  // Sticky nav also includes Previous / Next links with session ID and labelled age.
+  const stickyNav = page.getByRole('navigation', { name: 'In this session' });
+  await expect(stickyNav.getByRole('link', { name: /Previous session: 010815, 1 year, 8 months, 15 days \(1;08\.15\)/ })).toHaveAttribute('href', '/sessions/010815');
+  await expect(stickyNav.getByRole('link', { name: /Next session: 020604-local, 2 years, 6 months, 4 days \(2;06\.04, inferred from filename\)/ })).toHaveAttribute('href', '/sessions/020604-local');
+
   // Verify zero nested links anywhere on the page
   expect(await page.evaluate(() => document.querySelectorAll('a a, button a, a button').length)).toBe(0);
 
@@ -302,10 +307,11 @@ test('sticky In this session nav keeps targets uncovered, resolves safe Back to 
   await expect(stickyNav).toBeVisible();
 
   const navLinks = stickyNav.locator('a');
-  await expect(navLinks).toHaveText(['Guide', 'Moments', 'Transcript', 'Back to results']);
+  await expect(navLinks).toHaveCount(5);
   await expect(stickyNav.getByRole('link', { name: 'Guide' })).toHaveAttribute('href', '#guide');
   await expect(stickyNav.getByRole('link', { name: 'Moments' })).toHaveAttribute('href', '#moments');
   await expect(stickyNav.getByRole('link', { name: 'Transcript' })).toHaveAttribute('href', '#transcript');
+  await expect(stickyNav.getByRole('link', { name: /Next session: 020110-tb, 2 years, 1 month, 10 days \(2;01\.10\)/ })).toHaveAttribute('href', '/sessions/020110-tb');
   await expect(stickyNav.getByRole('link', { name: 'Back to results' })).toHaveAttribute('href', '/sessions');
 
   // Clicking sticky nav jump links lands below the sticky nav bar without occlusion

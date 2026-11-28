@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Headphones } from 'lucide-react';
 import type { CitationSessionInput } from '../lib/citations';
 import type { SessionAudioStatus } from '../lib/sessions-browse';
@@ -20,6 +21,7 @@ export interface CatalogRecordProps {
   audioStatus?: SessionAudioStatus;
   momentsCount?: number;
   citation?: CitationSessionInput;
+  shareAction?: ReactNode;
   ariaLabel?: string;
   showAgeSource?: boolean;
 }
@@ -61,6 +63,7 @@ export default function CatalogRecord({
   audioStatus,
   momentsCount,
   citation,
+  shareAction,
   ariaLabel,
   showAgeSource = false,
 }: CatalogRecordProps) {
@@ -119,7 +122,13 @@ export default function CatalogRecord({
           {origin !== 'archived_research' && (
             <>
               {' '}
-              <span className="catalog-meta-note">Unreviewed machine draft</span>
+              {isFull ? (
+                <a className="provenance-link catalog-meta-note" href="/about#transcript-origins">
+                  Unreviewed machine transcription
+                </a>
+              ) : (
+                <span className="catalog-meta-note">Unreviewed machine draft</span>
+              )}
             </>
           )}
         </dd>
@@ -167,7 +176,9 @@ export default function CatalogRecord({
             <dt>Guide</dt>
             {' '}
             <dd className="catalog-guide-cell">
-              <span className="catalog-guide-label">AI-written guide</span>
+              <a className="provenance-link catalog-guide-label" href="/about#ai-guides">
+                AI-written guide
+              </a>
               {' '}
               <span className="catalog-meta-sep" aria-hidden="true">·</span>
               {' '}
@@ -178,16 +189,16 @@ export default function CatalogRecord({
           </div>
         </>
       )}
-      {isFull && citation && (
+      {isFull && (citation || shareAction) && (
         <>
           {' '}
           <div className="catalog-record-row catalog-cite-row">
-            <dt>Citation</dt>
+            <dt>{shareAction ? 'Cite & share' : 'Citation'}</dt>
             {' '}
             <dd className="catalog-cite-cell">
-              <CiteSessionButton session={citation} />
-              {' '}
-              <span className="catalog-meta-note">Chicago, APA, and BibTeX</span>
+              {citation && <CiteSessionButton session={citation} />}
+              {citation && shareAction && ' '}
+              {shareAction}
             </dd>
           </div>
         </>

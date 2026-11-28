@@ -71,25 +71,80 @@ test('/sessions/[id] renders server-side per request with catalog record, title,
   await expect(record).toContainText('AI-written guide');
   await expect(record).toContainText('2 moments');
 
-  // Verify section order: catalog record -> guide overview -> moments -> player -> transcript -> sources
-  const sectionOrder = await page.evaluate(() => {
+  // Only one eyebrow on the page ("Session 010815"); provenance labels link to /about sections.
+  await expect(page.locator('main .eyebrow')).toHaveCount(1);
+  await expect(page.locator('main .eyebrow')).toHaveText('Session 010815');
+  await expect(record.getByRole('link', { name: 'AI-written guide' })).toHaveAttribute('href', '/about#ai-guides');
+  await expect(page.locator('.guide-overview-section').getByRole('link', { name: 'AI-written guide' })).toHaveAttribute('href', '/about#ai-guides');
+  await expect(page.locator('.guide-overview-section').getByRole('link', { name: 'Learn more' })).toHaveAttribute('href', '/about#ai-guides');
+  await expect(page.locator('.audio-panel').getByRole('link', { name: 'Learn more' })).toHaveAttribute('href', '/about#timestamps');
+
+  // Verify recording-first wide-screen layout: title -> compact player visible above fold -> sidebar beside guide -> moments -> transcript -> sources -> bottom prev/next
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const desktopLayout = await page.evaluate(() => {
+    const rect = (selector: string) => {
+      const el = document.querySelector(selector);
+      if (!el) throw new Error(`Missing ${selector}`);
+      const r = el.getBoundingClientRect();
+      return {
+        top: r.top + window.scrollY,
+        bottom: r.bottom + window.scrollY,
+        left: r.left,
+        right: r.right,
+        viewportBottom: r.bottom,
+      };
+    };
+    return {
+      h1: rect('main h1'),
+      player: rect('.audio-panel'),
+      sidebar: rect('.session-catalog-sidebar'),
+      guide: rect('.guide-overview-section'),
+      moments: rect('.moments-section'),
+      transcript: rect('.transcript-section'),
+      sources: rect('.source-section'),
+      adjacent: rect('.session-adjacent-nav'),
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(desktopLayout.player.top).toBeGreaterThanOrEqual(desktopLayout.h1.bottom - 2);
+  expect(desktopLayout.player.viewportBottom).toBeLessThanOrEqual(desktopLayout.viewportHeight);
+  expect(desktopLayout.sidebar.left).toBeGreaterThanOrEqual(desktopLayout.guide.right - 2);
+  expect(desktopLayout.guide.top).toBeGreaterThan(desktopLayout.player.top);
+  expect(desktopLayout.moments.top).toBeGreaterThan(desktopLayout.guide.top);
+  expect(desktopLayout.transcript.top).toBeGreaterThan(desktopLayout.moments.top);
+  expect(desktopLayout.sources.top).toBeGreaterThan(desktopLayout.transcript.top);
+  expect(desktopLayout.adjacent.top).toBeGreaterThan(desktopLayout.sources.top);
+
+  // Verify narrow-screen order (390x844): title -> player (near top) -> catalog record -> guide -> moments -> transcript -> sources -> prev/next
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileOrder = await page.evaluate(() => {
     const selectors = [
+      'main h1',
+      '.audio-panel',
       'dl.catalog-record',
       '.guide-overview-section',
       '.moments-section',
-      '.audio-panel',
       '.transcript-section',
       '.source-section',
+      '.session-adjacent-nav',
     ];
-    return selectors.map(selector => {
-      const el = document.querySelector(selector);
-      if (!el) throw new Error(`Missing ${selector}`);
-      return el.getBoundingClientRect().top + window.scrollY;
-    });
+    return {
+      tops: selectors.map(selector => {
+        const el = document.querySelector(selector);
+        if (!el) throw new Error(`Missing ${selector}`);
+        return el.getBoundingClientRect().top + window.scrollY;
+      }),
+      playerViewportBottom: document.querySelector('.audio-panel')!.getBoundingClientRect().bottom,
+      viewportHeight: window.innerHeight,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
   });
-  for (let i = 1; i < sectionOrder.length; i += 1) {
-    expect(sectionOrder[i], `Section ${i} should follow section ${i - 1}`).toBeGreaterThan(sectionOrder[i - 1]);
+  for (let i = 1; i < mobileOrder.tops.length; i += 1) {
+    expect(mobileOrder.tops[i], `Mobile section ${i} should follow section ${i - 1}`).toBeGreaterThan(mobileOrder.tops[i - 1]);
   }
+  expect(mobileOrder.playerViewportBottom).toBeLessThanOrEqual(mobileOrder.viewportHeight);
+  expect(mobileOrder.overflow).toBeLessThanOrEqual(0);
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // Verify heading hierarchy has a single H1 and no skipped levels
   const headingLevels = await page.evaluate(() =>
@@ -123,13 +178,51 @@ test('/sessions/[id] renders server-side per request with catalog record, title,
   await auditAllThemes(page, '/sessions/010815');
 });
 
-test('/sessions/[id] handles inferred ages, multiple recordings, unaged no-audio sessions, and canonical slug casing', async ({ page, request }) => {
+test('/sessions/[id] handles inferred ages, multiple recordings, unaged no-audio sessions, page-level Share, and canonical slug casing', async ({ page, request, baseURL }) => {
+  await page.addInitScript(() => {
+    const win = window as unknown as { __copiedTexts?: string[]; __failClipboard?: boolean };
+    win.__copiedTexts = [];
+    win.__failClipboard = false;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          if (win.__failClipboard) throw new Error('Clipboard denied');
+          win.__copiedTexts?.push(text);
+        },
+      },
+    });
+  });
+
+  // Page-level Share in catalog record copies canonical URL (without ?from=) and announces result, with manual fallback.
+  await page.goto('/sessions/010815?from=%2Fsearch%3Fq%3Dlocomotive');
+  const shareBtn = page.locator('dl.catalog-record').getByRole('button', { name: /Share link to session 010815/i });
+  await expect(shareBtn).toBeVisible();
+  await shareBtn.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.session-share [role="status"]')).toHaveText('Copied link to session 010815.');
+  expect(await page.evaluate(() => (window as unknown as { __copiedTexts: string[] }).__copiedTexts)).toEqual([
+    `${baseURL}/sessions/010815`,
+  ]);
+
+  await page.evaluate(() => { (window as unknown as { __failClipboard: boolean }).__failClipboard = true; });
+  await page.locator('dl.catalog-record').getByRole('button', { name: /Link copied|Share/i }).click();
+  await expect(page.locator('.session-share [role="status"]')).toContainText('Could not copy automatically');
+  const manualShareInput = page.getByRole('textbox', { name: 'Link to session 010815' });
+  await expect(manualShareInput).toBeVisible();
+  await expect(manualShareInput).toHaveValue(`${baseURL}/sessions/010815`);
+  await page.locator('.session-share-manual').getByRole('button', { name: 'Dismiss' }).click();
+  await expect(manualShareInput).toHaveCount(0);
+  await expect(page.locator('.session-share-status')).toHaveCount(0);
+  await expect(page.locator('.session-share [role="status"]')).toHaveText('');
+  await expect(page.locator('dl.catalog-record').getByRole('button', { name: /Share link to session 010815/i })).toBeFocused();
+
   // TalkBank AI draft with WAV original + MP3 listening copy
   await page.goto('/sessions/020110-tb');
   await expect(page).toHaveTitle('Session 020110-tb (age 2;01.10) · The Seth Tapes');
   const tbRecord = page.locator('dl.catalog-record');
   await expect(tbRecord).toContainText('TalkBank AI draft');
-  await expect(tbRecord).toContainText('Unreviewed machine draft');
+  await expect(tbRecord.getByRole('link', { name: 'Unreviewed machine transcription' })).toHaveAttribute('href', '/about#transcript-origins');
   await expect(tbRecord).toContainText('MP3 listening copy · 0:18');
   await expect(tbRecord).toContainText('Original WAV · 0:01');
 
@@ -144,9 +237,11 @@ test('/sessions/[id] handles inferred ages, multiple recordings, unaged no-audio
   await expect(localRecord.locator('dt', { hasText: /^Date$/ })).toHaveCount(0);
   await auditAllThemes(page, '/sessions/020604-local');
 
-  // Unaged session with no associated recordings
+  // Unaged session with no associated recordings shows a single quiet line in the player's place + View transcript
   await page.goto('/sessions/011103');
   await expect(page).toHaveTitle('Session 011103 · The Seth Tapes');
+  await expect(page.locator('.audio-panel')).toContainText('No recording is associated with this session.');
+  await expect(page.locator('.audio-panel').getByRole('link', { name: 'View transcript' })).toHaveAttribute('href', '#transcript');
   const unagedRecord = page.locator('dl.catalog-record');
   await expect(unagedRecord).toContainText('Not recorded');
   await expect(unagedRecord).toContainText('None associated (transcript only)');

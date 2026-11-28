@@ -259,4 +259,34 @@ test('SessionBody renders all 135 passages without a 100-passage cap or Show mor
   assert.match(html, /id="p135"/);
   assert.match(html, /windmill lantern token/);
   assert.doesNotMatch(html, /Show \d+ more passages/i);
+  assert.doesNotMatch(html, /class="eyebrow"/);
+  assert.match(html, /id="transcript"[^>]*tabIndex="-1"|id="transcript"[^>]*tabindex="-1"/);
+});
+
+test('SessionBody renders linked Unreviewed machine transcription provenance on AI drafts without section eyebrows', () => {
+  const aiSession: Session = {
+    id: 'fixture-ai-provenance',
+    slug: '020604-local',
+    legacyId: 'fixture-ai-provenance',
+    sourceName: '020604-local.json',
+    title: 'Synthetic AI draft session',
+    overview: 'Synthetic overview for provenance link check.',
+    origin: 'local_ai_draft',
+    topics: [],
+    dates: [],
+    ages: [],
+    inferredAge: '2;06.04',
+    recordings: [],
+    preferredRecordingId: null,
+    sources: [],
+    moments: [],
+    limits: [],
+    transcript: [{ text: 'synthetic utterance', start: 0, end: 2 }],
+    sourceSha256: '0'.repeat(64),
+    association: 'Synthetic fixture',
+  };
+
+  const html = renderToStaticMarkup(React.createElement(SessionBody, { session: aiSession }));
+  assert.doesNotMatch(html, /class="eyebrow"/);
+  assert.match(html, /href="\/about#transcript-origins"[^>]*>Unreviewed machine transcription<\/a>/);
 });

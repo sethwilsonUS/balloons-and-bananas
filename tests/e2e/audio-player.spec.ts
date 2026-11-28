@@ -28,13 +28,23 @@ async function tabUntilFocused(page: Page, target: Locator, maxTabs = 45) {
   await expect(target).toBeFocused();
 }
 
-test('audio player operates entirely by keyboard with spoken aria-valuetext, no visible native controls, and clean axe in light/dark/system themes', async ({ page }) => {
+test('audio player operates entirely by keyboard with spoken aria-valuetext, More disclosure, View transcript jump, no visible native controls, and clean axe in light/dark/system themes', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?entry=fixture-010815-locomotive');
   await expect(page).toHaveURL(/\/sessions\/010815$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Blue locomotive and wooden bridge' })).toBeVisible();
 
   const audioPanel = page.locator('.audio-panel');
   const audioEl = audioPanel.locator('audio');
+
+  // Compact player sits directly under the session title and is visible without scrolling at 1280x800.
+  const desktopGeometry = await page.evaluate(() => {
+    const h1 = document.querySelector('main h1')!.getBoundingClientRect();
+    const player = document.querySelector('.audio-panel')!.getBoundingClientRect();
+    return { h1Bottom: h1.bottom, playerTop: player.top, playerBottom: player.bottom, viewportHeight: window.innerHeight };
+  });
+  expect(desktopGeometry.playerTop).toBeGreaterThanOrEqual(desktopGeometry.h1Bottom - 2);
+  expect(desktopGeometry.playerBottom).toBeLessThanOrEqual(desktopGeometry.viewportHeight);
 
   // Native <audio controls> bar is removed; <audio> remains strictly for playback.
   await expect(audioEl).toHaveCount(1);
@@ -48,15 +58,18 @@ test('audio player operates entirely by keyboard with spoken aria-valuetext, no 
   const playButton = audioPanel.getByRole('button', { name: 'Play recording' });
   const backButton = audioPanel.getByRole('button', { name: 'Back 15 seconds' });
   const forwardButton = audioPanel.getByRole('button', { name: 'Forward 30 seconds' });
-  const speedSelect = audioPanel.getByLabel('Speed');
   const seekSlider = audioPanel.getByRole('slider', { name: 'Playback position' });
+  const speedSelect = audioPanel.getByLabel('Speed');
+  const moreButton = audioPanel.getByRole('button', { name: 'More audio options' });
   const muteButton = audioPanel.getByRole('button', { name: 'Mute' });
   const volumeSlider = audioPanel.getByRole('slider', { name: 'Volume' });
   const downloadLink = audioPanel.getByRole('link', { name: 'Download original MP3' });
+  const viewTranscriptLink = audioPanel.getByRole('link', { name: 'View transcript' });
 
   await expect(seekSlider).toHaveAttribute('aria-valuetext', '0 seconds of 36 seconds');
-  await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
-  await expect(volumeSlider).toHaveAttribute('aria-valuetext', '100 percent');
+  await expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(muteButton).toBeHidden();
+  await expect(volumeSlider).toBeHidden();
 
   // Keyboard-focus Play recording and start playback with Enter; focus stays on the transport button.
   await tabUntilFocused(page, playButton);
@@ -76,7 +89,7 @@ test('audio player operates entirely by keyboard with spoken aria-valuetext, no 
   await expect(playButton).toBeVisible();
   await expect(playButton).toBeFocused();
 
-  // Tab through Back 15s, Forward 30s, Speed, to Seek slider.
+  // Tab through Back 15s, Forward 30s, Seek slider, Speed, and More button.
   await page.keyboard.press('Tab');
   await expect(backButton).toBeFocused();
   await expect(backButton).toBeEnabled();
@@ -97,16 +110,9 @@ test('audio player operates entirely by keyboard with spoken aria-valuetext, no 
   await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).currentTime)).toBeGreaterThanOrEqual(14);
   await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).currentTime)).toBeLessThanOrEqual(17);
 
-  // Tab to Speed select and change playback rate via keyboard type-ahead (works across macOS/Linux/Windows).
+  // Tab past Forward 30s to custom seek slider and exercise Home, ArrowRight, ArrowUp, ArrowLeft, ArrowDown, PageUp, PageDown, End.
   await page.keyboard.press('Tab');
   await expect(forwardButton).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(speedSelect).toBeFocused();
-  await page.keyboard.type('2');
-  await expect(speedSelect).toHaveValue('2');
-  await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).playbackRate)).toBe(2);
-
-  // Tab to custom seek slider and exercise Home, ArrowRight, ArrowUp, ArrowLeft, ArrowDown, PageUp, PageDown, End.
   await page.keyboard.press('Tab');
   await expect(seekSlider).toBeFocused();
 
@@ -144,6 +150,23 @@ test('audio player operates entirely by keyboard with spoken aria-valuetext, no 
   await expect(seekSlider).toHaveAttribute('aria-valuetext', '36 seconds of 36 seconds');
   await expect(timeReadout).toHaveText('0:36 / 0:36');
   await expect.poll(() => audioEl.evaluate(el => Math.round((el as HTMLAudioElement).currentTime))).toBe(36);
+
+  // Tab to Speed select and change playback rate via keyboard type-ahead (works across macOS/Linux/Windows).
+  await page.keyboard.press('Tab');
+  await expect(speedSelect).toBeFocused();
+  await page.keyboard.type('2');
+  await expect(speedSelect).toHaveValue('2');
+  await expect.poll(() => audioEl.evaluate(el => (el as HTMLAudioElement).playbackRate)).toBe(2);
+
+  // Tab to More disclosure button, open via Enter, and operate Mute & Volume by keyboard.
+  await page.keyboard.press('Tab');
+  await expect(moreButton).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(moreButton).toHaveAttribute('aria-expanded', 'true');
+  await expect(muteButton).toBeVisible();
+  await expect(muteButton).toHaveAttribute('aria-pressed', 'false');
+  await expect(volumeSlider).toBeVisible();
+  await expect(volumeSlider).toHaveAttribute('aria-valuetext', '100 percent');
 
   // Tab to Mute toggle button and toggle via Enter / Space.
   await page.keyboard.press('Tab');
@@ -185,10 +208,25 @@ test('audio player operates entirely by keyboard with spoken aria-valuetext, no 
   await expect(volumeSlider).toHaveAttribute('aria-valuetext', '100 percent');
   await expect.poll(() => audioEl.evaluate(el => Math.round((el as HTMLAudioElement).volume * 100))).toBe(100);
 
-  // Tab to MP3 download link.
+  // Axe is clean while More panel is expanded too.
+  await expectNoSeriousAxeViolations(page, 'audio player with More open (light)');
+
+  // Escape closes More panel and returns focus to More button.
+  await page.keyboard.press('Escape');
+  await expect(moreButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(muteButton).toBeHidden();
+  await expect(moreButton).toBeFocused();
+
+  // Tab to MP3 download link and View transcript link.
   await page.keyboard.press('Tab');
   await expect(downloadLink).toBeFocused();
   await expect(downloadLink).toHaveAttribute('href', '/api/assets/fixture-audio-locomotive-mp3?download=1');
+
+  await page.keyboard.press('Tab');
+  await expect(viewTranscriptLink).toBeFocused();
+  await expect(viewTranscriptLink).toHaveAttribute('href', '#transcript');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#transcript')).toBeFocused();
 
   // Playing from End restarts cleanly from the beginning without a false out-of-range error.
   await playButton.focus();
@@ -205,11 +243,21 @@ test('audio player operates entirely by keyboard with spoken aria-valuetext, no 
   expect(transitionDuration).toBe('0s');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 
-  // Verify 320px narrow viewport has no horizontal overflow in the audio player.
+  // Verify 390px phone viewport shows player near top without scrolling, and 320px has zero overflow.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const mobilePlayer = await audioPanel.evaluate(el => ({
+    bottom: el.getBoundingClientRect().bottom,
+    viewportHeight: window.innerHeight,
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+  }));
+  expect(mobilePlayer.bottom).toBeLessThanOrEqual(mobilePlayer.viewportHeight);
+  expect(mobilePlayer.overflow).toBeLessThanOrEqual(0);
+
   await page.setViewportSize({ width: 320, height: 800 });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
-  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   // Audit light, dark, and system themes with axe.
   await setTheme(page, 'light');
@@ -290,9 +338,19 @@ test('audio player preserves load/media error status, signed-URL recovery, keybo
   await expect(page).toHaveURL(/\/sessions\/020110-tb$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Yellow submarine in the courtyard' })).toBeVisible();
   await expect(audioPanel.locator('audio')).not.toBeVisible();
-  await expect(audioPanel).toContainText('MP3 listening copy.');
   await expect(audioPanel.getByRole('link', { name: 'Download MP3 listening copy' })).toBeVisible();
+
+  // Recording choice and Original WAV download live inside the More disclosure.
+  const moreBtn = audioPanel.getByRole('button', { name: 'More audio options' });
+  await expect(audioPanel.getByText('Original WAV recording')).toBeHidden();
+  await moreBtn.click();
+  await expect(audioPanel).toContainText('MP3 listening copy.');
+  await expect(audioPanel.getByLabel('MP3 recording')).toBeVisible();
   await expect(audioPanel.getByText('Original WAV recording')).toBeVisible();
+  await expect(audioPanel.getByRole('link', { name: /Download original WAV/i })).toHaveAttribute(
+    'href',
+    '/api/assets/fixture-audio-submarine-wav?download=1',
+  );
   await setTheme(page, 'light');
   await expectNoSeriousAxeViolations(page, 'listening-copy audio player (light)');
   await setTheme(page, 'dark');
@@ -310,6 +368,7 @@ test('audio player hides percentage slider when platform volume is read-only (iO
 
   await page.goto('/?entry=fixture-010815-locomotive');
   const audioPanel = page.locator('.audio-panel');
+  await audioPanel.getByRole('button', { name: 'More audio options' }).click();
   await expect(audioPanel.getByRole('slider', { name: 'Volume' })).toHaveCount(0);
   await expect(audioPanel).toContainText('Use device buttons to adjust volume.');
 

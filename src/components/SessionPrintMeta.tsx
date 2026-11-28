@@ -99,7 +99,6 @@ export function SessionPrintCitation({
     >
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Citing this session</p>
           <h2 id="print-citation-heading">Citation</h2>
         </div>
       </div>
