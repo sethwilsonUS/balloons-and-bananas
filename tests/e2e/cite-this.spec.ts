@@ -1,7 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-
-type ThemeChoice = 'system' | 'light' | 'dark';
+import { setTheme, waitForThemeSettled } from './helpers/theme';
 
 async function installClipboardMock(page: Page) {
   await page.addInitScript(() => {
@@ -30,28 +29,6 @@ async function setClipboardFailure(page: Page, fail: boolean) {
   await page.evaluate(value => {
     (window as unknown as { __failClipboard: boolean }).__failClipboard = value;
   }, fail);
-}
-
-async function waitForThemeSettled(page: Page, expectedDark: boolean) {
-  const expectedPaper = expectedDark ? 'rgb(24, 31, 26)' : 'rgb(247, 244, 237)';
-  await expect
-    .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
-    .toBe(expectedPaper);
-  await page.evaluate(async () => {
-    const running = document
-      .getAnimations()
-      .filter(animation => animation.playState === 'running' && Number.isFinite(Number(animation.effect?.getComputedTiming().duration)));
-    await Promise.race([
-      Promise.all(running.map(animation => animation.finished.catch(() => undefined))),
-      new Promise(resolve => setTimeout(resolve, 400)),
-    ]);
-  });
-}
-
-async function setTheme(page: Page, theme: ThemeChoice, expectedDark?: boolean) {
-  await page.getByLabel('Appearance').selectOption(theme);
-  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-  await waitForThemeSettled(page, expectedDark ?? theme === 'dark');
 }
 
 async function expectNoSeriousAxeViolations(page: Page, label: string) {

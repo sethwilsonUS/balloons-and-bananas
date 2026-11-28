@@ -1,36 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-
-type ThemeChoice = 'light' | 'dark';
-
-async function waitForThemeSettled(page: Page, expectedDark: boolean) {
-  const expectedPaper = expectedDark ? 'rgb(24, 31, 26)' : 'rgb(247, 244, 237)';
-  const expectedPaperLight = expectedDark ? 'rgb(34, 44, 36)' : 'rgb(252, 250, 245)';
-  await expect
-    .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
-    .toBe(expectedPaper);
-  const shareButton = page.locator('.share-button');
-  if (await shareButton.count()) {
-    await expect
-      .poll(() => shareButton.evaluate(el => getComputedStyle(el).backgroundColor))
-      .toBe(expectedPaperLight);
-  }
-  await page.evaluate(async () => {
-    const running = document
-      .getAnimations()
-      .filter(animation => animation.playState === 'running' && Number.isFinite(Number(animation.effect?.getComputedTiming().duration)));
-    await Promise.race([
-      Promise.all(running.map(animation => animation.finished.catch(() => undefined))),
-      new Promise(resolve => setTimeout(resolve, 400)),
-    ]);
-  });
-}
-
-async function setTheme(page: Page, theme: ThemeChoice) {
-  await page.getByLabel('Appearance').selectOption(theme);
-  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-  await waitForThemeSettled(page, theme === 'dark');
-}
+import { setTheme } from './helpers/theme';
 
 async function expectNoSeriousAxeViolations(page: Page, label: string) {
   const results = await new AxeBuilder({ page }).analyze();

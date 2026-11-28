@@ -1,10 +1,11 @@
 import { ARCHIVE_NAME } from '../lib/site';
+import CassetteReelLogo from './CassetteReelLogo';
 
 export default function SiteFooter() {
   return (
     <footer className="site-footer">
       <div>
-        <span className="collection-mark" aria-hidden="true"><span /><span /></span>
+        <CassetteReelLogo className="footer-logo" />
         <p>
           {ARCHIVE_NAME}<br />
           <span>An unlisted public archive. Anyone with the link can visit.</span><br />

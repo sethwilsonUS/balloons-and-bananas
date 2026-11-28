@@ -63,12 +63,7 @@ export default async function ResearchDocumentPage({
 
   return (
     <div className="archive-shell">
-      <RouteHeader
-        activeSection="research"
-        showShare
-        sharePath={`/research/${encodeURIComponent(document.id)}`}
-        shareTargetLabel="document"
-      />
+      <RouteHeader activeSection="research" />
       <main id="main" tabIndex={-1} className="reading-layout">
         <article className="document-detail document-page reading-column">
           <a className="text-link back-button" href="/research">
