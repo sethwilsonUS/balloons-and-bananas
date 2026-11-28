@@ -8,15 +8,37 @@ import CassetteReelLogo from '../src/components/CassetteReelLogo';
 import RouteHeader from '../src/components/RouteHeader';
 import SiteFooter from '../src/components/SiteFooter';
 
-test('CassetteReelLogo renders decorative two-reel SVG beside text and labelled img when standalone', () => {
+test('CassetteReelLogo renders authentic 1980s compact-cassette SVG decoratively beside text and labelled when standalone', () => {
   const decorative = renderToStaticMarkup(React.createElement(CassetteReelLogo));
+  assert.match(decorative, /<svg[^>]*viewBox="0 0 64 40"/);
   assert.match(decorative, /<svg[^>]*aria-hidden="true"/);
+  assert.match(decorative, /<svg[^>]*focusable="false"/);
   assert.doesNotMatch(decorative, /\brole="img"/);
   assert.doesNotMatch(decorative, /\baria-label=/);
+
+  // Theme-aware currentColor strokes/fills (zero hardcoded light-only hex fills)
   assert.match(decorative, /stroke="currentColor"/);
-  assert.match(decorative, /<circle[^>]*cx="9"/);
-  assert.match(decorative, /<circle[^>]*cx="31"/);
-  assert.match(decorative, /<path[^>]*d="M3\.8 15 L9\.6 20\.25 H30\.4 L36\.2 15"/);
+  assert.doesNotMatch(decorative, /#[0-9a-f]{3,6}\b/i);
+
+  // Outer shell, 4 corner screws, ruled paper label, tape window, 2 hubs with 6 spokes each, bottom trapezoid + 4 holes
+  assert.match(decorative, /<rect[^>]*width="61"[^>]*height="37"[^>]*rx="3\.2"/);
+  assert.match(decorative, /<circle[^>]*cx="5"[^>]*cy="5"/);
+  assert.match(decorative, /<circle[^>]*cx="59"[^>]*cy="5"/);
+  assert.match(decorative, /<circle[^>]*cx="5"[^>]*cy="35"/);
+  assert.match(decorative, /<circle[^>]*cx="59"[^>]*cy="35"/);
+  assert.match(decorative, /M 10\.6 4\.8 H 53\.4/);
+  assert.match(decorative, /<rect[^>]*x="12\.2"[^>]*y="13\.8"[^>]*width="39\.6"[^>]*height="11\.6"/);
+  assert.match(decorative, /<circle[^>]*cx="19\.8"[^>]*cy="19\.6"[^>]*r="4\.3"/);
+  assert.match(decorative, /<circle[^>]*cx="44\.2"[^>]*cy="19\.6"[^>]*r="4\.3"/);
+  assert.match(decorative, /M 14\.0 38\.5 L 17\.2 30\.2 H 46\.8 L 50\.0 38\.5/);
+  assert.match(decorative, /<circle[^>]*cx="22"[^>]*cy="35"/);
+  assert.match(decorative, /<circle[^>]*cx="42"[^>]*cy="35"/);
+  assert.match(decorative, /<circle[^>]*cx="28\.2"[^>]*cy="33\.8"/);
+  assert.match(decorative, /<circle[^>]*cx="35\.8"[^>]*cy="33\.8"/);
+
+  // 2 label ruling lines + 3 center tape-gauge ticks + 12 hub drive spokes (6 per hub) = 17 <line> elements
+  const lineCount = (decorative.match(/<line\b/g) ?? []).length;
+  assert.equal(lineCount, 17);
 
   const standalone = renderToStaticMarkup(
     React.createElement(CassetteReelLogo, { label: 'The Seth Tapes' }),
@@ -80,14 +102,16 @@ test('SiteFooter uses CassetteReelLogo, retains unlisted-access note, and remove
   assert.doesNotMatch(html, /collection-mark/);
 });
 
-test('SVG favicon and globals.css carry the cassette-reel design and remove legacy circle-mark CSS', async () => {
+test('SVG favicon and globals.css carry the 1980s cassette silhouette and remove legacy circle-mark CSS', async () => {
   const iconSvg = await readFile(path.resolve('src/app/icon.svg'), 'utf8');
   assert.match(iconSvg, /<svg[^>]*viewBox="0 0 32 32"/);
   assert.match(iconSvg, /#f7f4ed/i);
   assert.match(iconSvg, /#254c38/i);
-  assert.match(iconSvg, /<circle[^>]*cx="9\.5"/);
-  assert.match(iconSvg, /<circle[^>]*cx="22\.5"/);
-  assert.match(iconSvg, /<path[^>]*d="M6\.5 18\.1 L9\.3 21\.25 H22\.7 L25\.5 18\.1"/);
+  assert.match(iconSvg, /<rect[^>]*x="3"[^>]*y="6\.5"[^>]*width="26"[^>]*height="19"/);
+  assert.match(iconSvg, /<line[^>]*y1="10\.2"/);
+  assert.match(iconSvg, /<circle[^>]*cx="11\.2"[^>]*cy="16\.2"/);
+  assert.match(iconSvg, /<circle[^>]*cx="20\.8"[^>]*cy="16\.2"/);
+  assert.match(iconSvg, /<path[^>]*d="M8\.8 25\.5 L10\.8 21\.8 H21\.2 L23\.2 25\.5 Z"/);
 
   const css = await readFile(path.resolve('src/app/globals.css'), 'utf8');
   assert.doesNotMatch(css, /\.collection-mark\b/);
