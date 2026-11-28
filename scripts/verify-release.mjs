@@ -125,7 +125,16 @@ async function main() {
   const markers = ['Seth Wilson', 'An unlisted collection', data.entries[0].title, data.entries[0].sourceName, data.entries[0].overview].filter(Boolean);
   check(markers.every(marker => !html.includes(marker)), 'public_root:no_static_archive');
   check(/<title>\s*The Seth Tapes\s*<\/title>/.test(html), 'public_root:archive_title');
+  check(!html.includes('Opening the archive'), 'public_root:no_loading_flash');
   check(html.includes('action="/search"') && html.includes('href="/sessions"') && html.includes('href="/research"') && html.includes('href="/about"'), 'public_root:entry_points');
+  check(
+    html.includes(`${expected.sessions.toLocaleString()} sessions`)
+      && html.includes(`${expected.recordings.toLocaleString()} original recordings`)
+      && html.includes(`${expected.original.toLocaleString()} archived research`)
+      && html.includes(`${expected.talkbankAi.toLocaleString()} TalkBank AI`)
+      && html.includes(`${expected.localAi.toLocaleString()} local AI`),
+    'public_root:live_counts',
+  );
   check((root.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"), 'public_root:frame_protection');
   if (!local) check(!(root.headers.get('content-security-policy') || '').includes("'unsafe-eval'"), 'production:no_unsafe_eval');
   const robots = await call('/robots.txt', 'robots');
