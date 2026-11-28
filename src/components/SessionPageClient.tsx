@@ -14,7 +14,7 @@ export default function SessionPageClient({ session }: { session: Session }) {
   return (
     <>
       <ArchiveAnalytics ready section="sessions" sessionId={session.id} documentId={null} />
-      <SessionBody key={session.id} session={session} headingLevel={2} momentsBeforePlayer />
+      <SessionBody key={session.id} session={session} headingLevel={2} momentsBeforePlayer enableHashNavigation />
       <SessionSources session={session} headingLevel={2} />
     </>
   );

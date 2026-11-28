@@ -151,7 +151,7 @@ test('opening a session plays fixture audio without Blob, serves private downloa
   await expect(page.getByRole('button', { name: /Listen from 0:02: Crossing the cardboard bridge/i })).toBeVisible();
 
   // Simpler reading view hides CHAT notation by default; toggling shows it
-  const passage3 = page.locator('#transcript-passage-3');
+  const passage3 = page.locator('#p3');
   await expect(passage3).not.toContainText('[//]');
   await page.getByLabel('Show linguistic notation').check();
   await expect(passage3).toContainText('[//]');
@@ -207,7 +207,7 @@ test('opening a session plays fixture audio without Blob, serves private downloa
 test('passage deep link (?entry=...&passage=3) highlights and focuses passage 3 with notation visible', async ({ page }) => {
   await page.goto('/?entry=fixture-010815-locomotive&passage=3');
 
-  const passage3 = page.locator('#transcript-passage-3');
+  const passage3 = page.locator('#p3');
   await expect(passage3).toBeVisible();
   await expect(passage3).toHaveClass(/\bis-linked\b/);
   await expect(passage3).toBeFocused();

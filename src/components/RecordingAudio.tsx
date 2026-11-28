@@ -17,7 +17,16 @@ import {
 import { PlaybackTelemetry, type PlaybackEvent } from '../lib/playback-telemetry';
 import { request, timeLabel } from './api';
 
-export interface RecordingAudioHandle { playAt: (seconds: number) => void; toggle: () => void }
+export type PrepareAudioResult =
+  | { status: 'ready'; seconds: number }
+  | { status: 'no-audio' }
+  | { status: 'out-of-range'; duration: number };
+
+export interface RecordingAudioHandle {
+  playAt: (seconds: number) => void;
+  prepareAt: (seconds: number) => PrepareAudioResult;
+  toggle: () => void;
+}
 interface Props {
   sessionId: string;
   origin: TranscriptOrigin;
@@ -425,7 +434,96 @@ const RecordingAudio = forwardRef<RecordingAudioHandle, Props>(function Recordin
     void load(selected, target, true, scrubIntent);
   }, [busy, effectiveDuration, hasLoadedSelected, load, onTime, playLoaded, playing, selected]);
 
-  useImperativeHandle(ref, () => ({ playAt: seconds => seek(seconds, true, 'passage'), toggle }), [seek, toggle]);
+  const prepareAt = useCallback((seconds: number): PrepareAudioResult => {
+    if (!available.length) {
+      return { status: 'no-audio' };
+    }
+    const player = audio.current;
+    const isLoadedSelected = hasLoadedSelected(player);
+    const loadedDuration = isLoadedSelected && Number.isFinite(player.duration) && player.duration > 0
+      ? player.duration
+      : null;
+    const maxKnownDuration = Math.max(
+      loadedDuration ?? 0,
+      ...available.map(item => (Number.isFinite(item.duration) && item.duration > 0 ? item.duration : 0)),
+    );
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      return { status: 'out-of-range', duration: maxKnownDuration };
+    }
+
+    const selectedDuration = loadedDuration ?? (selected?.duration || 0);
+    let recording = selected;
+    if (!recording?.available || (selectedDuration > 0 && seconds >= selectedDuration)) {
+      recording = available.find(item => item.duration <= 0 || seconds < item.duration);
+    }
+    if (!recording) {
+      return { status: 'out-of-range', duration: maxKnownDuration };
+    }
+
+    recoveryTried.current = false;
+    retryScrubIntent.current = null;
+    setMessage('');
+
+    if (isLoadedSelected && recording.id === selected!.id) {
+      if (!player.paused) {
+        player.pause();
+      }
+      telemetry.current.tracker.suspend();
+      programmedSeek.current = { generation: generation.current, target: seconds, when: performance.now() };
+      player.currentTime = seconds;
+      lastPosition.current = seconds;
+      setPosition(seconds);
+      onTime(seconds);
+      return { status: 'ready', seconds };
+    }
+
+    if (loading.current && pending.current && pending.current.generation === generation.current && recording.id === selected?.id) {
+      pending.current = {
+        ...pending.current,
+        at: seconds,
+        play: false,
+        fromScrub: false,
+        toEnd: false,
+        reportSeek: false,
+      };
+      lastPosition.current = seconds;
+      setPosition(seconds);
+      onTime(seconds);
+      return { status: 'ready', seconds };
+    }
+
+    if (recording.id !== selected?.id) {
+      telemetry.current.tracker.suspend();
+      selectTelemetry(recording.id);
+      if (seekTimer.current) {
+        clearTimeout(seekTimer.current);
+        seekTimer.current = null;
+      }
+      generation.current += 1;
+      controller.current?.abort();
+      loading.current = false;
+      pending.current = null;
+      releaseMedia(audio.current);
+      setPlaying(false);
+      onPlaying(false);
+      setSelectedId(recording.id);
+      setSource(null);
+      setMediaDuration(null);
+      setBusy(false);
+      setFailed(false);
+    }
+
+    lastPosition.current = seconds;
+    setPosition(seconds);
+    onTime(seconds);
+    return { status: 'ready', seconds };
+  }, [available, hasLoadedSelected, onPlaying, onTime, selectTelemetry, selected]);
+
+  useImperativeHandle(
+    ref,
+    () => ({ playAt: seconds => seek(seconds, true, 'passage'), prepareAt, toggle }),
+    [prepareAt, seek, toggle],
+  );
 
   // Refresh only an actively playing URL, once near expiry; idle pages do not poll.
   useEffect(() => {

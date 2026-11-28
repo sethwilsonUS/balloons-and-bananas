@@ -1,11 +1,17 @@
 'use client';
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowDown, Download, Pause, Play, Search } from 'lucide-react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowDown, Check, Download, Link2, Pause, Play, Search, X } from 'lucide-react';
 import type { Session, TranscriptOrigin } from '../lib/types';
 import { trackArchiveEvent } from '../lib/analytics';
 import { getNotationLinks, readingText } from '../lib/transcript-display';
 import { linguisticMarkers, type LinguisticMarkerId } from '../lib/linguistic-markers';
+import {
+  findNearestPassageIndex,
+  formatCanonicalPassageUrl,
+  formatTimeReadyAnnouncement,
+  parseSessionHash,
+} from '../lib/session-reading';
 import { ApiError, request, timeLabel, transcriptOriginLabels } from './api';
 import SessionAge from './SessionAge';
 import { TopicLabels } from './TopicThemes';
@@ -57,16 +63,19 @@ export function SessionBody({
   onMarker,
   headingLevel = 3,
   momentsBeforePlayer = false,
+  enableHashNavigation = false,
 }: {
   session: Session;
   targetPassage?: number | null;
   onMarker?: (marker: LinguisticMarkerId, sourcePassage: number) => void;
   headingLevel?: 2 | 3;
   momentsBeforePlayer?: boolean;
+  enableHashNavigation?: boolean;
 }) {
   const SectionHeading = headingLevel === 2 ? 'h2' : 'h3';
   const MomentHeading = headingLevel === 2 ? 'h3' : 'h4';
   const [jump, setJump] = useState<{ index: number; serial: number } | null>(null);
+  const [hashPassage, setHashPassage] = useState<number | null>(null);
   const [message, setMessage] = useState('');
   const [currentTime, setCurrentTime] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -78,35 +87,76 @@ export function SessionBody({
   const activeIndex = useMemo(() => currentTime === null ? null : session.transcript.findIndex(passage =>
     typeof passage.start === 'number' && typeof passage.end === 'number'
     && passage.start <= currentTime && passage.end > currentTime), [currentTime, session.transcript]);
-  const linkedIndex = targetPassage !== null && Number.isSafeInteger(targetPassage) && targetPassage > 0 && targetPassage <= session.transcript.length ? targetPassage - 1 : null;
+  const effectivePassage = targetPassage ?? hashPassage;
+  const linkedIndex = effectivePassage !== null && Number.isSafeInteger(effectivePassage) && effectivePassage > 0 && effectivePassage <= session.transcript.length
+    ? effectivePassage - 1
+    : null;
+  const targetPassageValid = targetPassage !== null && Number.isSafeInteger(targetPassage) && targetPassage > 0 && targetPassage <= session.transcript.length;
 
   useEffect(() => {
     if (targetPassage === null) return;
-    if (linkedIndex === null) {
+    if (!targetPassageValid) {
       setMessage(`Passage ${targetPassage} is outside this transcript. The available transcript is shown below.`);
       setJump(null);
       return;
     }
     setMessage(`Showing transcript passage ${targetPassage}, with surrounding passages for context.`);
-    setJump(value => ({ index: linkedIndex, serial: (value?.serial || 0) + 1 }));
-  }, [linkedIndex, targetPassage]);
+    setJump(value => ({ index: targetPassage - 1, serial: (value?.serial || 0) + 1 }));
+  }, [targetPassage, targetPassageValid]);
+
+  const jumpToPassage = useCallback((passageNumber: number) => {
+    setHashPassage(passageNumber);
+    if (!Number.isSafeInteger(passageNumber) || passageNumber < 1 || passageNumber > session.transcript.length) {
+      setMessage(`Passage ${passageNumber} is outside this transcript. The available transcript is shown below.`);
+      setJump(null);
+      return;
+    }
+    setMessage(`Showing transcript passage ${passageNumber}, with surrounding passages for context.`);
+    setJump(value => ({ index: passageNumber - 1, serial: (value?.serial || 0) + 1 }));
+  }, [session.transcript.length]);
+
+  const applySessionHash = useCallback((rawHash: string) => {
+    const parsed = parseSessionHash(rawHash);
+    if (!parsed) {
+      setHashPassage(null);
+      return;
+    }
+    if (parsed.kind === 'passage') {
+      jumpToPassage(parsed.passage);
+      return;
+    }
+    setHashPassage(null);
+    const prepared = player.current?.prepareAt(parsed.seconds) ?? { status: 'no-audio' as const };
+    const nearest = findNearestPassageIndex(session.transcript, parsed.seconds);
+    setMessage(formatTimeReadyAnnouncement(parsed.seconds, prepared.status, {
+      duration: prepared.status === 'out-of-range' ? prepared.duration : undefined,
+      hasTimedPassage: nearest?.timed ?? false,
+    }));
+    if (nearest) {
+      setJump(value => ({ index: nearest.index, serial: (value?.serial || 0) + 1 }));
+    }
+  }, [jumpToPassage, session.transcript]);
+
+  useEffect(() => {
+    if (!enableHashNavigation || typeof window === 'undefined') return;
+    if (window.location.hash) {
+      applySessionHash(window.location.hash);
+    }
+    const onHashChange = () => applySessionHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [applySessionHash, enableHashNavigation]);
 
   const readPassage = (at: number | null, source: 'moment' | 'current' = 'moment') => {
     trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source, action: 'read' });
-    let closest = 0;
-    let distance = Infinity;
-    session.transcript.forEach((passage, index) => {
-      if (at !== null && typeof passage.start === 'number') {
-        const difference = passage.start <= at && typeof passage.end === 'number' && passage.end >= at ? 0 : Math.abs(passage.start - at);
-        if (difference < distance) { distance = difference; closest = index; }
-      }
-    });
-    setMessage(Number.isFinite(distance) && at !== null ? `Showing the transcript near ${timeLabel(at)}. Use the source locator to check the exact passage.` : 'Showing the transcript. Use the source locator to check the exact passage in the downloadable original.');
-    setJump(value => ({ index: closest, serial: (value?.serial || 0) + 1 }));
+    const nearest = at !== null ? findNearestPassageIndex(session.transcript, at) : null;
+    const targetIndex = nearest ? nearest.index : 0;
+    setMessage(nearest?.timed && at !== null ? `Showing the transcript near ${timeLabel(at)}. Use the source locator to check the exact passage.` : 'Showing the transcript. Use the source locator to check the exact passage in the downloadable original.');
+    setJump(value => ({ index: targetIndex, serial: (value?.serial || 0) + 1 }));
   };
 
   const audioSection = <RecordingAudio ref={player} sessionId={session.id} origin={session.origin} recordings={session.recordings} preferredRecordingId={session.preferredRecordingId} onTime={setCurrentTime} onPlaying={setPlaying} headingLevel={headingLevel} />;
-  const momentsSection = <section className="moments-section" aria-labelledby="moments-heading">
+  const momentsSection = <section id="moments" className="moments-section" aria-labelledby="moments-heading">
     <div className="section-heading"><div><p className="eyebrow">From the guide</p><SectionHeading id="moments-heading">Moments</SectionHeading></div><span className="muted small">{session.moments.length} {session.moments.length === 1 ? 'moment' : 'moments'}</span></div>
     <ol className="moment-list">
       {session.moments.map((moment, index) => <li key={`${index}-${moment.title}`}>
@@ -121,23 +171,60 @@ export function SessionBody({
 
   return <>
     {momentsBeforePlayer ? <>{momentsSection}{audioSection}</> : <>{audioSection}{momentsSection}</>}
-    <Transcript session={session} jump={jump} message={message} linkedIndex={linkedIndex} activeIndex={activeIndex} playing={playing} hasAudio={hasAudio} canPlayAt={canPlayAt} headingLevel={headingLevel} onPlayAt={at => {
-      trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'cue', action: 'listen' });
-      player.current?.playAt(at);
-    }} onTogglePlayback={() => player.current?.toggle()} onCurrentPassage={() => readPassage(currentTime, 'current')} onMarker={onMarker} />
+    <Transcript
+      session={session}
+      jump={jump}
+      message={message}
+      linkedIndex={linkedIndex}
+      autoShowNotation={targetPassageValid}
+      activeIndex={activeIndex}
+      playing={playing}
+      hasAudio={hasAudio}
+      canPlayAt={canPlayAt}
+      headingLevel={headingLevel}
+      enableHashNavigation={enableHashNavigation}
+      onSelectPassage={jumpToPassage}
+      onPlayAt={at => {
+        trackArchiveEvent('transcript_jump', { recordingId: session.id, origin: session.origin, source: 'cue', action: 'listen' });
+        player.current?.playAt(at);
+      }}
+      onTogglePlayback={() => player.current?.toggle()}
+      onCurrentPassage={() => readPassage(currentTime, 'current')}
+      onMarker={onMarker}
+    />
   </>;
 }
 
-function Transcript({ session, jump, message, linkedIndex, activeIndex, playing, hasAudio, canPlayAt, headingLevel, onPlayAt, onTogglePlayback, onCurrentPassage, onMarker }: {
+function Transcript({
+  session,
+  jump,
+  message,
+  linkedIndex,
+  autoShowNotation,
+  activeIndex,
+  playing,
+  hasAudio,
+  canPlayAt,
+  headingLevel,
+  enableHashNavigation,
+  onSelectPassage,
+  onPlayAt,
+  onTogglePlayback,
+  onCurrentPassage,
+  onMarker,
+}: {
   session: Session;
   jump: { index: number; serial: number } | null;
   message: string;
   linkedIndex: number | null;
+  autoShowNotation: boolean;
   activeIndex: number | null;
   playing: boolean;
   hasAudio: boolean;
   canPlayAt: (at: number | null | undefined) => boolean;
   headingLevel: 2 | 3;
+  enableHashNavigation: boolean;
+  onSelectPassage: (passageNumber: number) => void;
   onPlayAt: (at: number) => void;
   onTogglePlayback: () => void;
   onCurrentPassage: () => void;
@@ -146,17 +233,34 @@ function Transcript({ session, jump, message, linkedIndex, activeIndex, playing,
   const SectionHeading = headingLevel === 2 ? 'h2' : 'h3';
   const [query, setQuery] = useState('');
   const findEdited = useRef(false);
-  const [limit, setLimit] = useState(100);
   const [follow, setFollow] = useState(false);
   const hasChatNotation = session.origin === 'archived_research' || session.origin === 'talkbank_ai_draft';
-  const [showNotation, setShowNotation] = useState(hasChatNotation && linkedIndex !== null);
+  const [showNotation, setShowNotation] = useState(hasChatNotation && autoShowNotation);
   const [toolbarHeight, setToolbarHeight] = useState(0);
+  const [copiedPassage, setCopiedPassage] = useState<number | null>(null);
+  const [copyMessage, setCopyMessage] = useState('');
+  const [manualCopy, setManualCopy] = useState<{ passage: number; url: string } | null>(null);
   const toolbar = useRef<HTMLDivElement>(null);
-  // Inspectable source notation is the initial view for exact passage links.
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualCopyInput = useRef<HTMLInputElement>(null);
+
+  // Inspectable source notation is the initial view for exact linguistic passage links.
   // Playback and ordinary passage jumps do not override a reader's choice.
   useEffect(() => {
-    if (hasChatNotation && linkedIndex !== null) setShowNotation(true);
-  }, [hasChatNotation, linkedIndex]);
+    if (hasChatNotation && autoShowNotation) setShowNotation(true);
+  }, [hasChatNotation, autoShowNotation]);
+
+  useEffect(() => () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (manualCopy) {
+      manualCopyInput.current?.focus();
+      manualCopyInput.current?.select();
+    }
+  }, [manualCopy]);
+
   useEffect(() => {
     const element = toolbar.current;
     if (!element) { setToolbarHeight(0); return; }
@@ -170,33 +274,43 @@ function Transcript({ session, jump, message, linkedIndex, activeIndex, playing,
     observer.observe(element);
     return () => observer.disconnect();
   }, [hasAudio]);
-  const [pendingFocus, setPendingFocus] = useState<number | null>(null);
+
+  const [pendingFocus, setPendingFocus] = useState<{ index: number; serial: number } | null>(null);
   const rows = useRef(new Map<number, HTMLDivElement>());
+
   useEffect(() => {
     if (!jump || !Number.isInteger(jump.index) || jump.index < 0 || jump.index >= session.transcript.length) return;
     setQuery('');
     setFollow(false);
-    setLimit(Math.max(100, jump.index + 25));
-    setPendingFocus(jump.index);
+    setPendingFocus(jump);
   }, [session.transcript.length, jump]);
+
   useEffect(() => {
-    if (pendingFocus === null) return;
-    const row = rows.current.get(pendingFocus);
+    if (!pendingFocus) return;
+    const row = rows.current.get(pendingFocus.index);
     if (!row) return;
-    row.focus();
     row.scrollIntoView({ block: 'start', behavior: 'instant' });
+    row.focus({ preventScroll: true });
+    // Re-align once after layout/sticky heights settle (e.g. content-visibility rows above).
+    const frame = window.requestAnimationFrame(() => {
+      row.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
     setPendingFocus(null);
-  }, [pendingFocus, limit, query]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingFocus, query]);
+
   useEffect(() => {
     if (!follow || !playing || query.trim() || activeIndex === null || activeIndex < 0) return;
-    setLimit(value => Math.max(value, activeIndex + 25));
     rows.current.get(activeIndex)?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [activeIndex, follow, playing, query, limit, toolbarHeight]);
+  }, [activeIndex, follow, playing, query, toolbarHeight]);
+
   const displayRows = useMemo(() => session.transcript.map((passage, index) => ({
     passage, index, text: showNotation ? passage.text : readingText(passage, session.origin),
     links: showNotation ? getNotationLinks(passage, session.origin) : [],
   })), [session.origin, session.transcript, showNotation]);
+
   const results = useMemo(() => displayRows.filter(({ passage, text }) => !query.trim() || `${passage.speaker || ''} ${text}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [displayRows, query]);
+
   useEffect(() => {
     if (!findEdited.current || !query.trim()) return;
     const timer = window.setTimeout(() => {
@@ -206,7 +320,30 @@ function Transcript({ session, jump, message, linkedIndex, activeIndex, playing,
     return () => window.clearTimeout(timer);
   }, [session.id, session.origin, query, results.length, showNotation]);
 
-  return <section className="transcript-section" aria-labelledby="transcript-heading" style={{ '--transcript-toolbar-height': `${toolbarHeight}px` } as CSSProperties}>
+  const copyPassageLink = async (passageNumber: number) => {
+    const slug = session.slug || session.id;
+    const url = formatCanonicalPassageUrl(slug, passageNumber, window.location.origin);
+    setManualCopy(null);
+    setCopyMessage('');
+    try {
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+        throw new Error('Clipboard unavailable');
+      }
+      await navigator.clipboard.writeText(url);
+      setCopiedPassage(passageNumber);
+      setCopyMessage(`Copied link to passage ${passageNumber}.`);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => {
+        setCopiedPassage(current => (current === passageNumber ? null : current));
+      }, 4000);
+    } catch {
+      setCopiedPassage(null);
+      setManualCopy({ passage: passageNumber, url });
+      setCopyMessage(`Could not copy automatically. Select and copy the link to passage ${passageNumber} below.`);
+    }
+  };
+
+  return <section id="transcript" className="transcript-section" aria-labelledby="transcript-heading" style={{ '--transcript-toolbar-height': `${toolbarHeight}px` } as CSSProperties}>
     <div className="section-heading"><div><p className="eyebrow">The source text</p><SectionHeading id="transcript-heading">Transcript</SectionHeading></div><span className={`origin-badge ${session.origin}`}>{transcriptOriginLabels[session.origin]}</span></div>
     <p className="small muted">{session.origin === 'archived_research' ? 'A readable view of the archived research transcript. Original notation is retained in the downloadable source files.' : 'Machine-generated draft: words, speakers, and timestamps may be wrong. Check the recording before treating a passage as evidence.'}</p>
     {hasAudio && <div ref={toolbar} className="transcript-playback-tools" role="group" aria-label="Transcript playback controls"><button type="button" className="button secondary" onClick={onTogglePlayback}>{playing ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}{playing ? 'Pause audio' : 'Play audio'}</button><button type="button" className="button secondary" onClick={onCurrentPassage} disabled={activeIndex === null || activeIndex < 0}>Current passage</button><label className="follow-control"><input type="checkbox" checked={follow} onChange={event => {
@@ -218,21 +355,94 @@ function Transcript({ session, jump, message, linkedIndex, activeIndex, playing,
       setShowNotation(event.target.checked);
       trackArchiveEvent('notation_toggle', { recordingId: session.id, origin: session.origin, enabled: event.target.checked });
     }} />Show linguistic notation</label><p id="transcript-notation-help" className="small muted">Off: an easier reading view with research codes and dependent notes hidden. Partial-word spellings and uncertainty remain. On: the notation and notes stored in this reading copy; full analysis tiers are in the downloadable CHAT source. This changes only the display; source files are unchanged.</p>{showNotation && <p className="small muted">Linked repetition, retracing, and pause symbols find matching passages across transcripts, initially including any speaker.</p>}</div> : <p className="small muted transcript-view-controls">This local AI draft has no CHAT notation layer to switch on. Its text is displayed unchanged.</p>}
-    <div className="transcript-search field"><label htmlFor="transcript-query">Find within this transcript</label><div className="search-input"><Search size={18} aria-hidden="true" /><input id="transcript-query" type="search" value={query} onChange={event => { findEdited.current = true; setQuery(event.target.value); setLimit(100); }} placeholder="A word, name, or phrase" autoComplete="off" spellCheck={false} aria-describedby="transcript-search-help" /></div><p id="transcript-search-help" className="small muted">Searches the text currently displayed, including speaker labels and visible source notes.</p></div>
-    <p className="small muted" role="status">{query.trim() ? `${results.length.toLocaleString()} matching ${results.length === 1 ? 'passage' : 'passages'}` : `${session.transcript.length.toLocaleString()} transcript ${session.transcript.length === 1 ? 'passage' : 'passages'}`}{results.length > limit ? ` · showing the first ${limit}` : ''}</p>
-    <p className="small muted" role="status">{message}</p>
+    <div className="transcript-search field"><label htmlFor="transcript-query">Find within this transcript</label><div className="search-input"><Search size={18} aria-hidden="true" /><input id="transcript-query" type="search" value={query} onChange={event => { findEdited.current = true; setQuery(event.target.value); }} placeholder="A word, name, or phrase" autoComplete="off" spellCheck={false} aria-describedby="transcript-search-help" /></div><p id="transcript-search-help" className="small muted">Searches the text currently displayed, including speaker labels and visible source notes.</p></div>
+    <p className="small muted" role="status">{query.trim() ? `${results.length.toLocaleString()} matching ${results.length === 1 ? 'passage' : 'passages'}` : `${session.transcript.length.toLocaleString()} transcript ${session.transcript.length === 1 ? 'passage' : 'passages'}`}</p>
+    <p className="small muted transcript-live-status" role="status" aria-live="polite" aria-atomic="true">{message}</p>
+    <p className="small muted transcript-copy-status" role="status" aria-live="polite" aria-atomic="true">{copyMessage}</p>
+    {manualCopy && (
+      <div className="passage-manual-copy">
+        <label htmlFor="manual-passage-link">Link to passage {manualCopy.passage}</label>
+        <div>
+          <input ref={manualCopyInput} id="manual-passage-link" value={manualCopy.url} readOnly />
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => setManualCopy(null)}
+          >
+            <X size={16} aria-hidden="true" />Close
+          </button>
+        </div>
+      </div>
+    )}
     <div className="transcript-lines">
-      {results.slice(0, limit).map(({ passage, index, text, links }) => <div className={`transcript-line${activeIndex === index ? ' is-current' : ''}${linkedIndex === index ? ' is-linked' : ''}`} id={`transcript-passage-${index + 1}`} key={index} tabIndex={-1} aria-current={activeIndex === index ? 'true' : undefined} ref={node => { if (node) rows.current.set(index, node); else rows.current.delete(index); }}>
-        <div className="transcript-cue">{canPlayAt(passage.start) ? <button className="cue-button" type="button" onClick={() => onPlayAt(passage.start!)} aria-label={`Play transcript passage ${index + 1} at ${timeLabel(passage.start!)}`}><Play size={11} aria-hidden="true" />{timeLabel(passage.start!)}</button> : <span className="small muted">{typeof passage.start === 'number' ? timeLabel(passage.start) : index + 1}</span>}</div>
-        <p><span className="sr-only">Passage {index + 1}. </span>{passage.speaker && <span className="speaker">{passage.speaker}: </span>}<TranscriptText sessionId={session.id} origin={session.origin} text={text} query={query} links={links} onMarker={onMarker ? marker => onMarker(marker, index + 1) : undefined} /></p>
-      </div>)}
+      {results.map(({ passage, index, text, links }) => {
+        const passageNumber = index + 1;
+        const isCopied = copiedPassage === passageNumber;
+        return (
+          <div
+            className={`transcript-line${activeIndex === index ? ' is-current' : ''}${linkedIndex === index ? ' is-linked' : ''}`}
+            id={`p${passageNumber}`}
+            key={index}
+            tabIndex={-1}
+            aria-current={activeIndex === index ? 'true' : undefined}
+            ref={node => { if (node) rows.current.set(index, node); else rows.current.delete(index); }}
+          >
+            <div className="transcript-cue">
+              <a
+                className="passage-anchor"
+                href={`#p${passageNumber}`}
+                onClick={event => {
+                  if (!enableHashNavigation) {
+                    event.preventDefault();
+                    onSelectPassage(passageNumber);
+                  } else if (window.location.hash.toLowerCase() === `#p${passageNumber}`) {
+                    onSelectPassage(passageNumber);
+                  }
+                }}
+              >
+                <span className="sr-only">Passage </span><span aria-hidden="true">#</span>{passageNumber}
+              </a>
+              {canPlayAt(passage.start) ? (
+                <button
+                  className="cue-button"
+                  type="button"
+                  onClick={() => onPlayAt(passage.start!)}
+                  aria-label={`Play transcript passage ${passageNumber} at ${timeLabel(passage.start!)}`}
+                >
+                  <Play size={11} aria-hidden="true" />
+                  {timeLabel(passage.start!)}
+                </button>
+              ) : typeof passage.start === 'number' ? (
+                <span className="small muted transcript-timestamp">{timeLabel(passage.start)}</span>
+              ) : null}
+            </div>
+            <p className="transcript-text">
+              {passage.speaker && <span className="speaker">{passage.speaker}: </span>}
+              <TranscriptText
+                sessionId={session.id}
+                origin={session.origin}
+                text={text}
+                query={query}
+                links={links}
+                onMarker={onMarker ? marker => onMarker(marker, passageNumber) : undefined}
+              />
+            </p>
+            <div className="passage-actions">
+              <button
+                type="button"
+                className={`passage-copy-button${isCopied ? ' is-copied' : ''}`}
+                onClick={() => void copyPassageLink(passageNumber)}
+                aria-label={isCopied ? `Copied link to passage ${passageNumber}` : `Copy link to passage ${passageNumber}`}
+              >
+                {isCopied ? <Check size={14} aria-hidden="true" /> : <Link2 size={14} aria-hidden="true" />}
+                <span>{isCopied ? 'Copied' : 'Copy link'}</span>
+              </button>
+            </div>
+          </div>
+        );
+      })}
       {!results.length && <p className="empty-inline">No matching passages. Try a different word or clear your search.</p>}
     </div>
-    {results.length > limit && <button type="button" className="button secondary" onClick={() => {
-      trackArchiveEvent('transcript_more', { recordingId: session.id, origin: session.origin });
-      setPendingFocus(results[limit].index);
-      setLimit(value => value + 100);
-    }}>Show {Math.min(100, results.length - limit)} more passages</button>}
   </section>;
 }
 
